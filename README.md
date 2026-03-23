@@ -118,9 +118,9 @@ Without ALL of these, the API returns 400/401.
 
 ## Integration Guide
 
-### Option 1 : Copier le fichier (le plus simple)
+### Option 1: Copy the file (simplest)
 
-Copie le fichier SDK dans ton projet. C'est un seul fichier, pas de dépendances.
+Copy the SDK file into your project. It's a single file, no dependencies.
 
 ```bash
 # Node.js
@@ -142,11 +142,11 @@ cd ~/mon-projet/claude-sdk && cargo build --release
 ./target/release/claude-native -p "hello"
 ```
 
-### Option 2 : Subprocess NDJSON (pour agents / automation)
+### Option 2: Subprocess NDJSON (for agents / automation)
 
-Ton programme spawn le SDK comme subprocess et communique via JSON sur stdin/stdout.
+Your program spawns the SDK as a subprocess and communicates via JSON on stdin/stdout.
 
-**Python (appelant) :**
+**Python (caller):**
 ```python
 import subprocess, json
 
@@ -156,14 +156,14 @@ proc = subprocess.Popen(
     text=True, bufsize=1
 )
 
-# Lire le "ready"
+# Read the "ready" message
 ready = json.loads(proc.stdout.readline())
 print(f"Session: {ready['session_id']}")
 
-# Envoyer un message avec des tools custom
+# Send a message with custom tools
 proc.stdin.write(json.dumps({
     "type": "message",
-    "content": "Cherche les fichiers migration dans Google Drive",
+    "content": "Search Google Drive for migration files",
     "tools": [{
         "name": "search_drive",
         "description": "Search Google Drive",
@@ -176,12 +176,12 @@ proc.stdin.write(json.dumps({
 }) + "\n")
 proc.stdin.flush()
 
-# Boucle : lire les events, répondre aux tool_use
+# Loop: read events, respond to tool_use
 for line in proc.stdout:
     msg = json.loads(line)
 
     if msg["type"] == "tool_use":
-        # Claude veut appeler ton tool — exécute-le
+        # Claude wants to call your tool — execute it
         result = my_search_drive(msg["input"]["query"])
         proc.stdin.write(json.dumps({
             "type": "tool_result",
@@ -196,7 +196,7 @@ for line in proc.stdout:
         break
 ```
 
-**Go (appelant) :**
+**Go (caller):**
 ```go
 cmd := exec.Command("node", "claude-native.mjs", "--ndjson")
 cmd.Stdin, _ = cmd.StdinPipe()
@@ -206,19 +206,19 @@ cmd.Start()
 scanner := bufio.NewScanner(stdout)
 encoder := json.NewEncoder(stdin)
 
-// Envoyer un message
+// Send a message
 encoder.Encode(map[string]any{
     "type": "message",
     "content": "List files in current directory",
 })
 
-// Lire les réponses
+// Read responses
 for scanner.Scan() {
     var msg map[string]any
     json.Unmarshal(scanner.Bytes(), &msg)
     switch msg["type"] {
     case "tool_use":
-        // Répondre avec le résultat
+        // Respond with the result
         encoder.Encode(map[string]any{
             "type": "tool_result", "id": msg["id"],
             "content": "file1.txt\nfile2.txt", "is_error": false,
@@ -230,7 +230,7 @@ for scanner.Scan() {
 }
 ```
 
-**Node.js (appelant) :**
+**Node.js (caller):**
 ```javascript
 import { spawn } from "node:child_process";
 
@@ -253,24 +253,23 @@ sdk.stdout.on("data", (chunk) => {
 });
 ```
 
-### Option 3 : Comme CLI dans un script shell
+### Option 3: CLI in a shell script
 
 ```bash
 #!/bin/bash
-# Utilise le SDK comme un simple CLI
 
 # One-shot
-RESPONSE=$(node claude-native.mjs -p "Résume ce fichier: $(cat README.md)")
+RESPONSE=$(node claude-native.mjs -p "Summarize this file: $(cat README.md)")
 echo "$RESPONSE"
 
-# Avec un modèle spécifique
+# With a specific model
 node claude-native.mjs -m opus -p "Review this code" < main.py
 
 # Pipe
-cat error.log | node claude-native.mjs -p "Explique cette erreur"
+cat error.log | node claude-native.mjs -p "Explain this error"
 ```
 
-### Option 4 : Comme serveur MCP
+### Option 4: MCP server integration
 
 ```bash
 # Avec un fichier de config MCP
