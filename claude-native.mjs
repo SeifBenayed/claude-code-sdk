@@ -765,9 +765,10 @@ function _checkFilePath(filePath, cwd, op) {
     return { behavior: "ask", reason: "sensitive_file", message: `${fileName} is a sensitive file.` };
   }
 
-  // Check if within working directory
+  // Check if within working directory or memory directory
   const cwdResolved = path.resolve(cwd || process.cwd());
-  if (fp.startsWith(cwdResolved) || fp.startsWith("/tmp") || fp.startsWith("/private/tmp")) {
+  const memDir = getMemoryDir(cwd || process.cwd());
+  if (fp.startsWith(cwdResolved) || fp.startsWith("/tmp") || fp.startsWith("/private/tmp") || fp.startsWith(memDir)) {
     return { behavior: "allow", reason: "within_workspace" };
   }
 
@@ -1560,6 +1561,109 @@ class McpManager {
 
 // ── PromptBuilder ───────────────────────────────────────────────
 
+// ── Memory System ───────────────────────────────────────────────
+//
+// Persistent file-based memory across sessions.
+// Directory: ~/.claude-native/projects/<sanitized-cwd>/memory/
+// MEMORY.md: index file loaded into system prompt (max 200 lines)
+// Memory files: individual .md files with frontmatter (name, description, type)
+
+const MEMORY_INDEX = "MEMORY.md";
+const MEMORY_MAX_LINES = 200;
+
+function getMemoryDir(cwd) {
+  const sanitized = (cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-").slice(0, 100);
+  return path.join(os.homedir(), ".claude-native", "projects", sanitized, "memory");
+}
+
+function ensureMemoryDir(cwd) {
+  const dir = getMemoryDir(cwd);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function loadMemoryIndex(cwd) {
+  const dir = getMemoryDir(cwd);
+  const indexPath = path.join(dir, MEMORY_INDEX);
+  try {
+    const content = fs.readFileSync(indexPath, "utf-8");
+    const lines = content.split("\n");
+    if (lines.length > MEMORY_MAX_LINES) {
+      return lines.slice(0, MEMORY_MAX_LINES).join("\n")
+        + `\n\n> WARNING: MEMORY.md is ${lines.length} lines (limit: ${MEMORY_MAX_LINES}). Only the first ${MEMORY_MAX_LINES} lines were loaded. Move detailed content into separate topic files.`;
+    }
+    return content;
+  } catch { return ""; }
+}
+
+function buildMemoryPrompt(cwd) {
+  const memDir = ensureMemoryDir(cwd);
+  const memContent = loadMemoryIndex(cwd);
+
+  return `# Memory
+
+You have a persistent, file-based memory system at \`${memDir}/\`.
+
+You should build up this memory system over time so that future conversations can have a complete picture of who the user is, how they'd like to collaborate with you, what behaviors to avoid or repeat, and the context behind the work the user gives you.
+
+If the user explicitly asks you to remember something, save it immediately. If they ask you to forget something, find and remove the relevant entry.
+
+## Types of memory
+
+| Type | Description |
+|------|-------------|
+| user | User's role, goals, preferences — tailor your behavior |
+| feedback | Corrections the user gave you — don't repeat mistakes |
+| project | Ongoing work, goals, initiatives — understand context |
+| reference | Pointers to external systems — know where to look |
+
+## When to access memories
+- When specific known memories seem relevant to the task at hand
+- When the user seems to refer to work from a prior conversation
+- You MUST access memory when the user explicitly asks you to check, recall, or remember
+
+## When to save memories
+- When you learn the user's role, preferences, or goals
+- When the user corrects your approach ("don't do X", "always do Y")
+- When you learn about ongoing projects, deadlines, or context
+- When the user explicitly says "remember this"
+- When in doubt, save it — better to prune later than to forget
+
+## What NOT to save
+- Code patterns derivable from the project itself
+- Git history (use git log)
+- Debugging solutions (the fix is in the code)
+- Anything already in CLAUDE.md
+- Ephemeral task details only useful in this conversation
+
+## How to save memories
+
+**Step 1** — Write the memory to its own file using this frontmatter format:
+
+\`\`\`markdown
+---
+name: {{memory name}}
+description: {{one-line description — used to decide relevance in future conversations}}
+type: {{user, feedback, project, reference}}
+---
+
+{{memory content}}
+\`\`\`
+
+**Step 2** — Add a pointer to that file in \`${MEMORY_INDEX}\`. The index should contain only links to memory files with brief descriptions. Never write memory content directly into \`${MEMORY_INDEX}\`.
+
+- \`${MEMORY_INDEX}\` is loaded into your system prompt — lines after ${MEMORY_MAX_LINES} will be truncated, so keep the index concise
+- Organize memory semantically by topic, not chronologically
+- Update or remove memories that are wrong or outdated
+- Do not write duplicate memories — check if one exists to update first
+
+## Staleness warning
+Memory records are point-in-time observations, not live state. Before asserting facts from memory, verify: if a memory names a file path, check it exists; if it names a function, grep for it.
+${memContent ? `\n## Current Memory Index (${MEMORY_INDEX})\n\n${memContent}` : ""}`;
+}
+
+// ── System Prompt Builder ───────────────────────────────────────
+
 function buildSystemPrompt(cfg) {
   // Billing header required for OAuth (Pro/Max subscription)
   const billingBlock = cfg.authToken ? [{
@@ -1603,6 +1707,9 @@ ${cfg.appendSystemPrompt ? `\n${cfg.appendSystemPrompt}` : ""}`;
     claudeMd = fs.readFileSync(claudeMdPath, "utf-8");
   } catch { /* no CLAUDE.md */ }
 
+  // Load memory system
+  const memoryPrompt = buildMemoryPrompt(cfg.cwd);
+
   const blocks = [
     ...billingBlock,
     {
@@ -1612,7 +1719,9 @@ ${cfg.appendSystemPrompt ? `\n${cfg.appendSystemPrompt}` : ""}`;
     },
     {
       type: "text",
-      text: dynamicPrompt + (claudeMd ? `\n\n# Project Instructions (CLAUDE.md)\n${claudeMd}` : ""),
+      text: dynamicPrompt
+        + (claudeMd ? `\n\n# Project Instructions (CLAUDE.md)\n${claudeMd}` : "")
+        + (memoryPrompt ? `\n\n${memoryPrompt}` : ""),
     },
   ];
 
@@ -2409,6 +2518,17 @@ class InteractiveMode {
         const budget = parseInt(args[0], 10);
         this.cfg.thinkingBudget = budget || (this.cfg.thinkingBudget ? 0 : 10000);
         process.stderr.write(`\x1b[2mThinking: ${this.cfg.thinkingBudget ? `enabled (${this.cfg.thinkingBudget} tokens)` : "disabled"}\x1b[0m\n`);
+        break;
+      case "/memory": case "/mem":
+        const memDir = ensureMemoryDir(this.cfg.cwd);
+        const memIndex = loadMemoryIndex(this.cfg.cwd);
+        process.stderr.write(`\x1b[2mMemory directory: ${memDir}\x1b[0m\n`);
+        if (memIndex) {
+          process.stderr.write(`\x1b[2m${memIndex.split("\n").length} lines in MEMORY.md:\x1b[0m\n`);
+          process.stderr.write(`\x1b[2m${memIndex.substring(0, 500)}\x1b[0m\n`);
+        } else {
+          process.stderr.write(`\x1b[2mNo memories yet. Claude will save memories as you work.\x1b[0m\n`);
+        }
         break;
       case "/checkpoints": case "/ckpt":
         if (this.checkpoints) {
