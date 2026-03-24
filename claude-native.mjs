@@ -44,6 +44,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
     mcpConfig: null,
     allowedTools: null,
     disallowedTools: null,
+    provider: null,  // explicit provider override (anthropic|openai|google|deepseek|mistral|groq|ollama)
     permissionMode: "auto",  // auto|default|plan|acceptEdits|bypassPermissions|dontAsk
     permissionRules: [],        // [{tool, pattern, behavior: "allow"|"deny"}]
     permissionCallbacks: false, // forward permission requests to NDJSON agent
@@ -61,6 +62,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "--api-url": cfg.apiUrl = argv[++i]; break;
       case "--openai-api-key": cfg.openaiApiKey = argv[++i]; break;
       case "--openai-api-url": cfg.openaiApiUrl = argv[++i]; break;
+      case "--provider": cfg.provider = argv[++i]; break;
       case "--ndjson": cfg.ndjson = true; cfg.interactive = false; break;
       case "-p": case "--print": cfg.prompt = argv[++i]; cfg.interactive = false; break;
       case "--resume": cfg.resume = true; break;
@@ -90,27 +92,244 @@ async function parseArgs(argv = process.argv.slice(2)) {
   return cfg;
 }
 
+// ── Model Aliases ──────────────────────────────────────────────
+
+const MODEL_ALIASES = {
+  // Anthropic
+  opus: "claude-opus-4-6", sonnet: "claude-sonnet-4-6", haiku: "claude-haiku-4-5-20251001",
+  "opus-4": "claude-opus-4-6", "sonnet-4": "claude-sonnet-4-6",
+  // OpenAI
+  "gpt-5.4": "gpt-5.4", "gpt5": "gpt-5.4", "5.4": "gpt-5.4",
+  "codex": "gpt-5.3-codex", "gpt-5.3-codex": "gpt-5.3-codex",
+  "gpt-5.2-codex": "gpt-5.2-codex", "gpt-5.1-codex": "gpt-5.1-codex",
+  "gpt-4.1": "gpt-4.1", "4.1": "gpt-4.1",
+  "gpt-4.1-mini": "gpt-4.1-mini", "4.1-mini": "gpt-4.1-mini",
+  "gpt-4.1-nano": "gpt-4.1-nano", "4.1-nano": "gpt-4.1-nano",
+  "gpt-4o": "gpt-4o", "gpt-4": "gpt-4o", "4o": "gpt-4o",
+  "gpt-4o-mini": "gpt-4o-mini", "4o-mini": "gpt-4o-mini",
+  "o3": "o3", "o3-pro": "o3-pro", "o3-mini": "o3-mini", "o4-mini": "o4-mini",
+  // Google
+  "gemini": "gemini-2.5-pro", "gemini-pro": "gemini-2.5-pro",
+  "gemini-flash": "gemini-2.5-flash", "gemini-2.5-flash": "gemini-2.5-flash",
+  "gemini-2.5-pro": "gemini-2.5-pro",
+  // DeepSeek
+  "deepseek": "deepseek-chat", "deepseek-r1": "deepseek-reasoner",
+  // Mistral
+  "mistral": "mistral-large-latest", "mistral-large": "mistral-large-latest",
+  "mistral-small": "mistral-small-latest", "codestral": "codestral-latest",
+  // Groq
+  "llama": "llama-3.3-70b-versatile", "llama-70b": "llama-3.3-70b-versatile",
+};
+
 function resolveModel(name) {
-  const aliases = {
-    opus: "claude-opus-4-6", sonnet: "claude-sonnet-4-6", haiku: "claude-haiku-4-5-20251001",
-    "opus-4": "claude-opus-4-6", "sonnet-4": "claude-sonnet-4-6",
-    // OpenAI aliases
-    // *-codex models use Responses API (/v1/responses), others use Chat Completions
-    "gpt-5.4": "gpt-5.4", "gpt5": "gpt-5.4", "5.4": "gpt-5.4",
-    "codex": "gpt-5.3-codex", "gpt-5.3-codex": "gpt-5.3-codex",
-    "gpt-5.2-codex": "gpt-5.2-codex", "gpt-5.1-codex": "gpt-5.1-codex",
-    "gpt-4.1": "gpt-4.1", "4.1": "gpt-4.1",
-    "gpt-4.1-mini": "gpt-4.1-mini", "4.1-mini": "gpt-4.1-mini",
-    "gpt-4.1-nano": "gpt-4.1-nano", "4.1-nano": "gpt-4.1-nano",
-    "gpt-4o": "gpt-4o", "gpt-4": "gpt-4o", "4o": "gpt-4o",
-    "gpt-4o-mini": "gpt-4o-mini", "4o-mini": "gpt-4o-mini",
-    "o3": "o3", "o3-pro": "o3-pro", "o3-mini": "o3-mini", "o4-mini": "o4-mini",
-  };
-  return aliases[name] || name;
+  return MODEL_ALIASES[name] || name;
 }
 
+// ── Provider Registry ──────────────────────────────────────────
+//
+// Each provider knows: how to match models, required env vars,
+// default API URL, and how to create a client.
+// The "openai-compat" provider is the catch-all for OpenAI-compatible APIs.
+
+const PROVIDERS = {
+  anthropic: {
+    name: "Anthropic",
+    detect: (m) => m.startsWith("claude-"),
+    envKey: "ANTHROPIC_API_KEY",
+    defaultUrl: "https://api.anthropic.com",
+    oauthSupport: true,
+    createClient: (cfg) => new AnthropicClient({ apiKey: cfg.apiKey, authToken: cfg.authToken, apiUrl: cfg.providerUrl }),
+    resolveAuth: (cfg) => cfg.apiKey || cfg.authToken || null,
+    resolveBaseUrl: (cfg) => cfg.apiUrl || "https://api.anthropic.com",
+    transformModel: (m) => m,
+    capabilities: {
+      apiStyle: "anthropic",
+      toolCallStyle: "anthropic",
+      instructionPlacement: "system-blocks",
+      supportsToolCalling: true,
+      supportsThinking: true,
+      supportsHostedWebSearch: true,
+      summaryModel: "claude-haiku-4-5-20251001",
+    },
+  },
+  openai: {
+    name: "OpenAI",
+    detect: (m) => (m.startsWith("gpt-") || /^o[1-9]/.test(m)) && !m.includes("-codex"),
+    envKey: "OPENAI_API_KEY",
+    defaultUrl: "https://api.openai.com",
+    oauthSupport: true,
+    createClient: (cfg) => new OpenAIClient({ apiKey: cfg.providerKey, apiUrl: cfg.providerUrl }),
+    resolveAuth: (cfg) => cfg.openaiApiKey || null,
+    resolveBaseUrl: (cfg) => cfg.openaiApiUrl || "https://api.openai.com",
+    transformModel: (m) => m,
+    capabilities: {
+      apiStyle: "openai-chat",
+      toolCallStyle: "openai-chat",
+      instructionPlacement: /^o[1-9]/.test("") ? "developer-message" : "system-message", // resolved dynamically
+      supportsToolCalling: true,
+      supportsThinking: false,
+      supportsHostedWebSearch: false,
+      summaryModel: "gpt-4o-mini",
+      // instructionPlacement is resolved dynamically based on model in getInstructionPlacement()
+    },
+  },
+  "openai-responses": {
+    name: "OpenAI Responses",
+    detect: (m) => m.includes("-codex"),
+    envKey: "OPENAI_API_KEY",
+    defaultUrl: "https://api.openai.com",
+    oauthSupport: true,
+    createClient: (cfg) => new OpenAIResponsesClient({ apiKey: cfg.providerKey, apiUrl: cfg.providerUrl }),
+    resolveAuth: (cfg) => cfg.openaiApiKey || null,
+    resolveBaseUrl: (cfg) => cfg.openaiApiUrl || "https://api.openai.com",
+    transformModel: (m) => m,
+    capabilities: {
+      apiStyle: "openai-responses",
+      toolCallStyle: "responses",
+      instructionPlacement: "instructions-field",
+      supportsToolCalling: true,
+      supportsThinking: false,
+      supportsHostedWebSearch: false,
+      summaryModel: "gpt-4o-mini",
+    },
+  },
+  google: {
+    name: "Google Gemini",
+    detect: (m) => m.startsWith("gemini-"),
+    envKey: "GOOGLE_API_KEY",
+    defaultUrl: "https://generativelanguage.googleapis.com",
+    createClient: (cfg) => new OpenAIClient({ apiKey: cfg.providerKey, apiUrl: cfg.providerUrl + "/v1beta/openai" }),
+    resolveAuth: (cfg) => process.env.GOOGLE_API_KEY || null,
+    resolveBaseUrl: () => "https://generativelanguage.googleapis.com",
+    transformModel: (m) => m,
+    capabilities: {
+      apiStyle: "openai-chat",
+      toolCallStyle: "openai-chat",
+      instructionPlacement: "system-message",
+      supportsToolCalling: true,
+      supportsThinking: false,
+      supportsHostedWebSearch: false,
+      summaryModel: "gemini-2.5-flash",
+    },
+  },
+  deepseek: {
+    name: "DeepSeek",
+    detect: (m) => m.startsWith("deepseek"),
+    envKey: "DEEPSEEK_API_KEY",
+    defaultUrl: "https://api.deepseek.com",
+    createClient: (cfg) => new OpenAIClient({ apiKey: cfg.providerKey, apiUrl: cfg.providerUrl }),
+    resolveAuth: (cfg) => process.env.DEEPSEEK_API_KEY || null,
+    resolveBaseUrl: () => "https://api.deepseek.com",
+    transformModel: (m) => m,
+    capabilities: {
+      apiStyle: "openai-chat",
+      toolCallStyle: "openai-chat",
+      instructionPlacement: "system-message",
+      supportsToolCalling: true,
+      supportsThinking: false,
+      supportsHostedWebSearch: false,
+      summaryModel: "deepseek-chat",
+    },
+  },
+  mistral: {
+    name: "Mistral",
+    detect: (m) => m.startsWith("mistral-") || m.startsWith("codestral") || m.startsWith("pixtral"),
+    envKey: "MISTRAL_API_KEY",
+    defaultUrl: "https://api.mistral.ai",
+    createClient: (cfg) => new OpenAIClient({ apiKey: cfg.providerKey, apiUrl: cfg.providerUrl }),
+    resolveAuth: (cfg) => process.env.MISTRAL_API_KEY || null,
+    resolveBaseUrl: () => "https://api.mistral.ai",
+    transformModel: (m) => m,
+    capabilities: {
+      apiStyle: "openai-chat",
+      toolCallStyle: "openai-chat",
+      instructionPlacement: "system-message",
+      supportsToolCalling: true,
+      supportsThinking: false,
+      supportsHostedWebSearch: false,
+      summaryModel: "mistral-small-latest",
+    },
+  },
+  groq: {
+    name: "Groq",
+    detect: (m) => m.startsWith("llama-") || m.startsWith("mixtral-") || m.includes("groq"),
+    envKey: "GROQ_API_KEY",
+    defaultUrl: "https://api.groq.com/openai",
+    createClient: (cfg) => new OpenAIClient({ apiKey: cfg.providerKey, apiUrl: cfg.providerUrl }),
+    resolveAuth: (cfg) => process.env.GROQ_API_KEY || null,
+    resolveBaseUrl: () => "https://api.groq.com/openai",
+    transformModel: (m) => m,
+    capabilities: {
+      apiStyle: "openai-chat",
+      toolCallStyle: "openai-chat",
+      instructionPlacement: "system-message",
+      supportsToolCalling: true,
+      supportsThinking: false,
+      supportsHostedWebSearch: false,
+      summaryModel: "llama-3.3-70b-versatile",
+    },
+  },
+  ollama: {
+    name: "Ollama (local)",
+    detect: (m) => m.startsWith("ollama/") || m.startsWith("local/"),
+    envKey: null, // no auth needed
+    defaultUrl: "http://localhost:11434",
+    createClient: (cfg) => new OpenAIClient({ apiKey: "ollama", apiUrl: cfg.providerUrl }),
+    resolveAuth: () => "no-auth",
+    resolveBaseUrl: () => "http://localhost:11434",
+    transformModel: (m) => m.replace(/^(ollama|local)\//, ""),
+    capabilities: {
+      apiStyle: "openai-chat",
+      toolCallStyle: "openai-chat",
+      instructionPlacement: "system-message",
+      supportsToolCalling: true,
+      supportsThinking: false,
+      supportsHostedWebSearch: false,
+      summaryModel: null,
+    },
+  },
+};
+
+// Dynamic instruction placement for OpenAI models (reasoning models use "developer" role)
+function getInstructionPlacement(provider, model) {
+  if (provider.capabilities.instructionPlacement === "system-blocks") return "system-blocks";
+  if (provider.capabilities.instructionPlacement === "instructions-field") return "instructions-field";
+  // OpenAI reasoning models (o1, o3, o4-mini, etc.) use developer role
+  if (/^o[1-9]/.test(model)) return "developer-message";
+  return provider.capabilities.instructionPlacement;
+}
+
+function detectProvider(model, explicitProvider) {
+  if (explicitProvider && PROVIDERS[explicitProvider]) return PROVIDERS[explicitProvider];
+  for (const p of Object.values(PROVIDERS)) {
+    if (p.detect(model)) return p;
+  }
+  // Fallback: treat as OpenAI-compatible
+  return {
+    name: "OpenAI-compatible",
+    detect: () => true,
+    envKey: "OPENAI_API_KEY",
+    defaultUrl: "https://api.openai.com",
+    createClient: (cfg) => new OpenAIClient({ apiKey: cfg.providerKey, apiUrl: cfg.providerUrl }),
+    resolveAuth: (cfg) => cfg.openaiApiKey || null,
+    resolveBaseUrl: (cfg) => cfg.openaiApiUrl || "https://api.openai.com",
+    transformModel: (m) => m,
+    capabilities: {
+      apiStyle: "openai-chat",
+      toolCallStyle: "openai-chat",
+      instructionPlacement: "system-message",
+      supportsToolCalling: true,
+      supportsThinking: false,
+      supportsHostedWebSearch: false,
+      summaryModel: "gpt-4o-mini",
+    },
+  };
+}
+
+// Backwards compat — used in test-suite.mjs extraction
 function isOpenAIModel(model) {
-  return model.startsWith("gpt-") || model.startsWith("o3") || model.startsWith("o4") || model === "o1" || model === "o1-mini";
+  const p = detectProvider(model);
+  return p.name !== "Anthropic";
 }
 
 function isResponsesAPIModel(model) {
@@ -268,7 +487,7 @@ function openaiOAuthLogout() {
 }
 
 function printHelp() {
-  process.stderr.write(`claude-native — Direct Anthropic API CLI
+  process.stderr.write(`claude-native — Multi-provider AI coding agent CLI
 
 Usage:
   claude-native                         Interactive REPL
@@ -277,6 +496,7 @@ Usage:
 
 Options:
   -m, --model <name>          Model (sonnet, opus, haiku, gpt-4o, o3, codex, or full ID)
+  --provider <name>           Explicit provider override (see Providers below)
   -p, --print <prompt>        One-shot mode, print response and exit
   --ndjson                    NDJSON bridge protocol on stdin/stdout
   --max-turns <n>             Max agent loop turns (default: 25)
@@ -300,8 +520,22 @@ Options:
   --resume                    Resume most recent session
   --allowed-tools <list>      Comma-separated tool allowlist
   --disallowed-tools <list>   Comma-separated tool denylist
+  --permission-mode <mode>    auto|default|plan|acceptEdits|bypassPermissions|dontAsk
   --verbose                   Debug logging to stderr
   -h, --help                  Show this help
+
+Providers:
+  anthropic       Anthropic (Claude)          ANTHROPIC_API_KEY or --login
+  openai          OpenAI (GPT, o-series)      OPENAI_API_KEY or --openai-login
+  openai-responses OpenAI Responses (*-codex)  OPENAI_API_KEY or --openai-login
+  google          Google Gemini               GOOGLE_API_KEY
+  deepseek        DeepSeek                    DEEPSEEK_API_KEY
+  mistral         Mistral                     MISTRAL_API_KEY
+  groq            Groq                        GROQ_API_KEY
+  ollama          Ollama (local)              (no auth needed)
+
+  Provider is auto-detected from model name. Use --provider to override:
+    claude-native --provider openai -m my-fine-tune -p "hello"
 `);
 }
 
@@ -2036,10 +2270,9 @@ Usage notes:
     // Use the API to process the content with the prompt (summarization)
     // We make a separate small API call to extract what the user wants
     try {
-      // Pick a small/fast model matching the current backend
-      const summaryModel = isOpenAIModel(registry._currentModel || "")
-        ? "gpt-4o-mini"
-        : "claude-haiku-4-5-20251001";
+      // Pick a small/fast model matching the current backend via provider capabilities
+      const currentProvider = registry._provider || detectProvider(registry._currentModel || "");
+      const summaryModel = currentProvider.capabilities?.summaryModel || "claude-haiku-4-5-20251001";
       const summaryBody = {
         model: summaryModel,
         max_tokens: 4096,
@@ -3040,6 +3273,8 @@ class AgentLoop {
     this.cb = callbacks;
     this.permissions = permissionManager;
     this.totalUsage = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+    // Provider is stored on cfg.provider (the provider object, not the string name)
+    this.provider = cfg._provider || detectProvider(cfg.model);
   }
 
   async _askPermission(block, message) {
@@ -3078,12 +3313,12 @@ class AgentLoop {
       log(`Turn ${turnCount}/${this.cfg.maxTurns}`);
 
       const toolDefs = this.registry.getDefinitions();
+      const caps = this.provider.capabilities;
 
-      // Add WebSearch as a server-side tool (Anthropic only)
-      const isOAI = isOpenAIModel(this.cfg.model);
-      const serverTools = isOAI ? [] : [
+      // Add WebSearch as a server-side tool (only if provider supports it)
+      const serverTools = caps.supportsHostedWebSearch ? [
         { type: "web_search_20250305", name: "web_search", max_uses: 8 },
-      ];
+      ] : [];
 
       // Strip non-API fields (messageId) from messages before sending
       const apiMessages = messages.map(({ messageId, ...rest }) => rest);
@@ -3096,8 +3331,8 @@ class AgentLoop {
         tools: [...toolDefs, ...serverTools],
       };
 
-      // Anthropic-only: extended thinking
-      if (this.cfg.thinkingBudget > 0 && !isOAI) {
+      // Extended thinking (only if provider supports it)
+      if (this.cfg.thinkingBudget > 0 && caps.supportsThinking) {
         body.thinking = { type: "enabled", budget_tokens: this.cfg.thinkingBudget };
       }
 
@@ -3764,6 +3999,14 @@ class InteractiveMode {
     this.totalCost = 0;
   }
 
+  _promptLabel() {
+    const m = this.cfg.model;
+    let short = m;
+    if (m.startsWith("claude-")) short = m.replace(/^claude-/, "").replace(/-\d.*$/, "");
+    else if (m.includes("-codex")) short = "codex";
+    return `\x1b[36m${short}>\x1b[0m `;
+  }
+
   async run() {
     // Resume or create session
     if (this.cfg.resume) {
@@ -3785,7 +4028,7 @@ class InteractiveMode {
     const rl = createInterface({
       input: process.stdin,
       output: process.stderr,
-      prompt: "\x1b[36mclaude>\x1b[0m ",
+      prompt: this._promptLabel(),
     });
 
     rl.prompt();
@@ -3817,40 +4060,48 @@ class InteractiveMode {
       case "/model":
         if (args[0]) {
           const newModel = resolveModel(args[0]);
-          const wasOpenAI = isOpenAIModel(this.cfg.model);
-          const nowOpenAI = isOpenAIModel(newModel);
-          // Validate creds BEFORE mutating state
-          const wasResponses = isResponsesAPIModel(this.cfg.model);
-          const nowResponses = isResponsesAPIModel(newModel);
-          const needsClientSwitch = (wasOpenAI !== nowOpenAI) || (wasResponses !== nowResponses);
-          if (needsClientSwitch) {
-            if (nowOpenAI && !this.cfg.openaiApiKey) {
-              process.stderr.write(`\x1b[31mCannot switch to ${newModel}: no OpenAI credentials.\x1b[0m\n`);
-              process.stderr.write(`\x1b[31mRun /openai-login or set OPENAI_API_KEY first.\x1b[0m\n`);
-              break;
-            }
-            if (!nowOpenAI && !this.cfg.apiKey && !this.cfg.authToken) {
-              process.stderr.write(`\x1b[31mCannot switch to ${newModel}: no Anthropic credentials.\x1b[0m\n`);
-              process.stderr.write(`\x1b[31mRun /login or set ANTHROPIC_API_KEY first.\x1b[0m\n`);
-              break;
-            }
-            // Creds validated — now safe to switch client
-            if (nowOpenAI && nowResponses) {
-              this.client = new OpenAIResponsesClient({ apiKey: this.cfg.openaiApiKey, apiUrl: this.cfg.openaiApiUrl });
-            } else if (nowOpenAI) {
-              this.client = new OpenAIClient({ apiKey: this.cfg.openaiApiKey, apiUrl: this.cfg.openaiApiUrl });
-            } else {
-              this.client = new AnthropicClient({ apiKey: this.cfg.apiKey, authToken: this.cfg.authToken, apiUrl: this.cfg.apiUrl });
-            }
-            this.registry._client = this.client;
+          const newProvider = detectProvider(newModel, this.cfg.provider);
+          const effectiveModel = newProvider.transformModel ? newProvider.transformModel(newModel) : newModel;
+
+          // Resolve credentials for the new provider
+          const providerKey = newProvider.envKey === "ANTHROPIC_API_KEY" ? (this.cfg.apiKey || this.cfg.authToken)
+            : newProvider.envKey === "OPENAI_API_KEY" ? this.cfg.openaiApiKey
+            : newProvider.envKey ? (process.env[newProvider.envKey] || "")
+            : "no-auth";
+
+          if (!providerKey && newProvider.envKey) {
+            const hint = newProvider.name === "Anthropic"
+              ? "Run /login or set ANTHROPIC_API_KEY"
+              : newProvider.envKey === "OPENAI_API_KEY"
+                ? "Run /openai-login or set OPENAI_API_KEY"
+                : `Set ${newProvider.envKey}`;
+            process.stderr.write(`\x1b[31mCannot switch to ${newModel}: no ${newProvider.name} credentials.\x1b[0m\n`);
+            process.stderr.write(`\x1b[31m${hint} first.\x1b[0m\n`);
+            break;
           }
-          this.cfg.model = newModel;
-          this.registry._currentModel = newModel;
-          const backend = nowOpenAI ? (nowResponses ? " (OpenAI Responses)" : " (OpenAI)") : "";
+
+          // Determine provider URL
+          const providerUrl = newProvider.resolveBaseUrl
+            ? newProvider.resolveBaseUrl(this.cfg)
+            : newProvider.defaultUrl;
+
+          // Create new client via provider contract
+          this.client = newProvider.createClient({
+            apiKey: this.cfg.apiKey, authToken: this.cfg.authToken,
+            providerKey, providerUrl, model: effectiveModel,
+            openaiApiKey: this.cfg.openaiApiKey, openaiApiUrl: this.cfg.openaiApiUrl,
+          });
+          this.registry._client = this.client;
+          this.registry._provider = newProvider;
+          this.cfg.model = effectiveModel;
+          this.cfg._provider = newProvider;
+          this.registry._currentModel = effectiveModel;
+          const backend = newProvider.name !== "Anthropic" ? ` (${newProvider.name})` : "";
           process.stderr.write(`\x1b[2mSwitched to ${this.cfg.model}${backend}\x1b[0m\n`);
+          rl.setPrompt(this._promptLabel());
         } else {
-          const backend = isOpenAIModel(this.cfg.model) ? " (OpenAI)" : " (Anthropic)";
-          process.stderr.write(`\x1b[2mCurrent model: ${this.cfg.model}${backend}\x1b[0m\n`);
+          const currentProvider = this.cfg._provider || detectProvider(this.cfg.model);
+          process.stderr.write(`\x1b[2mCurrent model: ${this.cfg.model} (${currentProvider.name})\x1b[0m\n`);
         }
         break;
       case "/clear":
@@ -4364,8 +4615,9 @@ async function main() {
     }
   }
 
-  // Resolve OpenAI auth: --openai (keychain) > --openai-api-key > OPENAI_API_KEY
-  if (cfg.useOpenAIOAuth || (isOpenAIModel(cfg.model) && !cfg.openaiApiKey)) {
+  // Resolve OpenAI auth (for OpenAI/Codex models)
+  const earlyProvider = detectProvider(cfg.model, cfg.provider);
+  if (cfg.useOpenAIOAuth || (earlyProvider.envKey === "OPENAI_API_KEY" && !cfg.openaiApiKey)) {
     try {
       const token = await getOpenAIAccessToken(cfg.verbose);
       cfg.openaiApiKey = token;
@@ -4375,34 +4627,47 @@ async function main() {
         process.stderr.write(`Error: ${e.message}\n`);
         process.exit(1);
       }
-      // Fall through — maybe using Anthropic
     }
   }
 
-  // Determine which backend to use
-  const useOpenAI = isOpenAIModel(cfg.model);
+  // Detect provider and create client
+  const provider = detectProvider(cfg.model, cfg.provider);
+  const effectiveModel = provider.transformModel ? provider.transformModel(cfg.model) : cfg.model;
+  cfg.model = effectiveModel;
 
-  if (useOpenAI) {
-    if (!cfg.openaiApiKey) {
-      process.stderr.write("Error: No OpenAI auth. Run --openai-login, use --openai-api-key, or set OPENAI_API_KEY\n");
-      process.exit(1);
-    }
-    process.stderr.write(`\x1b[2mUsing OpenAI backend (${cfg.model})\x1b[0m\n`);
-  } else {
-    if (!cfg.apiKey && !cfg.authToken) {
-      process.stderr.write("Error: No auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY\n");
-      process.exit(1);
-    }
+  // Resolve provider credentials
+  const providerKey = provider.envKey === "ANTHROPIC_API_KEY" ? (cfg.apiKey || cfg.authToken)
+    : provider.envKey === "OPENAI_API_KEY" ? cfg.openaiApiKey
+    : provider.envKey ? (process.env[provider.envKey] || "")
+    : "no-auth"; // e.g. Ollama
+
+  const providerUrl = cfg.provider
+    ? (cfg.openaiApiUrl !== "https://api.openai.com" ? cfg.openaiApiUrl : provider.defaultUrl)
+    : provider.defaultUrl;
+
+  if (!providerKey && provider.envKey) {
+    const hint = provider.name === "Anthropic"
+      ? "Run --login, use --api-key, or set ANTHROPIC_API_KEY"
+      : `Set ${provider.envKey}`;
+    process.stderr.write(`Error: No ${provider.name} auth. ${hint}\n`);
+    process.exit(1);
   }
 
-  const client = useOpenAI
-    ? (isResponsesAPIModel(cfg.model)
-      ? new OpenAIResponsesClient({ apiKey: cfg.openaiApiKey, apiUrl: cfg.openaiApiUrl })
-      : new OpenAIClient({ apiKey: cfg.openaiApiKey, apiUrl: cfg.openaiApiUrl }))
-    : new AnthropicClient({ apiKey: cfg.apiKey, authToken: cfg.authToken, apiUrl: cfg.apiUrl });
+  if (provider.name !== "Anthropic") {
+    process.stderr.write(`\x1b[2mUsing ${provider.name} backend (${cfg.model})\x1b[0m\n`);
+  }
+
+  // Store provider on cfg so AgentLoop can access it
+  cfg._provider = provider;
+
+  const client = provider.createClient({
+    apiKey: cfg.apiKey, authToken: cfg.authToken,
+    providerKey, providerUrl, model: cfg.model,
+  });
   const registry = new ToolRegistry();
   registry._client = client; // Used by WebFetch for AI summarization
   registry._currentModel = cfg.model; // Used by WebFetch to pick summary model
+  registry._provider = provider; // Used by WebFetch for summary model selection
   registerBuiltinTools(registry);
 
   if (cfg.allowedTools || cfg.disallowedTools) {

@@ -145,6 +145,7 @@ Switch live in the REPL: `/model codex`, `/model sonnet`, `/model o3`
 ```
 -p, --print <prompt>        One-shot mode
 -m, --model <name>          Model (sonnet, opus, haiku, codex, gpt-5.4, o3, etc.)
+--provider <name>           Explicit provider override (anthropic, openai, google, etc.)
 --ndjson                    NDJSON bridge mode
 --login                     Login to Anthropic via browser OAuth
 --logout                    Remove Anthropic credentials
@@ -182,21 +183,76 @@ Switch live in the REPL: `/model codex`, `/model sonnet`, `/model o3`
 
 ## Architecture
 
+### Provider-Pluggable Core
+
+AgentLoop is **provider-agnostic** — it reads capabilities from the provider contract, never checks provider names. All provider-specific logic lives in the provider definition or client implementation.
+
 ```
-┌─────────────────────────────────────────────────┐
-│                  AgentLoop                       │
-│  (streaming, tool execution, permissions)        │
-├──────────┬──────────────┬───────────────────────┤
-│ Anthropic│  OpenAI Chat │  OpenAI Responses     │
-│ Client   │  Completions │  Client               │
-│          │  Client      │  (*-codex models)     │
-├──────────┼──────────────┼───────────────────────┤
-│ /v1/     │ /v1/chat/    │ /v1/responses         │
-│ messages │ completions  │                       │
-└──────────┴──────────────┴───────────────────────┘
+┌───────────────────────────────────────────────────────────┐
+│                      AgentLoop                             │
+│  (streaming, tool execution, permissions)                  │
+│  reads: provider.capabilities.supportsThinking             │
+│         provider.capabilities.supportsHostedWebSearch       │
+│         provider.capabilities.summaryModel                  │
+├───────────┬──────────────┬─────────────┬─────────────────┤
+│ Anthropic │  OpenAI Chat │  OpenAI     │  OpenAI-compat  │
+│ Client    │  Completions │  Responses  │  (Gemini, etc.) │
+├───────────┼──────────────┼─────────────┼─────────────────┤
+│ /v1/      │ /v1/chat/    │ /v1/        │  varies         │
+│ messages  │ completions  │ responses   │                 │
+└───────────┴──────────────┴─────────────┴─────────────────┘
 ```
 
-All three clients yield the same SSE event format, so `AgentLoop` works unchanged across backends.
+### Provider Contract
+
+Every provider implements:
+
+```js
+{
+  name: "Provider Name",
+  detect(model): boolean,           // does this model belong here?
+  createClient(cfg): StreamClient,  // returns object with stream(body) method
+  resolveAuth(cfg): string|null,    // returns API key or null
+  resolveBaseUrl(cfg): string,      // returns effective API URL
+  transformModel(model): string,    // e.g. "ollama/llama3.2" → "llama3.2"
+  capabilities: {
+    apiStyle: "anthropic" | "openai-chat" | "openai-responses",
+    toolCallStyle: "anthropic" | "openai-chat" | "responses",
+    instructionPlacement: "system-blocks" | "system-message" | "developer-message" | "instructions-field",
+    supportsToolCalling: boolean,
+    supportsThinking: boolean,
+    supportsHostedWebSearch: boolean,
+    summaryModel: string|null,
+  },
+  envKey: string|null,              // env var for API key (null = no auth)
+}
+```
+
+### Supported Providers
+
+| Provider | Models | Auth | Status |
+|----------|--------|------|--------|
+| **Anthropic** | claude-* | `ANTHROPIC_API_KEY` or `--login` | Tested |
+| **OpenAI** | gpt-*, o1/o3/o4-* | `OPENAI_API_KEY` or `--openai-login` | Tested |
+| **OpenAI Responses** | *-codex | `OPENAI_API_KEY` or `--openai-login` | Tested |
+| **Google Gemini** | gemini-* | `GOOGLE_API_KEY` | Placeholder |
+| **DeepSeek** | deepseek-* | `DEEPSEEK_API_KEY` | Placeholder |
+| **Mistral** | mistral-*, codestral-* | `MISTRAL_API_KEY` | Placeholder |
+| **Groq** | llama-*, mixtral-* | `GROQ_API_KEY` | Placeholder |
+| **Ollama** | ollama/*, local/* | (none) | Placeholder |
+
+Use `--provider <name>` to force a specific provider (e.g., for fine-tuned models):
+
+```bash
+node claude-native.mjs --provider openai -m my-fine-tune -p "hello"
+```
+
+### Adding a New Provider
+
+1. Add an entry to `PROVIDERS` in `claude-native.mjs` with the full contract
+2. Add model aliases to `MODEL_ALIASES` if desired
+3. The provider auto-detects from model name via `detect()`, or can be forced with `--provider`
+4. If the provider uses the OpenAI API format, reuse `OpenAIClient`; otherwise implement a new client class that yields the same SSE events
 
 ### Anthropic Auth
 

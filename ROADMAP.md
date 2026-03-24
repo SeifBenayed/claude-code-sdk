@@ -40,6 +40,19 @@ Priority: **safe → useful → stateful → recoverable → extensible**
 | 4 | ~~Background agent stop() doesn't cancel (no AbortController)~~ | High | **Done** |
 | 5 | ~~ToolRegistry filter hides patterned tools entirely (Bash(rm *) hides Bash)~~ | High | **Done** |
 
+## v1.5 — Provider-Pluggable Architecture
+
+| # | Feature | Impact | Effort | Status |
+|:-:|---------|:------:|:------:|:------:|
+| 1 | ~~Provider contract with capabilities (detect, createClient, resolveAuth, capabilities)~~ | Critical | Medium | **Done** |
+| 2 | ~~Capability-based AgentLoop (zero provider branches, only capability reads)~~ | Critical | Medium | **Done** |
+| 3 | ~~`--provider` flag for explicit override~~ | High | Easy | **Done** |
+| 4 | ~~Dynamic /model switch via provider contract~~ | High | Medium | **Done** |
+| 5 | ~~Help text with provider table and env vars~~ | Medium | Easy | **Done** |
+| 6 | ~~Provider contract unit tests + architectural invariant test~~ | High | Medium | **Done** |
+| 7 | Second-wave providers E2E (Google, DeepSeek, Ollama, Mistral, Groq) | Medium | Medium | Planned |
+| 8 | Port provider contract to Python/Go/Rust SDKs | Medium | High | Planned |
+
 ## v2.0 — Extensibility
 
 | # | Feature | Impact | Effort | Status |
