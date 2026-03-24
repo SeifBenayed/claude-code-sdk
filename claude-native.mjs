@@ -466,15 +466,159 @@ class SecurityClassifier {
   classify(toolName, input) {
     for (const rule of this.blockRules) {
       if (rule.test(toolName, input)) {
-        return {
-          blocked: true,
-          rule: rule.name,
-          reason: rule.desc,
-        };
+        return { blocked: true, rule: rule.name, reason: rule.desc };
       }
     }
     return { blocked: false };
   }
+}
+
+// ── Per-Tool Permission Checks ──────────────────────────────────
+//
+// Each tool has its own checkPermissions() that evaluates tool-specific
+// safety conditions. This runs AFTER the SecurityClassifier (BLOCK rules)
+// and BEFORE the mode-based decision.
+//
+// Returns: { behavior: "allow"|"deny"|"ask"|"passthrough", message?, reason? }
+// "passthrough" means this check has no opinion — defer to mode logic.
+
+const SENSITIVE_DIRS = new Set([".git", ".vscode", ".idea", ".claude"]);
+const SENSITIVE_FILES = new Set([
+  ".gitconfig", ".gitmodules", ".bashrc", ".bash_profile",
+  ".zshrc", ".zprofile", ".profile", ".ripgreprc",
+  ".mcp.json", ".claude.json", ".env",
+]);
+
+const toolPermissionChecks = {
+  // Bash: check if command writes outside workspace, uses pipes to external
+  Bash(input, cwd) {
+    const cmd = input.command || "";
+    // Commands that only read are generally safe
+    const readOnlyPrefixes = [
+      "ls", "cat", "head", "tail", "wc", "echo", "pwd", "date", "whoami",
+      "which", "type", "file", "stat", "du", "df", "uname", "env", "printenv",
+      "git status", "git log", "git diff", "git branch", "git show", "git remote",
+      "git rev-parse", "git describe", "git tag", "git stash list",
+      "grep", "rg", "ag", "find", "fd", "tree",
+      "node --version", "python --version", "go version", "rustc --version",
+      "npm list", "pip list", "cargo --version",
+    ];
+    const trimCmd = cmd.trim();
+    for (const prefix of readOnlyPrefixes) {
+      if (trimCmd === prefix || trimCmd.startsWith(prefix + " ") || trimCmd.startsWith(prefix + "\t")) {
+        return { behavior: "allow", reason: "read_only_command" };
+      }
+    }
+    // Safe build/test commands within project
+    if (/^(npm|yarn|pnpm)\s+(run|test|build|start|dev|lint|format|check)\b/.test(trimCmd)) {
+      return { behavior: "allow", reason: "project_script" };
+    }
+    if (/^(cargo|go|make|python|pytest|jest|vitest|mocha)\s+(build|test|run|check|vet|fmt)\b/.test(trimCmd)) {
+      return { behavior: "allow", reason: "project_build_test" };
+    }
+    // Git commits/add within workspace are safe
+    if (/^git\s+(add|commit|stash|checkout\s+-b|switch\s+-c|push\s+origin\s+(?!main\b|master\b))\b/.test(trimCmd)) {
+      return { behavior: "allow", reason: "safe_git_op" };
+    }
+    // Default: no opinion, defer to mode
+    return { behavior: "passthrough" };
+  },
+
+  // Edit: check file path safety
+  Edit(input, cwd) {
+    return _checkFilePath(input.file_path, cwd, "edit");
+  },
+
+  // Write: check file path safety
+  Write(input, cwd) {
+    return _checkFilePath(input.file_path, cwd, "write");
+  },
+
+  // Read: almost always safe, but check for sensitive files
+  Read(input, cwd) {
+    const fp = input.file_path || "";
+    // Reading .env files should at least be noted
+    if (fp.endsWith(".env") || fp.includes(".env.")) {
+      return { behavior: "passthrough", reason: "env_file_read" };
+    }
+    return { behavior: "allow", reason: "read_safe" };
+  },
+
+  // Glob: always safe (read-only)
+  Glob(_input, _cwd) {
+    return { behavior: "allow", reason: "glob_safe" };
+  },
+
+  // Grep: always safe (read-only)
+  Grep(_input, _cwd) {
+    return { behavior: "allow", reason: "grep_safe" };
+  },
+
+  // WebFetch: check domain
+  WebFetch(input, _cwd) {
+    const url = input.url || "";
+    try {
+      const hostname = new URL(url).hostname;
+      // Always allow known safe domains
+      const safeDomains = [
+        "github.com", "raw.githubusercontent.com",
+        "docs.anthropic.com", "platform.claude.com", "code.claude.com",
+        "stackoverflow.com", "developer.mozilla.org", "npmjs.com",
+        "pypi.org", "crates.io", "pkg.go.dev",
+        "httpbin.org", "jsonplaceholder.typicode.com",
+      ];
+      if (safeDomains.some((d) => hostname === d || hostname.endsWith("." + d))) {
+        return { behavior: "allow", reason: "safe_domain" };
+      }
+      // Default: no opinion
+      return { behavior: "passthrough", reason: "unknown_domain" };
+    } catch {
+      return { behavior: "deny", reason: "invalid_url", message: "Invalid URL" };
+    }
+  },
+
+  // WebSearch: always safe (server-side, read-only)
+  WebSearch(_input, _cwd) {
+    return { behavior: "allow", reason: "search_safe" };
+  },
+};
+
+function _checkFilePath(filePath, cwd, op) {
+  if (!filePath) return { behavior: "passthrough" };
+  const fp = path.resolve(filePath);
+  const parts = fp.split(path.sep);
+  const fileName = parts[parts.length - 1];
+
+  // Block UNC paths
+  if (fp.startsWith("\\\\") || fp.startsWith("//")) {
+    return { behavior: "deny", reason: "unc_path", message: "UNC paths are not allowed." };
+  }
+
+  // Check sensitive directories
+  for (const part of parts) {
+    if (SENSITIVE_DIRS.has(part)) {
+      // Exception: .claude/worktrees is OK
+      if (part === ".claude") {
+        const nextPart = parts[parts.indexOf(part) + 1];
+        if (nextPart === "worktrees") continue;
+      }
+      return { behavior: "ask", reason: "sensitive_dir", message: `File is in sensitive directory: ${part}` };
+    }
+  }
+
+  // Check sensitive files
+  if (SENSITIVE_FILES.has(fileName)) {
+    return { behavior: "ask", reason: "sensitive_file", message: `${fileName} is a sensitive file.` };
+  }
+
+  // Check if within working directory
+  const cwdResolved = path.resolve(cwd || process.cwd());
+  if (fp.startsWith(cwdResolved) || fp.startsWith("/tmp") || fp.startsWith("/private/tmp")) {
+    return { behavior: "allow", reason: "within_workspace" };
+  }
+
+  // Outside workspace: ask
+  return { behavior: "ask", reason: "outside_workspace", message: `File ${fp} is outside the working directory.` };
 }
 
 // ── PermissionManager ───────────────────────────────────────────
@@ -539,11 +683,24 @@ class PermissionManager {
       }
     }
 
-    // 3. Check explicit allow rules
+    // 3. Per-tool checkPermissions — tool-specific safety logic
+    const toolCheck = toolPermissionChecks[toolName];
+    if (toolCheck) {
+      const result = toolCheck(input, process.cwd());
+      if (result.behavior === "deny") return { ...result, rule: `tool_${toolName}_deny` };
+      if (result.behavior === "ask") return { ...result, rule: `tool_${toolName}_ask` };
+      if (result.behavior === "allow" && this.mode !== "default") {
+        // In non-default modes, per-tool allow is trusted
+        return { ...result, rule: `tool_${toolName}_allow` };
+      }
+      // "passthrough" or "allow" in default mode → continue to mode logic
+    }
+
+    // 4. Check explicit allow rules
     const allowRule = this.rules.find((r) => r.behavior === "allow" && this._matchRule(r, toolName, input));
     if (allowRule) return { behavior: "allow", rule: "explicit_allow" };
 
-    // 4. Apply permission mode
+    // 5. Apply permission mode
     switch (this.mode) {
       case "bypassPermissions":
         return { behavior: "allow", rule: "mode_bypass" };
