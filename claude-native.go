@@ -35,7 +35,10 @@ type Config struct {
 	APIKey             string
 	AuthToken          string
 	APIURL             string
+	OpenAIAPIKey       string
+	OpenAIAPIURL       string
 	UseOAuth           bool
+	UseOpenAIOAuth     bool
 	NDJSON             bool
 	Interactive        bool
 	Prompt             string
@@ -169,16 +172,35 @@ func logDebug(format string, args ...interface{}) {
 
 func resolveModel(name string) string {
 	aliases := map[string]string{
-		"opus":     "claude-opus-4-6",
-		"sonnet":   "claude-sonnet-4-6",
-		"haiku":    "claude-haiku-4-5-20251001",
-		"opus-4":   "claude-opus-4-6",
-		"sonnet-4": "claude-sonnet-4-6",
+		"opus": "claude-opus-4-6", "sonnet": "claude-sonnet-4-6",
+		"haiku": "claude-haiku-4-5-20251001",
+		"opus-4": "claude-opus-4-6", "sonnet-4": "claude-sonnet-4-6",
+		// OpenAI
+		"gpt-5.4": "gpt-5.4", "gpt5": "gpt-5.4", "5.4": "gpt-5.4",
+		"codex": "gpt-5.3-codex", "gpt-5.3-codex": "gpt-5.3-codex",
+		"gpt-5.2-codex": "gpt-5.2-codex", "gpt-5.1-codex": "gpt-5.1-codex",
+		"gpt-4.1": "gpt-4.1", "4.1": "gpt-4.1",
+		"gpt-4.1-mini": "gpt-4.1-mini", "4.1-mini": "gpt-4.1-mini",
+		"gpt-4o": "gpt-4o", "gpt-4": "gpt-4o", "4o": "gpt-4o",
+		"gpt-4o-mini": "gpt-4o-mini", "4o-mini": "gpt-4o-mini",
+		"o3": "o3", "o3-pro": "o3-pro", "o3-mini": "o3-mini", "o4-mini": "o4-mini",
 	}
 	if full, ok := aliases[name]; ok {
 		return full
 	}
 	return name
+}
+
+func isOpenAIModel(model string) bool {
+	return strings.HasPrefix(model, "gpt-") || strings.HasPrefix(model, "o3") || strings.HasPrefix(model, "o4") || model == "o1" || model == "o1-mini"
+}
+
+func isResponsesAPIModel(model string) bool {
+	return strings.Contains(model, "-codex")
+}
+
+func isReasoningModel(model string) bool {
+	return len(model) >= 2 && model[0] == 'o' && model[1] >= '1' && model[1] <= '9'
 }
 
 func parseArgs() *Config {
@@ -193,6 +215,11 @@ func parseArgs() *Config {
 	}
 	if cfg.APIURL == "" {
 		cfg.APIURL = "https://api.anthropic.com"
+	}
+	cfg.OpenAIAPIKey = os.Getenv("OPENAI_API_KEY")
+	cfg.OpenAIAPIURL = os.Getenv("OPENAI_API_URL")
+	if cfg.OpenAIAPIURL == "" {
+		cfg.OpenAIAPIURL = "https://api.openai.com"
 	}
 
 	cwd, _ := os.Getwd()
@@ -249,6 +276,12 @@ func parseArgs() *Config {
 			cfg.AllowedTools = append(cfg.AllowedTools, strings.Split(next(), ",")...)
 		case "--disallowed-tools":
 			cfg.DisallowedTools = append(cfg.DisallowedTools, strings.Split(next(), ",")...)
+		case "--openai-api-key":
+			cfg.OpenAIAPIKey = next()
+		case "--openai-api-url":
+			cfg.OpenAIAPIURL = next()
+		case "--openai":
+			cfg.UseOpenAIOAuth = true
 		case "--login":
 			if err := oauthLogin(); err != nil {
 				fmt.Fprintf(os.Stderr, "Login error: %v\n", err)
@@ -431,6 +464,410 @@ func (c *AnthropicClient) parseSSE(body io.Reader, events chan<- SSEEvent) {
 			}
 			eventType = ""
 			dataLine = ""
+		}
+	}
+}
+
+// ── StreamClient interface ──────────────────────────────────────
+
+type StreamClient interface {
+	Stream(body map[string]interface{}) (<-chan SSEEvent, <-chan error)
+}
+
+// AnthropicClient implements StreamClient (already defined above)
+
+// ── OpenAIClient (Chat Completions) ────────────────────────────
+
+type OpenAIClient struct {
+	APIKey string
+	APIURL string
+	Client *http.Client
+}
+
+func NewOpenAIClient(apiKey, apiURL string) *OpenAIClient {
+	return &OpenAIClient{APIKey: apiKey, APIURL: apiURL, Client: &http.Client{Timeout: 5 * time.Minute}}
+}
+
+func (c *OpenAIClient) Stream(body map[string]interface{}) (<-chan SSEEvent, <-chan error) {
+	events := make(chan SSEEvent, 64)
+	errc := make(chan error, 1)
+
+	go func() {
+		defer close(events)
+		defer close(errc)
+
+		model, _ := body["model"].(string)
+		oaiMessages := c.convertMessages(body["system"], body["messages"], model)
+		oaiTools := c.convertTools(body["tools"])
+
+		oaiBody := map[string]interface{}{
+			"model": model, "messages": oaiMessages,
+			"max_completion_tokens": body["max_tokens"],
+			"stream": true, "stream_options": map[string]interface{}{"include_usage": true},
+		}
+		if oaiTools != nil {
+			oaiBody["tools"] = oaiTools
+		}
+
+		payload, _ := json.Marshal(oaiBody)
+		var lastErr error
+		for attempt := 0; attempt < 3; attempt++ {
+			if attempt > 0 {
+				time.Sleep(time.Duration(1<<uint(attempt)) * time.Second)
+			}
+			req, _ := http.NewRequest("POST", c.APIURL+"/v1/chat/completions", bytes.NewReader(payload))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+c.APIKey)
+			resp, err := c.Client.Do(req)
+			if err != nil { lastErr = err; continue }
+			if resp.StatusCode == 429 || resp.StatusCode == 529 { resp.Body.Close(); lastErr = fmt.Errorf("HTTP %d", resp.StatusCode); continue }
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				b, _ := io.ReadAll(resp.Body); resp.Body.Close()
+				errc <- fmt.Errorf("OpenAI API error %d: %s", resp.StatusCode, string(b)); return
+			}
+			c.translateStream(resp.Body, events)
+			resp.Body.Close()
+			return
+		}
+		if lastErr != nil { errc <- lastErr } else { errc <- fmt.Errorf("max retries") }
+	}()
+	return events, errc
+}
+
+func (c *OpenAIClient) convertMessages(systemBlocks, messages interface{}, model string) []map[string]interface{} {
+	out := []map[string]interface{}{}
+	if blocks, ok := systemBlocks.([]interface{}); ok && len(blocks) > 0 {
+		var texts []string
+		for _, b := range blocks {
+			if m, ok := b.(map[string]interface{}); ok {
+				texts = append(texts, fmt.Sprintf("%v", m["text"]))
+			}
+		}
+		role := "system"
+		if isReasoningModel(model) { role = "developer" }
+		out = append(out, map[string]interface{}{"role": role, "content": strings.Join(texts, "\n\n")})
+	}
+	if msgs, ok := messages.([]interface{}); ok {
+		for _, m := range msgs {
+			msg, _ := m.(map[string]interface{})
+			role, _ := msg["role"].(string)
+			content := msg["content"]
+			if role == "user" {
+				if arr, ok := content.([]interface{}); ok {
+					isToolResults := false
+					for _, item := range arr {
+						im, _ := item.(map[string]interface{})
+						if im["type"] == "tool_result" {
+							isToolResults = true
+							out = append(out, map[string]interface{}{"role": "tool", "tool_call_id": im["tool_use_id"], "content": fmt.Sprintf("%v", im["content"])})
+						}
+					}
+					if !isToolResults {
+						var text string
+						for _, item := range arr { im, _ := item.(map[string]interface{}); if im["type"] == "text" { text += fmt.Sprintf("%v", im["text"]) } }
+						out = append(out, map[string]interface{}{"role": "user", "content": text})
+					}
+				} else {
+					out = append(out, map[string]interface{}{"role": "user", "content": content})
+				}
+			} else if role == "assistant" {
+				if arr, ok := content.([]interface{}); ok {
+					var text string
+					var tcs []map[string]interface{}
+					for _, item := range arr {
+						im, _ := item.(map[string]interface{})
+						if im["type"] == "text" { text += fmt.Sprintf("%v", im["text"]) }
+						if im["type"] == "tool_use" {
+							inputJSON, _ := json.Marshal(im["input"])
+							tcs = append(tcs, map[string]interface{}{"id": im["id"], "type": "function", "function": map[string]interface{}{"name": im["name"], "arguments": string(inputJSON)}})
+						}
+					}
+					am := map[string]interface{}{"role": "assistant"}
+					if text != "" { am["content"] = text }
+					if len(tcs) > 0 { am["tool_calls"] = tcs }
+					out = append(out, am)
+				} else {
+					out = append(out, map[string]interface{}{"role": "assistant", "content": content})
+				}
+			}
+		}
+	}
+	return out
+}
+
+func (c *OpenAIClient) convertTools(tools interface{}) []map[string]interface{} {
+	arr, ok := tools.([]interface{})
+	if !ok || len(arr) == 0 { return nil }
+	var out []map[string]interface{}
+	for _, t := range arr {
+		tm, _ := t.(map[string]interface{})
+		if _, hasType := tm["type"]; hasType { continue } // skip server tools
+		out = append(out, map[string]interface{}{"type": "function", "function": map[string]interface{}{
+			"name": tm["name"], "description": tm["description"], "parameters": tm["input_schema"],
+		}})
+	}
+	if len(out) == 0 { return nil }
+	return out
+}
+
+func (c *OpenAIClient) translateStream(body io.Reader, events chan<- SSEEvent) {
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024)
+	sentStart := false
+	textIdx := -1
+	toolCalls := map[int]bool{}
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !strings.HasPrefix(line, "data: ") { continue }
+		payload := strings.TrimSpace(line[6:])
+		if payload == "[DONE]" { continue }
+		var chunk map[string]interface{}
+		if json.Unmarshal([]byte(payload), &chunk) != nil { continue }
+
+		if !sentStart {
+			sentStart = true
+			d, _ := json.Marshal(map[string]interface{}{"message": map[string]interface{}{"usage": map[string]interface{}{"input_tokens": 0, "output_tokens": 0}}})
+			events <- SSEEvent{Event: "message_start", Data: d}
+		}
+
+		choices, _ := chunk["choices"].([]interface{})
+		if len(choices) == 0 { continue }
+		choice, _ := choices[0].(map[string]interface{})
+		delta, _ := choice["delta"].(map[string]interface{})
+		finish, _ := choice["finish_reason"].(string)
+
+		if delta != nil {
+			if content, ok := delta["content"].(string); ok && content != "" {
+				if textIdx < 0 {
+					textIdx = 0
+					d, _ := json.Marshal(map[string]interface{}{"index": 0, "content_block": map[string]interface{}{"type": "text", "text": ""}})
+					events <- SSEEvent{Event: "content_block_start", Data: d}
+				}
+				d, _ := json.Marshal(map[string]interface{}{"index": 0, "delta": map[string]interface{}{"type": "text_delta", "text": content}})
+				events <- SSEEvent{Event: "content_block_delta", Data: d}
+			}
+			if tcs, ok := delta["tool_calls"].([]interface{}); ok {
+				for _, tc := range tcs {
+					tcm, _ := tc.(map[string]interface{})
+					idx := int(tcm["index"].(float64))
+					if !toolCalls[idx] {
+						if textIdx >= 0 { d, _ := json.Marshal(map[string]interface{}{"index": textIdx}); events <- SSEEvent{Event: "content_block_stop", Data: d}; textIdx = -1 }
+						toolCalls[idx] = true
+						fn, _ := tcm["function"].(map[string]interface{})
+						d, _ := json.Marshal(map[string]interface{}{"index": idx + 1, "content_block": map[string]interface{}{"type": "tool_use", "id": tcm["id"], "name": fn["name"]}})
+						events <- SSEEvent{Event: "content_block_start", Data: d}
+					}
+					if fn, ok := tcm["function"].(map[string]interface{}); ok {
+						if args, ok := fn["arguments"].(string); ok && args != "" {
+							d, _ := json.Marshal(map[string]interface{}{"index": idx + 1, "delta": map[string]interface{}{"type": "input_json_delta", "partial_json": args}})
+							events <- SSEEvent{Event: "content_block_delta", Data: d}
+						}
+					}
+				}
+			}
+		}
+		if finish != "" {
+			if textIdx >= 0 { d, _ := json.Marshal(map[string]interface{}{"index": textIdx}); events <- SSEEvent{Event: "content_block_stop", Data: d} }
+			for idx := range toolCalls { d, _ := json.Marshal(map[string]interface{}{"index": idx + 1}); events <- SSEEvent{Event: "content_block_stop", Data: d} }
+			stop := "end_turn"
+			if finish == "tool_calls" { stop = "tool_use" } else if finish == "length" { stop = "max_tokens" }
+			d, _ := json.Marshal(map[string]interface{}{"delta": map[string]interface{}{"stop_reason": stop}, "usage": map[string]interface{}{"output_tokens": 0}})
+			events <- SSEEvent{Event: "message_delta", Data: d}
+			d2, _ := json.Marshal(map[string]interface{}{})
+			events <- SSEEvent{Event: "message_stop", Data: d2}
+		}
+	}
+}
+
+// ── OpenAIResponsesClient (Responses API for *-codex) ──────────
+
+type OpenAIResponsesClient struct {
+	APIKey          string
+	APIURL          string
+	Client          *http.Client
+	callIdToItemId  map[string]string
+}
+
+func NewOpenAIResponsesClient(apiKey, apiURL string) *OpenAIResponsesClient {
+	return &OpenAIResponsesClient{APIKey: apiKey, APIURL: apiURL, Client: &http.Client{Timeout: 5 * time.Minute}, callIdToItemId: map[string]string{}}
+}
+
+func (c *OpenAIResponsesClient) Stream(body map[string]interface{}) (<-chan SSEEvent, <-chan error) {
+	events := make(chan SSEEvent, 64)
+	errc := make(chan error, 1)
+
+	go func() {
+		defer close(events)
+		defer close(errc)
+
+		model, _ := body["model"].(string)
+		// Build instructions from system blocks
+		var instructions string
+		if blocks, ok := body["system"].([]interface{}); ok {
+			var texts []string
+			for _, b := range blocks { if m, ok := b.(map[string]interface{}); ok { texts = append(texts, fmt.Sprintf("%v", m["text"])) } }
+			instructions = strings.Join(texts, "\n\n")
+		}
+		// Convert messages to input
+		input := c.convertInput(body["messages"])
+		// Convert tools (flat format)
+		var tools []map[string]interface{}
+		if arr, ok := body["tools"].([]interface{}); ok {
+			for _, t := range arr {
+				tm, _ := t.(map[string]interface{})
+				if _, hasType := tm["type"]; hasType { continue }
+				tools = append(tools, map[string]interface{}{"type": "function", "name": tm["name"], "description": tm["description"], "parameters": tm["input_schema"]})
+			}
+		}
+
+		reqBody := map[string]interface{}{"model": model, "input": input, "stream": true, "store": false, "max_output_tokens": body["max_tokens"]}
+		if instructions != "" { reqBody["instructions"] = instructions }
+		if len(tools) > 0 { reqBody["tools"] = tools }
+
+		payload, _ := json.Marshal(reqBody)
+		var lastErr error
+		for attempt := 0; attempt < 3; attempt++ {
+			if attempt > 0 { time.Sleep(time.Duration(1<<uint(attempt)) * time.Second) }
+			req, _ := http.NewRequest("POST", c.APIURL+"/v1/responses", bytes.NewReader(payload))
+			req.Header.Set("Content-Type", "application/json")
+			req.Header.Set("Authorization", "Bearer "+c.APIKey)
+			resp, err := c.Client.Do(req)
+			if err != nil { lastErr = err; continue }
+			if resp.StatusCode == 429 || resp.StatusCode == 529 { resp.Body.Close(); lastErr = fmt.Errorf("HTTP %d", resp.StatusCode); continue }
+			if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+				b, _ := io.ReadAll(resp.Body); resp.Body.Close()
+				errc <- fmt.Errorf("OpenAI Responses API error %d: %s", resp.StatusCode, string(b)); return
+			}
+			c.translateStream(resp.Body, events)
+			resp.Body.Close()
+			return
+		}
+		if lastErr != nil { errc <- lastErr } else { errc <- fmt.Errorf("max retries") }
+	}()
+	return events, errc
+}
+
+func (c *OpenAIResponsesClient) convertInput(messages interface{}) []map[string]interface{} {
+	var input []map[string]interface{}
+	msgs, ok := messages.([]interface{})
+	if !ok { return input }
+	for _, m := range msgs {
+		msg, _ := m.(map[string]interface{})
+		role, _ := msg["role"].(string)
+		content := msg["content"]
+		if role == "user" {
+			if arr, ok := content.([]interface{}); ok {
+				for _, item := range arr {
+					im, _ := item.(map[string]interface{})
+					if im["type"] == "tool_result" {
+						input = append(input, map[string]interface{}{"type": "function_call_output", "call_id": im["tool_use_id"], "output": fmt.Sprintf("%v", im["content"])})
+					}
+				}
+				if len(input) == 0 || input[len(input)-1]["type"] != "function_call_output" {
+					var text string
+					for _, item := range arr { im, _ := item.(map[string]interface{}); if im["type"] == "text" { text += fmt.Sprintf("%v", im["text"]) } }
+					if text != "" { input = append(input, map[string]interface{}{"role": "user", "content": text}) }
+				}
+			} else {
+				input = append(input, map[string]interface{}{"role": "user", "content": content})
+			}
+		} else if role == "assistant" {
+			if arr, ok := content.([]interface{}); ok {
+				var text string
+				for _, item := range arr { im, _ := item.(map[string]interface{}); if im["type"] == "text" { text += fmt.Sprintf("%v", im["text"]) } }
+				if text != "" { input = append(input, map[string]interface{}{"type": "message", "role": "assistant", "content": []map[string]interface{}{{"type": "output_text", "text": text}}}) }
+				for _, item := range arr {
+					im, _ := item.(map[string]interface{})
+					if im["type"] == "tool_use" {
+						callID, _ := im["id"].(string)
+						itemID := c.callIdToItemId[callID]
+						if itemID == "" { itemID = callID }
+						inputJSON, _ := json.Marshal(im["input"])
+						input = append(input, map[string]interface{}{"type": "function_call", "id": itemID, "call_id": callID, "name": im["name"], "arguments": string(inputJSON)})
+					}
+				}
+			}
+		}
+	}
+	return input
+}
+
+func (c *OpenAIResponsesClient) translateStream(body io.Reader, events chan<- SSEEvent) {
+	scanner := bufio.NewScanner(body)
+	scanner.Buffer(make([]byte, 0, 1024*1024), 10*1024*1024)
+	sentStart := false
+	textStarted := false
+	blockIdx := 0
+	var eventType, dataLine string
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		if strings.HasPrefix(line, "event: ") { eventType = line[7:]; continue }
+		if strings.HasPrefix(line, "data: ") { dataLine = line[6:]; continue }
+		if line != "" { continue }
+		// Empty line = end of SSE chunk
+		if eventType == "" || dataLine == "" { eventType = ""; dataLine = ""; continue }
+		var ev map[string]interface{}
+		if json.Unmarshal([]byte(dataLine), &ev) != nil { eventType = ""; dataLine = ""; continue }
+		evType, _ := ev["type"].(string)
+		eventType = ""; dataLine = ""
+
+		if !sentStart {
+			sentStart = true
+			d, _ := json.Marshal(map[string]interface{}{"message": map[string]interface{}{"usage": map[string]interface{}{"input_tokens": 0, "output_tokens": 0}}})
+			events <- SSEEvent{Event: "message_start", Data: d}
+		}
+
+		switch evType {
+		case "response.output_item.added":
+			item, _ := ev["item"].(map[string]interface{})
+			if item != nil && item["type"] == "function_call" {
+				if textStarted { d, _ := json.Marshal(map[string]interface{}{"index": blockIdx}); events <- SSEEvent{Event: "content_block_stop", Data: d}; textStarted = false; blockIdx++ }
+				callID, _ := item["call_id"].(string)
+				itemID, _ := item["id"].(string)
+				c.callIdToItemId[callID] = itemID
+				d, _ := json.Marshal(map[string]interface{}{"index": blockIdx, "content_block": map[string]interface{}{"type": "tool_use", "id": callID, "name": item["name"]}})
+				events <- SSEEvent{Event: "content_block_start", Data: d}
+			}
+		case "response.output_text.delta":
+			if !textStarted {
+				textStarted = true
+				d, _ := json.Marshal(map[string]interface{}{"index": blockIdx, "content_block": map[string]interface{}{"type": "text", "text": ""}})
+				events <- SSEEvent{Event: "content_block_start", Data: d}
+			}
+			d, _ := json.Marshal(map[string]interface{}{"index": blockIdx, "delta": map[string]interface{}{"type": "text_delta", "text": ev["delta"]}})
+			events <- SSEEvent{Event: "content_block_delta", Data: d}
+		case "response.function_call_arguments.delta":
+			d, _ := json.Marshal(map[string]interface{}{"index": blockIdx, "delta": map[string]interface{}{"type": "input_json_delta", "partial_json": ev["delta"]}})
+			events <- SSEEvent{Event: "content_block_delta", Data: d}
+		case "response.output_item.done":
+			item, _ := ev["item"].(map[string]interface{})
+			if textStarted { d, _ := json.Marshal(map[string]interface{}{"index": blockIdx}); events <- SSEEvent{Event: "content_block_stop", Data: d}; textStarted = false; blockIdx++ }
+			if item != nil && item["type"] == "function_call" { d, _ := json.Marshal(map[string]interface{}{"index": blockIdx}); events <- SSEEvent{Event: "content_block_stop", Data: d}; blockIdx++ }
+		case "response.completed":
+			if textStarted { d, _ := json.Marshal(map[string]interface{}{"index": blockIdx}); events <- SSEEvent{Event: "content_block_stop", Data: d}; textStarted = false }
+			response, _ := ev["response"].(map[string]interface{})
+			hasTC := false
+			if output, ok := response["output"].([]interface{}); ok {
+				for _, o := range output { om, _ := o.(map[string]interface{}); if om["type"] == "function_call" { hasTC = true } }
+			}
+			stop := "end_turn"; if hasTC { stop = "tool_use" }
+			usage, _ := response["usage"].(map[string]interface{})
+			inTok := 0; outTok := 0
+			if v, ok := usage["input_tokens"].(float64); ok { inTok = int(v) }
+			if v, ok := usage["output_tokens"].(float64); ok { outTok = int(v) }
+			d, _ := json.Marshal(map[string]interface{}{"delta": map[string]interface{}{"stop_reason": stop}, "usage": map[string]interface{}{"input_tokens": inTok, "output_tokens": outTok}})
+			events <- SSEEvent{Event: "message_delta", Data: d}
+			d2, _ := json.Marshal(map[string]interface{}{})
+			events <- SSEEvent{Event: "message_stop", Data: d2}
+		case "response.failed":
+			if resp, ok := ev["response"].(map[string]interface{}); ok {
+				if errObj, ok := resp["error"].(map[string]interface{}); ok {
+					errmsg, _ := errObj["message"].(string)
+					events <- SSEEvent{Event: "error", Data: json.RawMessage(`{"error":"` + errmsg + `"}`)}
+				}
+			}
 		}
 	}
 }
@@ -936,14 +1373,14 @@ type AgentCallbacks struct {
 }
 
 type AgentLoop struct {
-	Client     *AnthropicClient
+	Client     StreamClient
 	Registry   *ToolRegistry
 	Cfg        *Config
 	Callbacks  *AgentCallbacks
 	TotalUsage Usage
 }
 
-func NewAgentLoop(client *AnthropicClient, registry *ToolRegistry, cfg *Config, cb *AgentCallbacks) *AgentLoop {
+func NewAgentLoop(client StreamClient, registry *ToolRegistry, cfg *Config, cb *AgentCallbacks) *AgentLoop {
 	return &AgentLoop{
 		Client:    client,
 		Registry:  registry,
@@ -959,15 +1396,33 @@ func (a *AgentLoop) Run(messages []Message, systemBlocks []SystemBlock) (*AgentR
 		turnCount++
 		logDebug("Turn %d/%d", turnCount, a.Cfg.MaxTurns)
 
+		// Convert typed slices to interface{} for OpenAI clients
+		// Convert typed slices to []interface{} for cross-backend compatibility
+		var msgsI []interface{}
+		for _, m := range messages {
+			mm := map[string]interface{}{"role": m.Role, "content": m.Content}
+			msgsI = append(msgsI, mm)
+		}
+		var sysI []interface{}
+		for _, s := range systemBlocks {
+			sm := map[string]interface{}{"type": s.Type, "text": s.Text}
+			if s.CacheControl != nil { sm["cache_control"] = map[string]interface{}{"type": s.CacheControl.Type} }
+			sysI = append(sysI, sm)
+		}
+		defs := a.Registry.GetDefinitions()
+		var toolsI []interface{}
+		for _, d := range defs {
+			toolsI = append(toolsI, map[string]interface{}{"name": d.Name, "description": d.Description, "input_schema": d.InputSchema})
+		}
 		body := map[string]interface{}{
 			"model":      a.Cfg.Model,
 			"max_tokens": a.Cfg.MaxTokens,
-			"system":     systemBlocks,
-			"messages":   messages,
-			"tools":      a.Registry.GetDefinitions(),
+			"system":     sysI,
+			"messages":   msgsI,
+			"tools":      toolsI,
 		}
 
-		if a.Cfg.ThinkingBudget > 0 {
+		if a.Cfg.ThinkingBudget > 0 && !isOpenAIModel(a.Cfg.Model) {
 			body["thinking"] = map[string]interface{}{
 				"type":          "enabled",
 				"budget_tokens": a.Cfg.ThinkingBudget,
@@ -1262,12 +1717,12 @@ func (s *SessionManager) Latest() string {
 type NdjsonBridge struct {
 	Cfg              *Config
 	Registry         *ToolRegistry
-	Client           *AnthropicClient
+	Client           StreamClient
 	Sessions         *SessionManager
 	pendingToolCalls sync.Map // id -> chan *ToolExecuteResult
 }
 
-func NewNdjsonBridge(cfg *Config, registry *ToolRegistry, client *AnthropicClient) *NdjsonBridge {
+func NewNdjsonBridge(cfg *Config, registry *ToolRegistry, client StreamClient) *NdjsonBridge {
 	return &NdjsonBridge{
 		Cfg:      cfg,
 		Registry: registry,
@@ -1426,14 +1881,14 @@ func (b *NdjsonBridge) handleMessage(msg *NDJSONIncoming, sessionID string) {
 type InteractiveMode struct {
 	Cfg       *Config
 	Registry  *ToolRegistry
-	Client    *AnthropicClient
+	Client    StreamClient
 	Sessions  *SessionManager
 	SessionID string
 	Messages  []Message
 	TotalCost float64
 }
 
-func NewInteractiveMode(cfg *Config, registry *ToolRegistry, client *AnthropicClient) *InteractiveMode {
+func NewInteractiveMode(cfg *Config, registry *ToolRegistry, client StreamClient) *InteractiveMode {
 	return &InteractiveMode{
 		Cfg:      cfg,
 		Registry: registry,
@@ -1994,7 +2449,7 @@ func main() {
 	cfg := parseArgs()
 	verbose = cfg.Verbose
 
-	// Resolve auth: --oauth (keychain) > --auth-token > --api-key > ANTHROPIC_API_KEY
+	// Resolve Anthropic auth
 	if cfg.UseOAuth || (cfg.APIKey == "" && cfg.AuthToken == "") {
 		token, subType, err := getOAuthAccessToken(cfg.Verbose)
 		if err == nil {
@@ -2006,12 +2461,27 @@ func main() {
 		}
 	}
 
-	if cfg.APIKey == "" && cfg.AuthToken == "" {
-		fmt.Fprintln(os.Stderr, "Error: No auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY")
-		os.Exit(1)
+	// Determine backend and create client
+	useOpenAI := isOpenAIModel(cfg.Model)
+	var client StreamClient
+	if useOpenAI {
+		if cfg.OpenAIAPIKey == "" {
+			fmt.Fprintln(os.Stderr, "Error: No OpenAI auth. Run --openai-login, use --openai-api-key, or set OPENAI_API_KEY")
+			os.Exit(1)
+		}
+		fmt.Fprintf(os.Stderr, "\033[2mUsing OpenAI backend (%s)\033[0m\n", cfg.Model)
+		if isResponsesAPIModel(cfg.Model) {
+			client = NewOpenAIResponsesClient(cfg.OpenAIAPIKey, cfg.OpenAIAPIURL)
+		} else {
+			client = NewOpenAIClient(cfg.OpenAIAPIKey, cfg.OpenAIAPIURL)
+		}
+	} else {
+		if cfg.APIKey == "" && cfg.AuthToken == "" {
+			fmt.Fprintln(os.Stderr, "Error: No auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY")
+			os.Exit(1)
+		}
+		client = NewAnthropicClient(cfg.APIKey, cfg.AuthToken, cfg.APIURL)
 	}
-
-	client := NewAnthropicClient(cfg.APIKey, cfg.AuthToken, cfg.APIURL)
 	registry := NewToolRegistry()
 	registerBuiltinTools(registry)
 

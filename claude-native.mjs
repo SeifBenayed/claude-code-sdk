@@ -27,7 +27,10 @@ async function parseArgs(argv = process.argv.slice(2)) {
     apiKey: process.env.ANTHROPIC_API_KEY || "",
     authToken: process.env.ANTHROPIC_AUTH_TOKEN || "",  // OAuth token (Pro/Max subscription)
     apiUrl: process.env.ANTHROPIC_API_URL || "https://api.anthropic.com",
-    useOAuth: false,  // --oauth flag: use Pro subscription via keychain
+    openaiApiKey: process.env.OPENAI_API_KEY || "",
+    openaiApiUrl: process.env.OPENAI_API_URL || "https://api.openai.com",
+    useOAuth: false,  // --oauth flag: use Anthropic Pro subscription via keychain
+    useOpenAIOAuth: false,  // --openai flag: use OpenAI subscription via keychain
     ndjson: false,
     interactive: true,
     prompt: null,
@@ -41,7 +44,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
     mcpConfig: null,
     allowedTools: null,
     disallowedTools: null,
-    permissionMode: "default",  // default|plan|acceptEdits|bypassPermissions|dontAsk
+    permissionMode: "auto",  // auto|default|plan|acceptEdits|bypassPermissions|dontAsk
     permissionRules: [],        // [{tool, pattern, behavior: "allow"|"deny"}]
     permissionCallbacks: false, // forward permission requests to NDJSON agent
     cwd: process.cwd(),
@@ -56,6 +59,8 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "--auth-token": cfg.authToken = argv[++i]; break;
       case "--oauth": cfg.useOAuth = true; break;
       case "--api-url": cfg.apiUrl = argv[++i]; break;
+      case "--openai-api-key": cfg.openaiApiKey = argv[++i]; break;
+      case "--openai-api-url": cfg.openaiApiUrl = argv[++i]; break;
       case "--ndjson": cfg.ndjson = true; cfg.interactive = false; break;
       case "-p": case "--print": cfg.prompt = argv[++i]; cfg.interactive = false; break;
       case "--resume": cfg.resume = true; break;
@@ -72,6 +77,9 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "--permission-callbacks": cfg.permissionCallbacks = true; break;
       case "--login": await oauthLogin(); process.exit(0);
       case "--logout": oauthLogout(); process.exit(0);
+      case "--openai-login": await openaiOAuthLogin(); process.exit(0);
+      case "--openai-logout": openaiOAuthLogout(); process.exit(0);
+      case "--openai": cfg.useOpenAIOAuth = true; break;
       case "--help": case "-h": printHelp(); process.exit(0);
       default:
         if (!a.startsWith("-") && !cfg.prompt) cfg.prompt = a;
@@ -86,8 +94,177 @@ function resolveModel(name) {
   const aliases = {
     opus: "claude-opus-4-6", sonnet: "claude-sonnet-4-6", haiku: "claude-haiku-4-5-20251001",
     "opus-4": "claude-opus-4-6", "sonnet-4": "claude-sonnet-4-6",
+    // OpenAI aliases
+    // *-codex models use Responses API (/v1/responses), others use Chat Completions
+    "gpt-5.4": "gpt-5.4", "gpt5": "gpt-5.4", "5.4": "gpt-5.4",
+    "codex": "gpt-5.3-codex", "gpt-5.3-codex": "gpt-5.3-codex",
+    "gpt-5.2-codex": "gpt-5.2-codex", "gpt-5.1-codex": "gpt-5.1-codex",
+    "gpt-4.1": "gpt-4.1", "4.1": "gpt-4.1",
+    "gpt-4.1-mini": "gpt-4.1-mini", "4.1-mini": "gpt-4.1-mini",
+    "gpt-4.1-nano": "gpt-4.1-nano", "4.1-nano": "gpt-4.1-nano",
+    "gpt-4o": "gpt-4o", "gpt-4": "gpt-4o", "4o": "gpt-4o",
+    "gpt-4o-mini": "gpt-4o-mini", "4o-mini": "gpt-4o-mini",
+    "o3": "o3", "o3-pro": "o3-pro", "o3-mini": "o3-mini", "o4-mini": "o4-mini",
   };
   return aliases[name] || name;
+}
+
+function isOpenAIModel(model) {
+  return model.startsWith("gpt-") || model.startsWith("o3") || model.startsWith("o4") || model === "o1" || model === "o1-mini";
+}
+
+function isResponsesAPIModel(model) {
+  return model.includes("-codex");
+}
+
+// ── OpenAI OAuth ────────────────────────────────────────────────
+//
+// OAuth 2.1 PKCE flow against auth.openai.com, similar to Anthropic's.
+// Tokens cached in macOS keychain under "Claude Native OpenAI-credentials".
+
+const OPENAI_AUTH_URL = "https://auth.openai.com/oauth/authorize";
+const OPENAI_TOKEN_URL = "https://auth.openai.com/oauth/token";
+const OPENAI_CLIENT_ID = "app_codex_cli";  // Codex CLI's registered client ID
+
+async function openaiOAuthLogin() {
+  const state = randomUUID();
+  const codeVerifier = randomUUID() + randomUUID();
+  const codeChallenge = createHash("sha256").update(codeVerifier).digest("base64url");
+
+  const params = new URLSearchParams({
+    response_type: "code",
+    client_id: OPENAI_CLIENT_ID,
+    redirect_uri: "http://127.0.0.1:9876/callback",
+    scope: "openid profile email offline_access",
+    state,
+    code_challenge: codeChallenge,
+    code_challenge_method: "S256",
+  });
+
+  const authUrl = `${OPENAI_AUTH_URL}?${params}`;
+
+  // Start local server to receive callback
+  const { code, receivedState } = await new Promise((resolve, reject) => {
+    const server = createServer((req, res) => {
+      const url = new URL(req.url, "http://127.0.0.1:9876");
+      if (url.pathname !== "/callback") { res.writeHead(404); res.end(); return; }
+
+      const code = url.searchParams.get("code");
+      const receivedState = url.searchParams.get("state");
+      const error = url.searchParams.get("error");
+
+      res.writeHead(200, { "content-type": "text/html" });
+      res.end("<html><body><h2>Login successful!</h2><p>You can close this tab.</p><script>window.close()</script></body></html>");
+      server.close();
+
+      if (error) reject(new Error(`OAuth error: ${error}`));
+      else resolve({ code, receivedState });
+    });
+
+    server.listen(9876, "127.0.0.1", () => {
+      process.stderr.write(`\nOpening browser for OpenAI login...\n`);
+      try { execSync(`open "${authUrl}"`); } catch {
+        process.stderr.write(`Open this URL in your browser:\n${authUrl}\n`);
+      }
+    });
+
+    setTimeout(() => { server.close(); reject(new Error("Login timed out (120s)")); }, 120000);
+  });
+
+  if (receivedState !== state) throw new Error("OAuth state mismatch");
+
+  // Exchange code for tokens
+  const tokenResp = await fetch(OPENAI_TOKEN_URL, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      client_id: OPENAI_CLIENT_ID,
+      code,
+      redirect_uri: "http://127.0.0.1:9876/callback",
+      code_verifier: codeVerifier,
+    }),
+  });
+
+  if (!tokenResp.ok) {
+    const text = await tokenResp.text();
+    throw new Error(`Token exchange failed: ${tokenResp.status} ${text}`);
+  }
+
+  const tokens = await tokenResp.json();
+
+  // Save to macOS keychain
+  const user = process.env.USER || os.userInfo().username;
+  const service = "Claude Native OpenAI-credentials";
+  const payload = JSON.stringify({
+    access_token: tokens.access_token,
+    refresh_token: tokens.refresh_token,
+    expires_at: Date.now() + (tokens.expires_in || 3600) * 1000,
+  });
+
+  try {
+    execSync(`security delete-generic-password -a "${user}" -s "${service}"`, { stdio: ["pipe", "pipe", "pipe"] });
+  } catch { /* no existing entry */ }
+  execSync(
+    `security add-generic-password -a "${user}" -s "${service}" -w '${payload.replace(/'/g, "'\\''")}'`,
+    { stdio: ["pipe", "pipe", "pipe"] }
+  );
+
+  process.stderr.write(`\nOpenAI credentials saved to macOS keychain.\n`);
+  return tokens.access_token;
+}
+
+async function getOpenAIAccessToken(verbose = false) {
+  const user = process.env.USER || os.userInfo().username;
+  const service = "Claude Native OpenAI-credentials";
+
+  let raw;
+  try {
+    raw = execSync(`security find-generic-password -a "${user}" -s "${service}" -w`, {
+      encoding: "utf-8", stdio: ["pipe", "pipe", "pipe"],
+    }).trim();
+  } catch {
+    throw new Error("No OpenAI credentials found. Run --openai-login first.");
+  }
+
+  const creds = JSON.parse(raw);
+
+  // Check if token is expired → refresh
+  if (creds.expires_at && Date.now() > creds.expires_at - 60000 && creds.refresh_token) {
+    if (verbose) log("[openai-auth] Token expired, refreshing...");
+    const resp = await fetch(OPENAI_TOKEN_URL, {
+      method: "POST",
+      headers: { "content-type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams({
+        grant_type: "refresh_token",
+        client_id: OPENAI_CLIENT_ID,
+        refresh_token: creds.refresh_token,
+      }),
+    });
+
+    if (!resp.ok) throw new Error("OpenAI token refresh failed. Run --openai-login again.");
+    const tokens = await resp.json();
+
+    creds.access_token = tokens.access_token;
+    if (tokens.refresh_token) creds.refresh_token = tokens.refresh_token;
+    creds.expires_at = Date.now() + (tokens.expires_in || 3600) * 1000;
+
+    const payload = JSON.stringify(creds);
+    try { execSync(`security delete-generic-password -a "${user}" -s "${service}"`, { stdio: ["pipe", "pipe", "pipe"] }); } catch {}
+    execSync(`security add-generic-password -a "${user}" -s "${service}" -w '${payload.replace(/'/g, "'\\''")}'`, { stdio: ["pipe", "pipe", "pipe"] });
+  }
+
+  return creds.access_token;
+}
+
+function openaiOAuthLogout() {
+  try {
+    const user = process.env.USER || os.userInfo().username;
+    execSync(`security delete-generic-password -a "${user}" -s "Claude Native OpenAI-credentials"`, { stdio: ["pipe", "pipe", "pipe"] });
+    process.stderr.write("OpenAI credentials removed from keychain.\n");
+  } catch {
+    process.stderr.write("No OpenAI credentials found in keychain.\n");
+  }
 }
 
 function printHelp() {
@@ -99,17 +276,22 @@ Usage:
   claude-native --ndjson                NDJSON bridge mode
 
 Options:
-  -m, --model <name>          Model (sonnet, opus, haiku, or full ID)
+  -m, --model <name>          Model (sonnet, opus, haiku, gpt-4o, o3, codex, or full ID)
   -p, --print <prompt>        One-shot mode, print response and exit
   --ndjson                    NDJSON bridge protocol on stdin/stdout
   --max-turns <n>             Max agent loop turns (default: 25)
   --max-tokens <n>            Max output tokens (default: 16384)
-  --login                     Login via browser (OAuth, saves to keychain)
-  --logout                    Remove saved credentials
-  --oauth                     Use Pro/Max subscription (reads macOS keychain)
-  --api-key <key>             API key (or ANTHROPIC_API_KEY env)
+  --login                     Login to Anthropic via browser (OAuth)
+  --logout                    Remove Anthropic credentials
+  --oauth                     Use Anthropic Pro/Max subscription (keychain)
+  --openai-login              Login to OpenAI via browser (OAuth)
+  --openai-logout             Remove OpenAI credentials
+  --openai                    Use OpenAI subscription (keychain)
+  --api-key <key>             Anthropic API key (or ANTHROPIC_API_KEY env)
+  --openai-api-key <key>      OpenAI API key (or OPENAI_API_KEY env)
   --auth-token <token>        OAuth bearer token directly
-  --api-url <url>             API base URL
+  --api-url <url>             Anthropic API base URL
+  --openai-api-url <url>      OpenAI API base URL
   --thinking <budget>         Enable extended thinking with token budget
   --system-prompt <text>      Override system prompt
   --append-system-prompt <t>  Append to system prompt
@@ -155,13 +337,17 @@ class AnthropicClient {
     };
   }
 
-  async *stream(body) {
+  async *stream(body, opts = {}) {
     const url = this.authToken
       ? `${this.apiUrl}/v1/messages?beta=true`
       : `${this.apiUrl}/v1/messages`;
+    const signal = opts.signal;
     let lastError;
 
     for (let attempt = 0; attempt < 3; attempt++) {
+      if (signal?.aborted) {
+        throw signal.reason instanceof Error ? signal.reason : new Error("Request aborted");
+      }
       if (attempt > 0) {
         const delay = 1000 * (1 << attempt);
         log(`Retry ${attempt}/3 after ${delay}ms...`);
@@ -180,8 +366,10 @@ class AnthropicClient {
             "anthropic-beta": this._betaHeaders(),
           },
           body: JSON.stringify({ ...body, stream: true }),
+          signal,
         });
       } catch (e) {
+        if (signal?.aborted || e?.name === "AbortError") throw e;
         lastError = e;
         continue;
       }
@@ -237,6 +425,566 @@ class AnthropicClient {
   }
 }
 
+// ── OpenAIClient ────────────────────────────────────────────────
+//
+// Drop-in replacement for AnthropicClient. Translates OpenAI's chat
+// completions SSE format into the same { event, data } shape that
+// AgentLoop expects (Anthropic SSE events).
+
+class OpenAIClient {
+  constructor({ apiKey, apiUrl = "https://api.openai.com" }) {
+    this.apiKey = apiKey;
+    this.apiUrl = apiUrl;
+  }
+
+  // Convert Anthropic tool defs to OpenAI function-calling format
+  _convertTools(tools) {
+    if (!tools || tools.length === 0) return undefined;
+    return tools
+      .filter((t) => !t.type) // skip server-side tools (web_search etc.)
+      .map((t) => ({
+        type: "function",
+        function: {
+          name: t.name,
+          description: t.description,
+          parameters: t.input_schema,
+        },
+      }));
+  }
+
+  _isReasoningModel(model) {
+    return /^o[1-9]/.test(model); // o1, o3, o3-pro, o3-mini, o4-mini
+  }
+
+  // Convert Anthropic system blocks + messages to OpenAI format
+  _convertMessages(systemBlocks, messages) {
+    const out = [];
+    // System prompt: reasoning models (o3, o4-mini) use "developer" role, others use "system"
+    if (systemBlocks?.length > 0) {
+      const systemText = systemBlocks.map((b) => b.text).join("\n\n");
+      const role = this._isReasoningModel(this._model) ? "developer" : "system";
+      out.push({ role, content: systemText });
+    }
+    for (const msg of messages) {
+      if (msg.role === "assistant") {
+        // Convert Anthropic content blocks to OpenAI format
+        if (Array.isArray(msg.content)) {
+          const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+          const toolCalls = msg.content.filter((b) => b.type === "tool_use").map((b) => ({
+            id: b.id,
+            type: "function",
+            function: { name: b.name, arguments: JSON.stringify(b.input) },
+          }));
+          const oaiMsg = { role: "assistant" };
+          if (text) oaiMsg.content = text;
+          if (toolCalls.length > 0) oaiMsg.tool_calls = toolCalls;
+          out.push(oaiMsg);
+        } else {
+          out.push({ role: "assistant", content: msg.content });
+        }
+      } else if (msg.role === "user") {
+        // User messages may be tool_result arrays
+        if (Array.isArray(msg.content)) {
+          const toolResults = msg.content.filter((b) => b.type === "tool_result");
+          if (toolResults.length > 0) {
+            for (const tr of toolResults) {
+              out.push({
+                role: "tool",
+                tool_call_id: tr.tool_use_id,
+                content: typeof tr.content === "string" ? tr.content : JSON.stringify(tr.content),
+              });
+            }
+          } else {
+            const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+            out.push({ role: "user", content: text || JSON.stringify(msg.content) });
+          }
+        } else {
+          out.push({ role: "user", content: msg.content });
+        }
+      }
+    }
+    return out;
+  }
+
+  async *stream(body, opts = {}) {
+    const signal = opts.signal;
+    this._model = body.model; // stash for _isReasoningModel
+    const oaiTools = this._convertTools(body.tools);
+    const oaiMessages = this._convertMessages(body.system, body.messages);
+
+    const oaiBody = {
+      model: body.model,
+      messages: oaiMessages,
+      max_completion_tokens: body.max_tokens,
+      stream: true,
+      stream_options: { include_usage: true },
+    };
+    if (oaiTools?.length > 0) oaiBody.tools = oaiTools;
+
+    let lastError;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (signal?.aborted) {
+        throw signal.reason instanceof Error ? signal.reason : new Error("Request aborted");
+      }
+      if (attempt > 0) {
+        const delay = 1000 * (1 << attempt);
+        log(`[openai] Retry ${attempt}/3 after ${delay}ms...`);
+        await sleep(delay);
+      }
+
+      let resp;
+      try {
+        resp = await fetch(`${this.apiUrl}/v1/chat/completions`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "authorization": `Bearer ${this.apiKey}`,  // Works for both API keys and OAuth tokens
+          },
+          body: JSON.stringify(oaiBody),
+          signal,
+        });
+      } catch (e) {
+        if (signal?.aborted || e?.name === "AbortError") throw e;
+        lastError = e;
+        continue;
+      }
+
+      if (resp.status === 429 || resp.status === 529) {
+        lastError = new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        continue;
+      }
+
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => "");
+        throw new Error(`OpenAI API error ${resp.status}: ${text}`);
+      }
+
+      // Translate OpenAI SSE → Anthropic SSE events
+      yield* this._translateStream(resp.body);
+      return;
+    }
+
+    throw lastError || new Error("Max retries exceeded");
+  }
+
+  async *_translateStream(body) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    // Track tool call state: index → { id, name, arguments }
+    const toolCalls = new Map();
+    let sentStart = false;
+    let textBlockIndex = null;
+    let usage = null;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        const lines = buf.split("\n");
+        buf = lines.pop();
+
+        for (const line of lines) {
+          if (!line.startsWith("data: ")) continue;
+          const payload = line.slice(6).trim();
+          if (payload === "[DONE]") continue;
+
+          let chunk;
+          try { chunk = JSON.parse(payload); } catch { continue; }
+
+          // Emit message_start on first chunk
+          if (!sentStart) {
+            sentStart = true;
+            yield {
+              event: "message_start",
+              data: { message: { usage: { input_tokens: 0, output_tokens: 0 } } },
+            };
+          }
+
+          // Usage (comes in final chunk with stream_options.include_usage)
+          if (chunk.usage) {
+            usage = {
+              input_tokens: chunk.usage.prompt_tokens || 0,
+              output_tokens: chunk.usage.completion_tokens || 0,
+            };
+          }
+
+          const delta = chunk.choices?.[0]?.delta;
+          const finishReason = chunk.choices?.[0]?.finish_reason;
+          if (!delta && !finishReason) continue;
+
+          // Text content
+          if (delta?.content) {
+            if (textBlockIndex === null) {
+              textBlockIndex = 0;
+              yield {
+                event: "content_block_start",
+                data: { index: textBlockIndex, content_block: { type: "text", text: "" } },
+              };
+            }
+            yield {
+              event: "content_block_delta",
+              data: { index: textBlockIndex, delta: { type: "text_delta", text: delta.content } },
+            };
+          }
+
+          // Tool calls
+          if (delta?.tool_calls) {
+            for (const tc of delta.tool_calls) {
+              const idx = tc.index;
+              if (!toolCalls.has(idx)) {
+                // New tool call — close text block if open, then start tool_use block
+                if (textBlockIndex !== null) {
+                  yield { event: "content_block_stop", data: { index: textBlockIndex } };
+                  textBlockIndex = null;
+                }
+                toolCalls.set(idx, { id: tc.id, name: tc.function?.name || "", arguments: "" });
+                yield {
+                  event: "content_block_start",
+                  data: {
+                    index: idx + 1,
+                    content_block: { type: "tool_use", id: tc.id, name: tc.function?.name || "" },
+                  },
+                };
+              }
+              const entry = toolCalls.get(idx);
+              if (tc.function?.name && !entry.name) entry.name = tc.function.name;
+              if (tc.function?.arguments) {
+                entry.arguments += tc.function.arguments;
+                yield {
+                  event: "content_block_delta",
+                  data: { index: idx + 1, delta: { type: "input_json_delta", partial_json: tc.function.arguments } },
+                };
+              }
+            }
+          }
+
+          // Finish
+          if (finishReason) {
+            // Close any open blocks
+            if (textBlockIndex !== null) {
+              yield { event: "content_block_stop", data: { index: textBlockIndex } };
+            }
+            for (const [idx] of toolCalls) {
+              yield { event: "content_block_stop", data: { index: idx + 1 } };
+            }
+
+            // Map finish reason
+            const stopReason = finishReason === "tool_calls" ? "tool_use"
+              : finishReason === "length" ? "max_tokens"
+              : "end_turn";
+
+            yield {
+              event: "message_delta",
+              data: {
+                delta: { stop_reason: stopReason },
+                usage: usage || { output_tokens: 0 },
+              },
+            };
+            yield { event: "message_stop", data: {} };
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+}
+
+// ── OpenAIResponsesClient ────────────────────────────────────────
+//
+// For *-codex models that only work on POST /v1/responses.
+// Translates to/from Anthropic SSE events like OpenAIClient does.
+// Key difference: uses `instructions` instead of system messages,
+// `input` instead of messages, and `previous_response_id` for multi-turn.
+
+class OpenAIResponsesClient {
+  constructor({ apiKey, apiUrl = "https://api.openai.com" }) {
+    this.apiKey = apiKey;
+    this.apiUrl = apiUrl;
+    this._lastResponseId = null;
+    // Map call_id → item_id (Responses API needs item_id in function_call input items)
+    this._callIdToItemId = new Map();
+  }
+
+  // Convert Anthropic tool defs → Responses API format (flat, no "function" wrapper)
+  _convertTools(tools) {
+    if (!tools || tools.length === 0) return undefined;
+    return tools
+      .filter((t) => !t.type) // skip Anthropic server-side tools
+      .map((t) => ({
+        type: "function",
+        name: t.name,
+        description: t.description,
+        parameters: t.input_schema,
+      }));
+  }
+
+  // Convert Anthropic system blocks + messages → Responses API input format
+  _convertInput(systemBlocks, messages) {
+    const input = [];
+
+    for (const msg of messages) {
+      if (msg.role === "user") {
+        if (Array.isArray(msg.content)) {
+          // Tool results
+          const toolResults = msg.content.filter((b) => b.type === "tool_result");
+          if (toolResults.length > 0) {
+            for (const tr of toolResults) {
+              input.push({
+                type: "function_call_output",
+                call_id: tr.tool_use_id,
+                output: typeof tr.content === "string" ? tr.content : JSON.stringify(tr.content),
+              });
+            }
+          } else {
+            const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+            input.push({ role: "user", content: text || JSON.stringify(msg.content) });
+          }
+        } else {
+          input.push({ role: "user", content: msg.content });
+        }
+      } else if (msg.role === "assistant") {
+        if (Array.isArray(msg.content)) {
+          // Text part
+          const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("");
+          if (text) {
+            input.push({ type: "message", role: "assistant", content: [{ type: "output_text", text }] });
+          }
+          // Tool calls — b.id is the call_id; look up the Responses API item_id
+          for (const b of msg.content.filter((b) => b.type === "tool_use")) {
+            const itemId = this._callIdToItemId.get(b.id) || b.id;
+            input.push({
+              type: "function_call",
+              id: itemId,
+              call_id: b.id,
+              name: b.name,
+              arguments: JSON.stringify(b.input),
+            });
+          }
+        } else {
+          input.push({ type: "message", role: "assistant", content: [{ type: "output_text", text: msg.content }] });
+        }
+      }
+    }
+    return input;
+  }
+
+  _getInstructions(systemBlocks) {
+    if (!systemBlocks?.length) return undefined;
+    return systemBlocks.map((b) => b.text).join("\n\n");
+  }
+
+  async *stream(body, opts = {}) {
+    const signal = opts.signal;
+    const instructions = this._getInstructions(body.system);
+    const input = this._convertInput(body.system, body.messages);
+    const tools = this._convertTools(body.tools);
+
+    const reqBody = {
+      model: body.model,
+      input,
+      stream: true,
+      store: false,
+      max_output_tokens: body.max_tokens,
+    };
+    if (instructions) reqBody.instructions = instructions;
+    if (tools?.length > 0) reqBody.tools = tools;
+
+    let lastError;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      if (signal?.aborted) {
+        throw signal.reason instanceof Error ? signal.reason : new Error("Request aborted");
+      }
+      if (attempt > 0) {
+        const delay = 1000 * (1 << attempt);
+        log(`[openai-responses] Retry ${attempt}/3 after ${delay}ms...`);
+        await sleep(delay);
+      }
+
+      let resp;
+      try {
+        resp = await fetch(`${this.apiUrl}/v1/responses`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            "authorization": `Bearer ${this.apiKey}`,
+          },
+          body: JSON.stringify(reqBody),
+          signal,
+        });
+      } catch (e) {
+        if (signal?.aborted || e?.name === "AbortError") throw e;
+        lastError = e;
+        continue;
+      }
+
+      if (resp.status === 429 || resp.status === 529) {
+        lastError = new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        continue;
+      }
+
+      if (!resp.ok) {
+        const text = await resp.text().catch(() => "");
+        throw new Error(`OpenAI Responses API error ${resp.status}: ${text}`);
+      }
+
+      yield* this._translateStream(resp.body);
+      return;
+    }
+
+    throw lastError || new Error("Max retries exceeded");
+  }
+
+  async *_translateStream(body) {
+    const reader = body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    let sentStart = false;
+    let textBlockStarted = false;
+    const funcCalls = new Map();
+    let blockIndex = 0;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+
+        // Responses API SSE: "event: <type>\ndata: <json>\n\n"
+        const chunks = buf.split("\n\n");
+        buf = chunks.pop();
+
+        for (const chunk of chunks) {
+          // Extract data line from the chunk
+          let dataLine = null;
+          for (const line of chunk.split("\n")) {
+            if (line.startsWith("data: ")) dataLine = line.slice(6);
+          }
+          if (!dataLine) continue;
+
+          let event;
+          try { event = JSON.parse(dataLine); } catch { continue; }
+
+          // Emit message_start on first event
+          if (!sentStart) {
+            sentStart = true;
+            yield {
+              event: "message_start",
+              data: { message: { usage: { input_tokens: 0, output_tokens: 0 } } },
+            };
+          }
+
+          switch (event.type) {
+            case "response.output_item.added": {
+              const item = event.item;
+              if (item?.type === "function_call") {
+                if (textBlockStarted) {
+                  yield { event: "content_block_stop", data: { index: blockIndex } };
+                  textBlockStarted = false;
+                  blockIndex++;
+                }
+                funcCalls.set(item.id, { callId: item.call_id, name: item.name });
+                // Store mapping: call_id → item_id (needed when reconstructing input)
+                this._callIdToItemId.set(item.call_id, item.id);
+                yield {
+                  event: "content_block_start",
+                  data: {
+                    index: blockIndex,
+                    content_block: { type: "tool_use", id: item.call_id, name: item.name },
+                  },
+                };
+              }
+              break;
+            }
+
+            // Text delta — Responses API uses "response.output_text.delta"
+            case "response.output_text.delta": {
+              if (!textBlockStarted) {
+                textBlockStarted = true;
+                yield {
+                  event: "content_block_start",
+                  data: { index: blockIndex, content_block: { type: "text", text: "" } },
+                };
+              }
+              yield {
+                event: "content_block_delta",
+                data: { index: blockIndex, delta: { type: "text_delta", text: event.delta } },
+              };
+              break;
+            }
+
+            case "response.output_text.done":
+              break;
+
+            case "response.function_call_arguments.delta": {
+              yield {
+                event: "content_block_delta",
+                data: { index: blockIndex, delta: { type: "input_json_delta", partial_json: event.delta } },
+              };
+              break;
+            }
+
+            case "response.function_call_arguments.done":
+              break;
+
+            case "response.output_item.done": {
+              if (textBlockStarted) {
+                yield { event: "content_block_stop", data: { index: blockIndex } };
+                textBlockStarted = false;
+                blockIndex++;
+              } else if (event.item?.type === "function_call") {
+                yield { event: "content_block_stop", data: { index: blockIndex } };
+                blockIndex++;
+              }
+              break;
+            }
+
+            case "response.completed": {
+              if (textBlockStarted) {
+                yield { event: "content_block_stop", data: { index: blockIndex } };
+                textBlockStarted = false;
+              }
+
+              const response = event.response;
+              this._lastResponseId = response?.id;
+
+              const hasToolCalls = response?.output?.some((o) => o.type === "function_call");
+              const stopReason = hasToolCalls ? "tool_use" : "end_turn";
+
+              const usage = response?.usage || {};
+              yield {
+                event: "message_delta",
+                data: {
+                  delta: { stop_reason: stopReason },
+                  usage: {
+                    input_tokens: usage.input_tokens || 0,
+                    output_tokens: usage.output_tokens || 0,
+                  },
+                },
+              };
+              yield { event: "message_stop", data: {} };
+              break;
+            }
+
+            case "response.failed": {
+              const errMsg = event.response?.error?.message || "Responses API call failed";
+              throw new Error(errMsg);
+            }
+
+            default:
+              break;
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+}
+
 // ── ToolRegistry ────────────────────────────────────────────────
 
 class ToolRegistry {
@@ -244,6 +992,7 @@ class ToolRegistry {
     this._tools = new Map(); // name → { definition, executor }
     this._allowed = null;
     this._disallowed = null;
+    this._cwd = process.cwd();
   }
 
   register(name, definition, executor) {
@@ -278,8 +1027,27 @@ class ToolRegistry {
   isExternal(name) { const t = this._tools.get(name); return t && !t.executor; }
 
   setFilter(allowed, disallowed) {
-    this._allowed = allowed;
-    this._disallowed = disallowed;
+    // Asymmetry between allowed/disallowed is intentional:
+    //
+    // _allowed: extract bare name from "Bash(echo *)" → "Bash" so the tool
+    //   stays VISIBLE to the model. The pattern restriction is enforced by
+    //   PermissionManager allow rules, not here. If we kept the raw entry,
+    //   _allowed.includes("Bash") would fail and the tool would vanish.
+    //
+    // _disallowed: only include entries WITHOUT a pattern. "Bash(rm *)" should
+    //   NOT hide Bash from definitions — PermissionManager deny rules handle
+    //   the pattern. Only bare "Bash" (block the whole tool) belongs here.
+    const normalizeAllowed = (list) => {
+      if (!list || list.length === 0) return null;
+      return [...new Set(list.map((entry) => entry.split("(")[0]).filter(Boolean))];
+    };
+    const normalizeDisallowed = (list) => {
+      if (!list || list.length === 0) return null;
+      const fullBlock = list.filter((entry) => !entry.includes("(")).map((e) => e.trim()).filter(Boolean);
+      return fullBlock.length > 0 ? [...new Set(fullBlock)] : null;
+    };
+    this._allowed = normalizeAllowed(allowed);
+    this._disallowed = normalizeDisallowed(disallowed);
   }
 }
 
@@ -744,7 +1512,8 @@ const toolPermissionChecks = {
 
 function _checkFilePath(filePath, cwd, op) {
   if (!filePath) return { behavior: "passthrough" };
-  const fp = path.resolve(filePath);
+  const cwdResolved = path.resolve(cwd || process.cwd());
+  const fp = path.resolve(cwdResolved, filePath);
   const parts = fp.split(path.sep);
   const fileName = parts[parts.length - 1];
 
@@ -771,8 +1540,7 @@ function _checkFilePath(filePath, cwd, op) {
   }
 
   // Check if within working directory or memory directory
-  const cwdResolved = path.resolve(cwd || process.cwd());
-  const memDir = getMemoryDir(cwd || process.cwd());
+  const memDir = getMemoryDir(cwdResolved);
   if (fp.startsWith(cwdResolved) || fp.startsWith("/tmp") || fp.startsWith("/private/tmp") || fp.startsWith(memDir)) {
     return { behavior: "allow", reason: "within_workspace" };
   }
@@ -840,6 +1608,7 @@ class PermissionManager {
   // Returns: { behavior: "allow"|"deny"|"ask", message? }
   // Returns: { behavior: "allow"|"deny"|"ask", message?, rule?, reason? }
   async check(toolName, input, opts = {}) {
+    const decisionCwd = opts.cwd || process.cwd();
     // 0. Circuit breaker — too many denials, become maximally restrictive
     if (this.denials.isCircuitBroken() && this.mode === "auto") {
       if (!READ_ONLY_TOOLS.has(toolName)) {
@@ -874,7 +1643,7 @@ class PermissionManager {
     // 3. Per-tool checkPermissions — tool-specific safety logic
     const toolCheck = toolPermissionChecks[toolName];
     if (toolCheck) {
-      const result = toolCheck(input, process.cwd());
+      const result = toolCheck(input, decisionCwd);
       if (result.behavior === "deny") return { ...result, rule: `tool_${toolName}_deny` };
       if (result.behavior === "ask") return { ...result, rule: `tool_${toolName}_ask` };
       if (result.behavior === "allow" && this.mode !== "default") {
@@ -911,6 +1680,7 @@ class PermissionManager {
         if (READ_ONLY_TOOLS.has(toolName)) { this._recordAllow(); return { behavior: "allow", rule: "auto_readonly" }; }
         if (WRITE_TOOLS.has(toolName)) { this._recordAllow(); return { behavior: "allow", rule: "auto_write" }; }
         if (toolName === "Bash") { this._recordAllow(); return { behavior: "allow", rule: "auto_bash_safe" }; }
+        if (toolName === "Agent") { this._recordAllow(); return { behavior: "allow", rule: "auto_agent" }; }
         return { behavior: "ask", message: `Allow ${toolName}?`, rule: "auto_ask" };
 
       case "default":
@@ -974,7 +1744,7 @@ function registerBuiltinTools(registry) {
     return new Promise((resolve) => {
       const proc = spawn("bash", ["-c", input.command], {
         timeout,
-        cwd: process.cwd(),
+        cwd: input.cwd || registry._cwd || process.cwd(),
         env: { ...process.env, TERM: "dumb" },
         stdio: ["pipe", "pipe", "pipe"],
       });
@@ -1266,8 +2036,12 @@ Usage notes:
     // Use the API to process the content with the prompt (summarization)
     // We make a separate small API call to extract what the user wants
     try {
+      // Pick a small/fast model matching the current backend
+      const summaryModel = isOpenAIModel(registry._currentModel || "")
+        ? "gpt-4o-mini"
+        : "claude-haiku-4-5-20251001";
       const summaryBody = {
-        model: "claude-haiku-4-5-20251001",
+        model: summaryModel,
         max_tokens: 4096,
         messages: [{
           role: "user",
@@ -1305,7 +2079,7 @@ Usage notes:
       required: ["pattern"],
     },
   }, async (input) => {
-    const dir = input.path || process.cwd();
+    const dir = input.path || registry._cwd || process.cwd();
     const pattern = input.pattern;
     const regex = globToRegex(pattern);
 
@@ -1356,7 +2130,7 @@ Usage notes:
       required: ["pattern"],
     },
   }, async (input) => {
-    const dir = input.path || process.cwd();
+    const dir = input.path || registry._cwd || process.cwd();
     const mode = input.output_mode || "files_with_matches";
 
     // Try rg first, fallback to grep
@@ -1718,20 +2492,29 @@ class BackgroundAgentManager {
 
   launch(agentId, description, runFn) {
     const outputFile = path.join(this.outputDir, `${agentId}.output`);
+    const controller = new AbortController();
     const entry = {
       status: "running",
       description,
       startTime: Date.now(),
       outputFile,
       result: null,
+      controller,
     };
 
-    entry.promise = runFn().then((result) => {
+    entry.promise = Promise.resolve().then(() => runFn(controller.signal)).then((result) => {
+      if (entry.status === "cancelled") return result;
       entry.status = "completed";
       entry.result = result;
       fs.writeFileSync(outputFile, typeof result === "string" ? result : JSON.stringify(result));
       return result;
     }).catch((err) => {
+      if (entry.status === "cancelled" || controller.signal.aborted || err?.name === "AbortError") {
+        entry.status = "cancelled";
+        entry.result = { cancelled: true, error: err?.message || "Cancelled" };
+        fs.writeFileSync(outputFile, `Cancelled: ${err?.message || "Cancelled"}`);
+        return entry.result;
+      }
       entry.status = "failed";
       entry.result = { error: err.message };
       fs.writeFileSync(outputFile, `Error: ${err.message}`);
@@ -1763,6 +2546,7 @@ class BackgroundAgentManager {
     const entry = this.agents.get(agentId);
     if (!entry || entry.status !== "running") return false;
     entry.status = "cancelled";
+    entry.controller?.abort(new Error(`Background agent ${agentId} cancelled`));
     return true;
   }
 
@@ -1900,20 +2684,6 @@ class SubAgentRunner {
       }
     }
 
-    // Build system prompt
-    const subCfg = { ...this.cfg, model: resolvedModel };
-    const systemBlocks = buildSystemPrompt(subCfg);
-    // Prepend agent-specific prompt
-    const agentPromptBlock = {
-      type: "text",
-      text: agentDef.getSystemPrompt(),
-      cache_control: { type: "ephemeral" },
-    };
-    systemBlocks.splice(systemBlocks.length > 1 ? 1 : 0, 0, agentPromptBlock);
-
-    // Build messages
-    const messages = [{ role: "user", content: prompt }];
-
     // Worktree isolation
     let worktreeInfo = null;
     let effectiveCwd = process.cwd();
@@ -1931,46 +2701,61 @@ class SubAgentRunner {
       log(`[sub-agent] Worktree created: ${effectiveCwd}`);
     }
 
+    subRegistry._cwd = effectiveCwd;
+
+    // Build system prompt after cwd/isolation is resolved
+    const subCfg = { ...this.cfg, model: resolvedModel, cwd: effectiveCwd };
+    const systemBlocks = buildSystemPrompt(subCfg);
+    const agentPromptBlock = {
+      type: "text",
+      text: agentDef.getSystemPrompt(),
+      cache_control: { type: "ephemeral" },
+    };
+    systemBlocks.splice(systemBlocks.length > 1 ? 1 : 0, 0, agentPromptBlock);
+
+    // Build messages
+    const messages = [{ role: "user", content: prompt }];
+
     // Run sub-agent loop
     const subCfgWithModel = { ...this.cfg, model: resolvedModel, maxTurns: Math.min(this.cfg.maxTurns, 15), cwd: effectiveCwd };
 
-    const runAgent = async () => {
+    const runAgent = async (signal) => {
       log(`[sub-agent] Starting ${agentDef.agentType} (depth=${depth}, model=${resolvedModel}, id=${agentId.slice(0,8)}${isolation === "worktree" ? `, worktree=${effectiveCwd}` : ""})`);
 
-      const loop = new AgentLoop(this.client, subRegistry, subCfgWithModel, {
+      const loop = new AgentLoop(this.client, subRegistry, { ...subCfgWithModel, abortSignal: signal }, {
         onToolUse: (block) => {
           log(`[sub-agent:${agentId.slice(0,8)}] Tool: ${block.name}`);
         },
       }, subPermissions);
 
-      const result = await loop.run(messages, systemBlocks);
-
-      // Cleanup worktree
+      let result;
       let worktreeResult = {};
-      if (worktreeInfo) {
-        const hasChanges = await hasWorktreeChanges(worktreeInfo.worktreePath);
-        if (hasChanges) {
-          worktreeResult = { worktreePath: worktreeInfo.worktreePath, worktreeBranch: worktreeInfo.worktreeBranch };
-          log(`[sub-agent] Worktree has changes, keeping: ${worktreeInfo.worktreePath}`);
-        } else {
-          await removeWorktree(worktreeInfo.worktreePath);
-          log(`[sub-agent] Worktree clean, removed`);
+      try {
+        result = await loop.run(messages, systemBlocks);
+        log(`[sub-agent] Finished ${agentDef.agentType}: ${result.turns} turns, ${result.usage.input_tokens} in / ${result.usage.output_tokens} out`);
+        return {
+          agent_id: agentId,
+          agent_type: agentDef.agentType,
+          content: result.text,
+          model: resolvedModel,
+          turns: result.turns,
+          stop_reason: result.stopReason,
+          usage: result.usage,
+          parent_agent_id: parentAgentId,
+          ...worktreeResult,
+        };
+      } finally {
+        if (worktreeInfo) {
+          const hasChanges = await hasWorktreeChanges(worktreeInfo.worktreePath);
+          if (hasChanges) {
+            worktreeResult = { worktreePath: worktreeInfo.worktreePath, worktreeBranch: worktreeInfo.worktreeBranch };
+            log(`[sub-agent] Worktree has changes, keeping: ${worktreeInfo.worktreePath}`);
+          } else {
+            await removeWorktree(worktreeInfo.worktreePath);
+            log(`[sub-agent] Worktree clean, removed`);
+          }
         }
       }
-
-      log(`[sub-agent] Finished ${agentDef.agentType}: ${result.turns} turns, ${result.usage.input_tokens} in / ${result.usage.output_tokens} out`);
-
-      return {
-        agent_id: agentId,
-        agent_type: agentDef.agentType,
-        content: result.text,
-        model: resolvedModel,
-        turns: result.turns,
-        stop_reason: result.stopReason,
-        usage: result.usage,
-        parent_agent_id: parentAgentId,
-        ...worktreeResult,
-      };
     };
 
     // Background mode
@@ -2022,7 +2807,7 @@ class SubAgentRunner {
         runInBackground: input.run_in_background || false,
         isolation: input.isolation || null,
       });
-      return JSON.stringify(result);
+      return { content: result.content, is_error: false, usage: result.usage, agent_result: result };
     });
   }
 }
@@ -2072,8 +2857,7 @@ Guidelines:
       isolation: input.isolation || null,
     });
 
-    // Aggregate usage to parent (will be captured by AgentLoop)
-    return result.content;
+    return { content: result.content, is_error: false, usage: result.usage, agent_result: result };
   });
 }
 
@@ -2271,17 +3055,33 @@ class AgentLoop {
     return false;
   }
 
+  _recordUsage(usage) {
+    if (!usage) return;
+    for (const key of Object.keys(this.totalUsage)) {
+      this.totalUsage[key] += usage[key] || 0;
+    }
+  }
+
+  _throwIfAborted() {
+    if (!this.cfg.abortSignal?.aborted) return;
+    throw this.cfg.abortSignal.reason instanceof Error
+      ? this.cfg.abortSignal.reason
+      : new Error("Agent run aborted");
+  }
+
   async run(messages, systemBlocks) {
     let turnCount = 0;
 
     while (turnCount < this.cfg.maxTurns) {
+      this._throwIfAborted();
       turnCount++;
       log(`Turn ${turnCount}/${this.cfg.maxTurns}`);
 
       const toolDefs = this.registry.getDefinitions();
 
-      // Add WebSearch as a server-side tool (executed by the API, not client)
-      const serverTools = [
+      // Add WebSearch as a server-side tool (Anthropic only)
+      const isOAI = isOpenAIModel(this.cfg.model);
+      const serverTools = isOAI ? [] : [
         { type: "web_search_20250305", name: "web_search", max_uses: 8 },
       ];
 
@@ -2296,7 +3096,8 @@ class AgentLoop {
         tools: [...toolDefs, ...serverTools],
       };
 
-      if (this.cfg.thinkingBudget > 0) {
+      // Anthropic-only: extended thinking
+      if (this.cfg.thinkingBudget > 0 && !isOAI) {
         body.thinking = { type: "enabled", budget_tokens: this.cfg.thinkingBudget };
       }
 
@@ -2306,7 +3107,7 @@ class AgentLoop {
       let stopReason = null;
       let usage = null;
 
-      for await (const { event, data } of this.client.stream(body)) {
+      for await (const { event, data } of this.client.stream(body, { signal: this.cfg.abortSignal })) {
         switch (event) {
           case "message_start":
             usage = data.message?.usage;
@@ -2358,11 +3159,7 @@ class AgentLoop {
       }
 
       // Accumulate usage
-      if (usage) {
-        for (const key of Object.keys(this.totalUsage)) {
-          this.totalUsage[key] += usage[key] || 0;
-        }
-      }
+      this._recordUsage(usage);
 
       // Build assistant message
       const assistantMsg = { role: "assistant", content: contentBlocks };
@@ -2382,12 +3179,15 @@ class AgentLoop {
       const toolResults = [];
 
       for (const block of toolUseBlocks) {
+        this._throwIfAborted();
         this.cb.onToolUse?.(block);
         log(`Tool: ${block.name}(${JSON.stringify(block.input).substring(0, 100)})`);
 
         // Check permissions before execution
         if (this.permissions) {
-          const perm = await this.permissions.check(block.name, block.input);
+          const perm = await this.permissions.check(block.name, block.input, {
+            cwd: this.registry._cwd || this.cfg.cwd || process.cwd(),
+          });
           if (perm.behavior === "deny") {
             log(`Permission denied: ${block.name} — ${perm.message}`);
             this.cb.onPermissionDeny?.(block, perm.message);
@@ -2427,6 +3227,7 @@ class AgentLoop {
           });
         } else {
           const result = await this.registry.execute(block.name, block.input);
+          this._recordUsage(result?.usage);
           this.cb.onToolResult?.(block.id, result);
           toolResults.push({
             type: "tool_result",
@@ -2930,7 +3731,7 @@ class NdjsonBridge {
         content: result.text,
         session_id: sessionId,
         iterations: result.turns,
-        usage: result.totalUsage,
+        usage: result.usage,
         stop_reason: result.stopReason,
         model: this.cfg.model,
       });
@@ -3015,10 +3816,41 @@ class InteractiveMode {
         return "exit";
       case "/model":
         if (args[0]) {
-          this.cfg.model = resolveModel(args[0]);
-          process.stderr.write(`\x1b[2mSwitched to ${this.cfg.model}\x1b[0m\n`);
+          const newModel = resolveModel(args[0]);
+          const wasOpenAI = isOpenAIModel(this.cfg.model);
+          const nowOpenAI = isOpenAIModel(newModel);
+          // Validate creds BEFORE mutating state
+          const wasResponses = isResponsesAPIModel(this.cfg.model);
+          const nowResponses = isResponsesAPIModel(newModel);
+          const needsClientSwitch = (wasOpenAI !== nowOpenAI) || (wasResponses !== nowResponses);
+          if (needsClientSwitch) {
+            if (nowOpenAI && !this.cfg.openaiApiKey) {
+              process.stderr.write(`\x1b[31mCannot switch to ${newModel}: no OpenAI credentials.\x1b[0m\n`);
+              process.stderr.write(`\x1b[31mRun /openai-login or set OPENAI_API_KEY first.\x1b[0m\n`);
+              break;
+            }
+            if (!nowOpenAI && !this.cfg.apiKey && !this.cfg.authToken) {
+              process.stderr.write(`\x1b[31mCannot switch to ${newModel}: no Anthropic credentials.\x1b[0m\n`);
+              process.stderr.write(`\x1b[31mRun /login or set ANTHROPIC_API_KEY first.\x1b[0m\n`);
+              break;
+            }
+            // Creds validated — now safe to switch client
+            if (nowOpenAI && nowResponses) {
+              this.client = new OpenAIResponsesClient({ apiKey: this.cfg.openaiApiKey, apiUrl: this.cfg.openaiApiUrl });
+            } else if (nowOpenAI) {
+              this.client = new OpenAIClient({ apiKey: this.cfg.openaiApiKey, apiUrl: this.cfg.openaiApiUrl });
+            } else {
+              this.client = new AnthropicClient({ apiKey: this.cfg.apiKey, authToken: this.cfg.authToken, apiUrl: this.cfg.apiUrl });
+            }
+            this.registry._client = this.client;
+          }
+          this.cfg.model = newModel;
+          this.registry._currentModel = newModel;
+          const backend = nowOpenAI ? (nowResponses ? " (OpenAI Responses)" : " (OpenAI)") : "";
+          process.stderr.write(`\x1b[2mSwitched to ${this.cfg.model}${backend}\x1b[0m\n`);
         } else {
-          process.stderr.write(`\x1b[2mCurrent model: ${this.cfg.model}\x1b[0m\n`);
+          const backend = isOpenAIModel(this.cfg.model) ? " (OpenAI)" : " (Anthropic)";
+          process.stderr.write(`\x1b[2mCurrent model: ${this.cfg.model}${backend}\x1b[0m\n`);
         }
         break;
       case "/clear":
@@ -3111,6 +3943,18 @@ class InteractiveMode {
         break;
       case "/logout":
         oauthLogout();
+        break;
+      case "/openai-login":
+        try {
+          const oaiToken = await openaiOAuthLogin();
+          this.cfg.openaiApiKey = oaiToken;
+          process.stderr.write(`\x1b[2mOpenAI auth ready. Use /model codex to switch.\x1b[0m\n`);
+        } catch (e) {
+          process.stderr.write(`\x1b[31mOpenAI login failed: ${e.message}\x1b[0m\n`);
+        }
+        break;
+      case "/openai-logout":
+        openaiOAuthLogout();
         break;
       default:
         process.stderr.write(`\x1b[2mUnknown command: ${cmd}\x1b[0m\n`);
@@ -3520,14 +4364,45 @@ async function main() {
     }
   }
 
-  if (!cfg.apiKey && !cfg.authToken) {
-    process.stderr.write("Error: No auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY\n");
-    process.exit(1);
+  // Resolve OpenAI auth: --openai (keychain) > --openai-api-key > OPENAI_API_KEY
+  if (cfg.useOpenAIOAuth || (isOpenAIModel(cfg.model) && !cfg.openaiApiKey)) {
+    try {
+      const token = await getOpenAIAccessToken(cfg.verbose);
+      cfg.openaiApiKey = token;
+      process.stderr.write(`\x1b[2mUsing OpenAI subscription (OAuth)\x1b[0m\n`);
+    } catch (e) {
+      if (cfg.useOpenAIOAuth) {
+        process.stderr.write(`Error: ${e.message}\n`);
+        process.exit(1);
+      }
+      // Fall through — maybe using Anthropic
+    }
   }
 
-  const client = new AnthropicClient({ apiKey: cfg.apiKey, authToken: cfg.authToken, apiUrl: cfg.apiUrl });
+  // Determine which backend to use
+  const useOpenAI = isOpenAIModel(cfg.model);
+
+  if (useOpenAI) {
+    if (!cfg.openaiApiKey) {
+      process.stderr.write("Error: No OpenAI auth. Run --openai-login, use --openai-api-key, or set OPENAI_API_KEY\n");
+      process.exit(1);
+    }
+    process.stderr.write(`\x1b[2mUsing OpenAI backend (${cfg.model})\x1b[0m\n`);
+  } else {
+    if (!cfg.apiKey && !cfg.authToken) {
+      process.stderr.write("Error: No auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY\n");
+      process.exit(1);
+    }
+  }
+
+  const client = useOpenAI
+    ? (isResponsesAPIModel(cfg.model)
+      ? new OpenAIResponsesClient({ apiKey: cfg.openaiApiKey, apiUrl: cfg.openaiApiUrl })
+      : new OpenAIClient({ apiKey: cfg.openaiApiKey, apiUrl: cfg.openaiApiUrl }))
+    : new AnthropicClient({ apiKey: cfg.apiKey, authToken: cfg.authToken, apiUrl: cfg.apiUrl });
   const registry = new ToolRegistry();
   registry._client = client; // Used by WebFetch for AI summarization
+  registry._currentModel = cfg.model; // Used by WebFetch to pick summary model
   registerBuiltinTools(registry);
 
   if (cfg.allowedTools || cfg.disallowedTools) {

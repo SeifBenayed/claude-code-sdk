@@ -30,6 +30,16 @@ Priority: **safe → useful → stateful → recoverable → extensible**
 |:-:|---------|:------:|:------:|:------:|
 | 5 | ~~Sub-agents (Agent tool, parallel spawn)~~ | High | High | **Done** |
 
+## v1.4.1 — Post-v1.4 Bug Fixes
+
+| # | Bug | Severity | Status |
+|:-:|-----|:--------:|:------:|
+| 1 | ~~Worktree cwd not propagated to system prompt / tools / permissions~~ | High | **Done** |
+| 2 | ~~NDJSON emits wrong usage field (result.totalUsage → result.usage)~~ | Medium | **Done** |
+| 3 | ~~Sub-agent usage not aggregated into parent totalUsage~~ | Medium | **Done** |
+| 4 | ~~Background agent stop() doesn't cancel (no AbortController)~~ | High | **Done** |
+| 5 | ~~ToolRegistry filter hides patterned tools entirely (Bash(rm *) hides Bash)~~ | High | **Done** |
+
 ## v2.0 — Extensibility
 
 | # | Feature | Impact | Effort | Status |

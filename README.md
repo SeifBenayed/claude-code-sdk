@@ -1,16 +1,17 @@
 # claude-code-sdk
 
-Open-source Claude Code SDK — single-file CLIs that talk directly to the Anthropic API using your Pro/Max subscription. No binary dependency, no npm, zero overhead.
+Open-source Claude Code SDK — single-file CLIs that talk directly to the Anthropic API **and OpenAI API** using your subscription or API key. No binary dependency, no npm, zero overhead.
 
 ## What is this?
 
-We reverse-engineered the Claude Code CLI binary (190MB Bun bundle, $20/mo subscription) and rebuilt it from scratch in 4 languages. Each SDK is a **single file** with **zero external dependencies** that:
+A single-file coding agent CLI built from scratch in 4 languages, with **zero external dependencies**. One tool, two backends:
 
-- Authenticates via OAuth (same flow as `claude --login`)
-- Uses your existing Pro/Max subscription (no API credits consumed)
-- Implements the full agent loop: streaming, tool calling, multi-turn
-- Exposes an NDJSON bridge protocol for programmatic use
-- Provides an interactive REPL for human use
+- **Multi-backend**: Anthropic (Claude) and OpenAI (GPT-5, Codex, o3) in the same CLI
+- **Live model switching**: `/model codex` → `/model sonnet` → `/model o3` mid-conversation
+- **OAuth for both**: uses your Anthropic Pro/Max or ChatGPT Plus/Pro subscription directly
+- Full agent loop: streaming, tool calling, multi-turn, sub-agents
+- NDJSON bridge protocol for programmatic use
+- Interactive REPL with permissions, checkpoints, and memory
 
 ## SDKs
 
@@ -24,14 +25,21 @@ We reverse-engineered the Claude Code CLI binary (190MB Bun bundle, $20/mo subsc
 ## Quick Start
 
 ```bash
-# Login (opens browser, saves to macOS keychain)
+# Login to Anthropic (opens browser, saves to macOS keychain)
 node claude-native.mjs --login
 
-# Interactive REPL (uses your Pro/Max subscription)
+# Login to OpenAI (same flow)
+node claude-native.mjs --openai-login
+
+# Interactive REPL with Claude (default)
 node claude-native.mjs
+
+# Interactive REPL with OpenAI Codex
+node claude-native.mjs -m codex
 
 # One-shot
 node claude-native.mjs -p "explain this code"
+node claude-native.mjs -m gpt-5.4 -p "explain this code"
 
 # Programmatic (NDJSON bridge)
 echo '{"type":"message","content":"hello"}' | node claude-native.mjs --ndjson
@@ -39,16 +47,39 @@ echo '{"type":"message","content":"hello"}' | node claude-native.mjs --ndjson
 
 ## Authentication
 
+### Anthropic (Claude)
+
 Three modes, auto-detected in order:
 
 1. **OAuth (Pro/Max subscription)** — reads token from macOS keychain, uses `--login` to authenticate
 2. **API key** — `--api-key KEY` or `ANTHROPIC_API_KEY` env var (pay-per-token)
 3. **Auth token** — `--auth-token TOKEN` for direct Bearer auth
 
-### First-time setup
 ```bash
 node claude-native.mjs --login    # Opens browser → claude.ai OAuth → saves to keychain
 node claude-native.mjs            # Ready to use with your subscription
+```
+
+### OpenAI (GPT-5, Codex, o3)
+
+Two modes, auto-detected:
+
+1. **OAuth (ChatGPT Plus/Pro subscription)** — `--openai-login` to authenticate, reads from keychain
+2. **API key** — `--openai-api-key KEY` or `OPENAI_API_KEY` env var
+
+```bash
+node claude-native.mjs --openai-login    # Opens browser → OpenAI OAuth → saves to keychain
+node claude-native.mjs -m codex          # Ready to use
+```
+
+### Both at once
+
+You can have both backends authenticated and switch on the fly:
+
+```bash
+node claude-native.mjs --login           # Anthropic
+node claude-native.mjs --openai-login    # OpenAI
+node claude-native.mjs                   # Start with Claude, /model codex to switch
 ```
 
 ## NDJSON Bridge Protocol
@@ -86,26 +117,88 @@ Pass custom tools in the `message` payload. The SDK calls them via NDJSON:
 | **Bash** | Execute shell commands (120s timeout) |
 | **Read** | Read files with line numbers |
 | **Write** | Write files (creates parent dirs) |
+| **Edit** | Exact string replacement in files |
 | **Glob** | Find files by pattern |
 | **Grep** | Search file contents (uses rg/grep) |
+| **WebFetch** | Fetch and summarize web pages |
+| **WebSearch** | Server-side web search (Anthropic only) |
+| **Agent** | Launch sub-agents (Explore, Plan, general-purpose) |
+
+## Models
+
+| Alias | Model | Backend | API |
+|-------|-------|---------|-----|
+| `sonnet` | claude-sonnet-4-6 | Anthropic | Messages |
+| `opus` | claude-opus-4-6 | Anthropic | Messages |
+| `haiku` | claude-haiku-4-5 | Anthropic | Messages |
+| `codex` | gpt-5.3-codex | OpenAI | Responses |
+| `gpt5` / `5.4` | gpt-5.4 | OpenAI | Chat Completions |
+| `4.1` | gpt-4.1 | OpenAI | Chat Completions |
+| `4o` | gpt-4o | OpenAI | Chat Completions |
+| `o3` | o3 | OpenAI | Chat Completions |
+| `o4-mini` | o4-mini | OpenAI | Chat Completions |
+
+Switch live in the REPL: `/model codex`, `/model sonnet`, `/model o3`
 
 ## CLI Options
 
 ```
 -p, --print <prompt>        One-shot mode
--m, --model <name>          Model: sonnet, opus, haiku (default: sonnet)
+-m, --model <name>          Model (sonnet, opus, haiku, codex, gpt-5.4, o3, etc.)
 --ndjson                    NDJSON bridge mode
---login                     Login via browser OAuth
---logout                    Remove credentials
---oauth                     Force OAuth auth
---api-key <key>             Use API key
+--login                     Login to Anthropic via browser OAuth
+--logout                    Remove Anthropic credentials
+--oauth                     Force Anthropic OAuth auth
+--openai-login              Login to OpenAI via browser OAuth
+--openai-logout             Remove OpenAI credentials
+--openai                    Force OpenAI OAuth auth
+--api-key <key>             Anthropic API key (or ANTHROPIC_API_KEY env)
+--openai-api-key <key>      OpenAI API key (or OPENAI_API_KEY env)
+--permission-mode <mode>    auto|default|plan|acceptEdits|bypassPermissions|dontAsk
 --max-turns <n>             Max agent turns (default: 25)
 --max-tokens <n>            Max output tokens (default: 16384)
---thinking <budget>         Enable extended thinking
+--thinking <budget>         Enable extended thinking (Anthropic only)
+--mcp-config <path>         MCP servers config JSON file
+--resume                    Resume most recent session
 --verbose                   Debug logging
 ```
 
-## How It Works
+## REPL Commands
+
+```
+/model <name>       Switch model (live backend switching)
+/model              Show current model
+/thinking [budget]  Toggle extended thinking
+/permissions <mode> Change permission mode
+/memory             Show saved memories
+/checkpoints        List file checkpoints
+/rewind             Restore files to a checkpoint
+/cost               Show session cost
+/clear              New session
+/login              Login to Anthropic
+/openai-login       Login to OpenAI
+/exit               Quit
+```
+
+## Architecture
+
+```
+┌─────────────────────────────────────────────────┐
+│                  AgentLoop                       │
+│  (streaming, tool execution, permissions)        │
+├──────────┬──────────────┬───────────────────────┤
+│ Anthropic│  OpenAI Chat │  OpenAI Responses     │
+│ Client   │  Completions │  Client               │
+│          │  Client      │  (*-codex models)     │
+├──────────┼──────────────┼───────────────────────┤
+│ /v1/     │ /v1/chat/    │ /v1/responses         │
+│ messages │ completions  │                       │
+└──────────┴──────────────┴───────────────────────┘
+```
+
+All three clients yield the same SSE event format, so `AgentLoop` works unchanged across backends.
+
+### Anthropic Auth
 
 The key discovery: Claude Code's subscription auth requires:
 
@@ -115,6 +208,10 @@ The key discovery: Claude Code's subscription auth requires:
 4. **Access headers**: `anthropic-dangerous-direct-browser-access: true` + `x-app: cli`
 
 Without ALL of these, the API returns 400/401.
+
+### OpenAI Auth
+
+OpenAI Codex CLI uses OAuth 2.1 with PKCE against `auth.openai.com`. ChatGPT Plus/Pro subscribers can use the CLI without a separate API key. Tokens are cached in macOS keychain with auto-refresh.
 
 ## Integration Guide
 
@@ -286,6 +383,19 @@ node claude-native.mjs --mcp-config mcp-servers.json
     }
   }
 }
+```
+
+## Testing
+
+```bash
+# Unit + NRT tests (no API key needed)
+node test-openai-integration.mjs
+
+# Full E2E (needs OPENAI_API_KEY)
+OPENAI_API_KEY=sk-... node test-openai-integration.mjs --e2e
+
+# E2E with OAuth
+node test-openai-integration.mjs --e2e --oauth
 ```
 
 ## Legacy Bridge

@@ -59,7 +59,10 @@ struct Config {
     api_key: String,
     auth_token: String,
     api_url: String,
+    openai_api_key: String,
+    openai_api_url: String,
     use_oauth: bool,
+    use_openai_oauth: bool,
     ndjson: bool,
     interactive: bool,
     prompt: Option<String>,
@@ -84,7 +87,11 @@ impl Config {
             auth_token: env::var("ANTHROPIC_AUTH_TOKEN").unwrap_or_default(),
             api_url: env::var("ANTHROPIC_API_URL")
                 .unwrap_or_else(|_| "https://api.anthropic.com".to_string()),
+            openai_api_key: env::var("OPENAI_API_KEY").unwrap_or_default(),
+            openai_api_url: env::var("OPENAI_API_URL")
+                .unwrap_or_else(|_| "https://api.openai.com".to_string()),
             use_oauth: false,
+            use_openai_oauth: false,
             ndjson: false,
             interactive: true,
             prompt: None,
@@ -114,8 +121,28 @@ fn resolve_model(name: &str) -> String {
         "haiku" => "claude-haiku-4-5-20251001".to_string(),
         "opus-4" => "claude-opus-4-6".to_string(),
         "sonnet-4" => "claude-sonnet-4-6".to_string(),
+        // OpenAI
+        "gpt-5.4" | "gpt5" | "5.4" => "gpt-5.4".to_string(),
+        "codex" | "gpt-5.3-codex" => "gpt-5.3-codex".to_string(),
+        "gpt-5.2-codex" => "gpt-5.2-codex".to_string(),
+        "gpt-4.1" | "4.1" => "gpt-4.1".to_string(),
+        "gpt-4.1-mini" | "4.1-mini" => "gpt-4.1-mini".to_string(),
+        "gpt-4o" | "gpt-4" | "4o" => "gpt-4o".to_string(),
+        "gpt-4o-mini" | "4o-mini" => "gpt-4o-mini".to_string(),
+        "o3" => "o3".to_string(),
+        "o3-pro" => "o3-pro".to_string(),
+        "o3-mini" => "o3-mini".to_string(),
+        "o4-mini" => "o4-mini".to_string(),
         other => other.to_string(),
     }
+}
+
+fn is_openai_model(model: &str) -> bool {
+    model.starts_with("gpt-") || model.starts_with("o3") || model.starts_with("o4") || model == "o1" || model == "o1-mini"
+}
+
+fn is_responses_api_model(model: &str) -> bool {
+    model.contains("-codex")
 }
 
 // ── Arg Parsing ─────────────────────────────────────────────────
@@ -221,6 +248,17 @@ fn parse_args() -> Result<Config, String> {
                 cfg.disallowed_tools
                     .get_or_insert_with(Vec::new)
                     .extend(tools);
+            }
+            "--openai-api-key" => {
+                i += 1;
+                cfg.openai_api_key = args.get(i).ok_or("Missing openai-api-key arg")?.clone();
+            }
+            "--openai-api-url" => {
+                i += 1;
+                cfg.openai_api_url = args.get(i).ok_or("Missing openai-api-url arg")?.clone();
+            }
+            "--openai" => {
+                cfg.use_openai_oauth = true;
             }
             "--login" => {
                 oauth_login()?;
@@ -944,6 +982,384 @@ impl AnthropicClient {
             }
         }
 
+        Ok(events)
+    }
+}
+
+// ── StreamClient trait ──────────────────────────────────────────
+
+trait StreamClient {
+    fn stream(&self, body: &serde_json::Value) -> Result<Vec<SseEvent>, String>;
+}
+
+impl StreamClient for AnthropicClient {
+    fn stream(&self, body: &serde_json::Value) -> Result<Vec<SseEvent>, String> {
+        self.stream(body)
+    }
+}
+
+// ── OpenAIClient (Chat Completions) ────────────────────────────
+
+struct OpenAIClient {
+    api_key: String,
+    api_url: String,
+    http: reqwest::blocking::Client,
+}
+
+impl OpenAIClient {
+    fn new(api_key: &str, api_url: &str) -> Self {
+        Self {
+            api_key: api_key.to_string(),
+            api_url: api_url.to_string(),
+            http: reqwest::blocking::Client::builder().timeout(Duration::from_secs(300)).build().unwrap(),
+        }
+    }
+
+    fn convert_tools(tools: &serde_json::Value) -> serde_json::Value {
+        let arr = match tools.as_array() {
+            Some(a) => a,
+            None => return serde_json::Value::Null,
+        };
+        let out: Vec<serde_json::Value> = arr.iter()
+            .filter(|t| t.get("type").is_none())
+            .map(|t| serde_json::json!({
+                "type": "function",
+                "function": { "name": t["name"], "description": t["description"], "parameters": t["input_schema"] }
+            }))
+            .collect();
+        if out.is_empty() { serde_json::Value::Null } else { serde_json::json!(out) }
+    }
+
+    fn convert_messages(system: &serde_json::Value, messages: &serde_json::Value, model: &str) -> Vec<serde_json::Value> {
+        let mut out = Vec::new();
+        if let Some(blocks) = system.as_array() {
+            let text: String = blocks.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n\n");
+            if !text.is_empty() {
+                let role = if is_openai_model(model) && model.starts_with('o') { "developer" } else { "system" };
+                out.push(serde_json::json!({"role": role, "content": text}));
+            }
+        }
+        if let Some(msgs) = messages.as_array() {
+            for msg in msgs {
+                let role = msg["role"].as_str().unwrap_or("");
+                let content = &msg["content"];
+                match role {
+                    "user" => {
+                        if let Some(arr) = content.as_array() {
+                            let trs: Vec<&serde_json::Value> = arr.iter().filter(|b| b["type"] == "tool_result").collect();
+                            if !trs.is_empty() {
+                                for tr in trs {
+                                    out.push(serde_json::json!({"role": "tool", "tool_call_id": tr["tool_use_id"], "content": tr["content"].as_str().unwrap_or("")}));
+                                }
+                            } else {
+                                let text: String = arr.iter().filter(|b| b["type"] == "text").filter_map(|b| b["text"].as_str()).collect();
+                                out.push(serde_json::json!({"role": "user", "content": text}));
+                            }
+                        } else {
+                            out.push(serde_json::json!({"role": "user", "content": content}));
+                        }
+                    }
+                    "assistant" => {
+                        if let Some(arr) = content.as_array() {
+                            let text: String = arr.iter().filter(|b| b["type"] == "text").filter_map(|b| b["text"].as_str()).collect();
+                            let tcs: Vec<serde_json::Value> = arr.iter()
+                                .filter(|b| b["type"] == "tool_use")
+                                .map(|b| serde_json::json!({"id": b["id"], "type": "function", "function": {"name": b["name"], "arguments": serde_json::to_string(&b["input"]).unwrap_or_default()}}))
+                                .collect();
+                            let mut m = serde_json::json!({"role": "assistant"});
+                            if !text.is_empty() { m["content"] = serde_json::json!(text); }
+                            if !tcs.is_empty() { m["tool_calls"] = serde_json::json!(tcs); }
+                            out.push(m);
+                        } else {
+                            out.push(serde_json::json!({"role": "assistant", "content": content}));
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        out
+    }
+
+    fn translate_events(raw_events: &[SseEvent]) -> Vec<SseEvent> {
+        // raw_events come from OpenAI SSE parsed as generic events
+        // We need to re-parse them as OpenAI chat completion chunks and emit Anthropic-format events
+        let mut out = Vec::new();
+        let mut sent_start = false;
+        let mut text_started = false;
+        let mut tool_calls: HashMap<i64, bool> = HashMap::new();
+
+        for ev in raw_events {
+            // ev.event is the raw event type (empty for OpenAI SSE), ev.data is the JSON
+            let chunk = &ev.data;
+            if !sent_start {
+                sent_start = true;
+                out.push(SseEvent { event: "message_start".into(), data: serde_json::json!({"message": {"usage": {"input_tokens": 0, "output_tokens": 0}}}) });
+            }
+            let choices = chunk["choices"].as_array();
+            if choices.is_none() || choices.unwrap().is_empty() { continue; }
+            let choice = &choices.unwrap()[0];
+            let delta = &choice["delta"];
+            let finish = choice["finish_reason"].as_str();
+
+            if let Some(content) = delta["content"].as_str() {
+                if !content.is_empty() {
+                    if !text_started {
+                        text_started = true;
+                        out.push(SseEvent { event: "content_block_start".into(), data: serde_json::json!({"index": 0, "content_block": {"type": "text", "text": ""}}) });
+                    }
+                    out.push(SseEvent { event: "content_block_delta".into(), data: serde_json::json!({"index": 0, "delta": {"type": "text_delta", "text": content}}) });
+                }
+            }
+            if let Some(tcs) = delta["tool_calls"].as_array() {
+                for tc in tcs {
+                    let idx = tc["index"].as_i64().unwrap_or(0);
+                    if !tool_calls.contains_key(&idx) {
+                        if text_started { out.push(SseEvent { event: "content_block_stop".into(), data: serde_json::json!({"index": 0}) }); text_started = false; }
+                        tool_calls.insert(idx, true);
+                        out.push(SseEvent { event: "content_block_start".into(), data: serde_json::json!({"index": idx + 1, "content_block": {"type": "tool_use", "id": tc["id"], "name": tc["function"]["name"]}}) });
+                    }
+                    if let Some(args) = tc["function"]["arguments"].as_str() {
+                        if !args.is_empty() {
+                            out.push(SseEvent { event: "content_block_delta".into(), data: serde_json::json!({"index": idx + 1, "delta": {"type": "input_json_delta", "partial_json": args}}) });
+                        }
+                    }
+                }
+            }
+            if let Some(fr) = finish {
+                if text_started { out.push(SseEvent { event: "content_block_stop".into(), data: serde_json::json!({"index": 0}) }); }
+                for idx in tool_calls.keys() { out.push(SseEvent { event: "content_block_stop".into(), data: serde_json::json!({"index": idx + 1}) }); }
+                let stop = match fr { "tool_calls" => "tool_use", "length" => "max_tokens", _ => "end_turn" };
+                out.push(SseEvent { event: "message_delta".into(), data: serde_json::json!({"delta": {"stop_reason": stop}, "usage": {"output_tokens": 0}}) });
+                out.push(SseEvent { event: "message_stop".into(), data: serde_json::json!({}) });
+            }
+        }
+        out
+    }
+}
+
+impl StreamClient for OpenAIClient {
+    fn stream(&self, body: &serde_json::Value) -> Result<Vec<SseEvent>, String> {
+        let model = body["model"].as_str().unwrap_or("gpt-4o");
+        let oai_msgs = Self::convert_messages(&body["system"], &body["messages"], model);
+        let oai_tools = Self::convert_tools(&body["tools"]);
+        let mut oai_body = serde_json::json!({
+            "model": model, "messages": oai_msgs,
+            "max_completion_tokens": body["max_tokens"],
+            "stream": true, "stream_options": {"include_usage": true}
+        });
+        if !oai_tools.is_null() { oai_body["tools"] = oai_tools; }
+
+        let mut last_error = String::new();
+        for attempt in 0..3u32 {
+            if attempt > 0 { std::thread::sleep(Duration::from_millis(1000 * (1u64 << attempt))); }
+            let resp = match self.http.post(format!("{}/v1/chat/completions", self.api_url))
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {}", self.api_key))
+                .body(oai_body.to_string()).send() {
+                Ok(r) => r,
+                Err(e) => { last_error = e.to_string(); continue; }
+            };
+            let status = resp.status().as_u16();
+            if status == 429 || status == 529 { last_error = format!("HTTP {}", status); continue; }
+            if !resp.status().is_success() {
+                let text = resp.text().unwrap_or_default();
+                return Err(format!("OpenAI API error {}: {}", status, text));
+            }
+            // Parse SSE into raw events, then translate
+            let raw = self.parse_raw_sse(resp);
+            return Ok(Self::translate_events(&raw));
+        }
+        Err(if last_error.is_empty() { "Max retries".into() } else { last_error })
+    }
+}
+
+impl OpenAIClient {
+    fn parse_raw_sse(&self, resp: reqwest::blocking::Response) -> Vec<SseEvent> {
+        let reader = BufReader::new(resp);
+        let mut events = Vec::new();
+        for line_result in reader.lines() {
+            let line = match line_result { Ok(l) => l, Err(_) => break };
+            if !line.starts_with("data: ") { continue; }
+            let payload = &line[6..];
+            if payload.trim() == "[DONE]" { continue; }
+            if let Ok(data) = serde_json::from_str::<serde_json::Value>(payload) {
+                events.push(SseEvent { event: "chunk".into(), data });
+            }
+        }
+        events
+    }
+}
+
+// ── OpenAIResponsesClient (for *-codex models) ─────────────────
+
+struct OpenAIResponsesClient {
+    api_key: String,
+    api_url: String,
+    http: reqwest::blocking::Client,
+    call_id_to_item_id: std::cell::RefCell<HashMap<String, String>>,
+}
+
+impl OpenAIResponsesClient {
+    fn new(api_key: &str, api_url: &str) -> Self {
+        Self {
+            api_key: api_key.to_string(),
+            api_url: api_url.to_string(),
+            http: reqwest::blocking::Client::builder().timeout(Duration::from_secs(300)).build().unwrap(),
+            call_id_to_item_id: std::cell::RefCell::new(HashMap::new()),
+        }
+    }
+
+    fn convert_input(&self, messages: &serde_json::Value) -> Vec<serde_json::Value> {
+        let mut input = Vec::new();
+        let msgs = match messages.as_array() { Some(a) => a, None => return input };
+        let map = self.call_id_to_item_id.borrow();
+        for msg in msgs {
+            let role = msg["role"].as_str().unwrap_or("");
+            let content = &msg["content"];
+            match role {
+                "user" => {
+                    if let Some(arr) = content.as_array() {
+                        let trs: Vec<&serde_json::Value> = arr.iter().filter(|b| b["type"] == "tool_result").collect();
+                        if !trs.is_empty() {
+                            for tr in trs {
+                                input.push(serde_json::json!({"type": "function_call_output", "call_id": tr["tool_use_id"], "output": tr["content"].as_str().unwrap_or("")}));
+                            }
+                        } else {
+                            let text: String = arr.iter().filter(|b| b["type"] == "text").filter_map(|b| b["text"].as_str()).collect();
+                            if !text.is_empty() { input.push(serde_json::json!({"role": "user", "content": text})); }
+                        }
+                    } else {
+                        input.push(serde_json::json!({"role": "user", "content": content}));
+                    }
+                }
+                "assistant" => {
+                    if let Some(arr) = content.as_array() {
+                        let text: String = arr.iter().filter(|b| b["type"] == "text").filter_map(|b| b["text"].as_str()).collect();
+                        if !text.is_empty() { input.push(serde_json::json!({"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": text}]})); }
+                        for b in arr.iter().filter(|b| b["type"] == "tool_use") {
+                            let call_id = b["id"].as_str().unwrap_or("");
+                            let item_id = map.get(call_id).map(|s| s.as_str()).unwrap_or(call_id);
+                            input.push(serde_json::json!({"type": "function_call", "id": item_id, "call_id": call_id, "name": b["name"], "arguments": serde_json::to_string(&b["input"]).unwrap_or_default()}));
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        input
+    }
+
+    fn convert_tools(tools: &serde_json::Value) -> serde_json::Value {
+        let arr = match tools.as_array() { Some(a) => a, None => return serde_json::Value::Null };
+        let out: Vec<serde_json::Value> = arr.iter()
+            .filter(|t| t.get("type").is_none())
+            .map(|t| serde_json::json!({"type": "function", "name": t["name"], "description": t["description"], "parameters": t["input_schema"]}))
+            .collect();
+        if out.is_empty() { serde_json::Value::Null } else { serde_json::json!(out) }
+    }
+}
+
+impl StreamClient for OpenAIResponsesClient {
+    fn stream(&self, body: &serde_json::Value) -> Result<Vec<SseEvent>, String> {
+        let model = body["model"].as_str().unwrap_or("");
+        let instructions: String = body["system"].as_array()
+            .map(|blocks| blocks.iter().filter_map(|b| b["text"].as_str()).collect::<Vec<_>>().join("\n\n"))
+            .unwrap_or_default();
+        let input = self.convert_input(&body["messages"]);
+        let tools = Self::convert_tools(&body["tools"]);
+
+        let mut req_body = serde_json::json!({"model": model, "input": input, "stream": true, "store": false, "max_output_tokens": body["max_tokens"]});
+        if !instructions.is_empty() { req_body["instructions"] = serde_json::json!(instructions); }
+        if !tools.is_null() { req_body["tools"] = tools; }
+
+        let mut last_error = String::new();
+        for attempt in 0..3u32 {
+            if attempt > 0 { std::thread::sleep(Duration::from_millis(1000 * (1u64 << attempt))); }
+            let resp = match self.http.post(format!("{}/v1/responses", self.api_url))
+                .header("content-type", "application/json")
+                .header("authorization", format!("Bearer {}", self.api_key))
+                .body(req_body.to_string()).send() {
+                Ok(r) => r,
+                Err(e) => { last_error = e.to_string(); continue; }
+            };
+            let status = resp.status().as_u16();
+            if status == 429 || status == 529 { last_error = format!("HTTP {}", status); continue; }
+            if !resp.status().is_success() {
+                let text = resp.text().unwrap_or_default();
+                return Err(format!("OpenAI Responses API error {}: {}", status, text));
+            }
+            return self.translate_sse(resp);
+        }
+        Err(if last_error.is_empty() { "Max retries".into() } else { last_error })
+    }
+}
+
+impl OpenAIResponsesClient {
+    fn translate_sse(&self, resp: reqwest::blocking::Response) -> Result<Vec<SseEvent>, String> {
+        let reader = BufReader::new(resp);
+        let mut events = Vec::new();
+        let mut sent_start = false;
+        let mut text_started = false;
+        let mut block_idx: i64 = 0;
+        let mut current_event_type: Option<String> = None;
+        let mut current_data: Option<String> = None;
+
+        for line_result in reader.lines() {
+            let line = match line_result { Ok(l) => l, Err(_) => break };
+            if let Some(rest) = line.strip_prefix("event: ") { current_event_type = Some(rest.to_string()); continue; }
+            if let Some(rest) = line.strip_prefix("data: ") { current_data = Some(rest.to_string()); continue; }
+            if !line.is_empty() { continue; }
+            let (evt_type, data_str) = match (current_event_type.take(), current_data.take()) { (Some(e), Some(d)) => (e, d), _ => continue };
+            let ev: serde_json::Value = match serde_json::from_str(&data_str) { Ok(v) => v, Err(_) => continue };
+            let t = ev["type"].as_str().unwrap_or("");
+
+            if !sent_start {
+                sent_start = true;
+                events.push(SseEvent { event: "message_start".into(), data: serde_json::json!({"message": {"usage": {"input_tokens": 0, "output_tokens": 0}}}) });
+            }
+
+            match t {
+                "response.output_item.added" => {
+                    let item = &ev["item"];
+                    if item["type"] == "function_call" {
+                        if text_started { events.push(SseEvent { event: "content_block_stop".into(), data: serde_json::json!({"index": block_idx}) }); text_started = false; block_idx += 1; }
+                        let call_id = item["call_id"].as_str().unwrap_or("");
+                        let item_id = item["id"].as_str().unwrap_or("");
+                        self.call_id_to_item_id.borrow_mut().insert(call_id.to_string(), item_id.to_string());
+                        events.push(SseEvent { event: "content_block_start".into(), data: serde_json::json!({"index": block_idx, "content_block": {"type": "tool_use", "id": call_id, "name": item["name"]}}) });
+                    }
+                }
+                "response.output_text.delta" => {
+                    if !text_started {
+                        text_started = true;
+                        events.push(SseEvent { event: "content_block_start".into(), data: serde_json::json!({"index": block_idx, "content_block": {"type": "text", "text": ""}}) });
+                    }
+                    events.push(SseEvent { event: "content_block_delta".into(), data: serde_json::json!({"index": block_idx, "delta": {"type": "text_delta", "text": ev["delta"]}}) });
+                }
+                "response.function_call_arguments.delta" => {
+                    events.push(SseEvent { event: "content_block_delta".into(), data: serde_json::json!({"index": block_idx, "delta": {"type": "input_json_delta", "partial_json": ev["delta"]}}) });
+                }
+                "response.output_item.done" => {
+                    if text_started { events.push(SseEvent { event: "content_block_stop".into(), data: serde_json::json!({"index": block_idx}) }); text_started = false; block_idx += 1; }
+                    else if ev["item"]["type"] == "function_call" { events.push(SseEvent { event: "content_block_stop".into(), data: serde_json::json!({"index": block_idx}) }); block_idx += 1; }
+                }
+                "response.completed" => {
+                    if text_started { events.push(SseEvent { event: "content_block_stop".into(), data: serde_json::json!({"index": block_idx}) }); }
+                    let response = &ev["response"];
+                    let has_tc = response["output"].as_array().map(|o| o.iter().any(|i| i["type"] == "function_call")).unwrap_or(false);
+                    let stop = if has_tc { "tool_use" } else { "end_turn" };
+                    let usage = &response["usage"];
+                    events.push(SseEvent { event: "message_delta".into(), data: serde_json::json!({"delta": {"stop_reason": stop}, "usage": {"input_tokens": usage["input_tokens"].as_i64().unwrap_or(0), "output_tokens": usage["output_tokens"].as_i64().unwrap_or(0)}}) });
+                    events.push(SseEvent { event: "message_stop".into(), data: serde_json::json!({}) });
+                }
+                "response.failed" => {
+                    let msg = ev["response"]["error"]["message"].as_str().unwrap_or("Responses API failed");
+                    return Err(msg.to_string());
+                }
+                _ => {}
+            }
+        }
         Ok(events)
     }
 }
@@ -1801,7 +2217,7 @@ trait AgentCallbacks {
 }
 
 fn run_agent_loop(
-    client: &AnthropicClient,
+    client: &dyn StreamClient,
     registry: &ToolRegistry,
     cfg: &Config,
     messages: &mut Vec<serde_json::Value>,
@@ -2135,7 +2551,7 @@ fn emit_ndjson(obj: &serde_json::Value) {
 fn run_ndjson_bridge(
     cfg: &mut Config,
     registry: &ToolRegistry,
-    client: &AnthropicClient,
+    client: &dyn StreamClient,
 ) -> Result<(), String> {
     let sessions = SessionManager::new();
     let session_id = sessions.create();
@@ -2231,7 +2647,7 @@ fn run_ndjson_bridge(
 fn ndjson_handle_message(
     cfg: &Config,
     registry: &ToolRegistry,
-    client: &AnthropicClient,
+    client: &dyn StreamClient,
     sessions: &SessionManager,
     session_id: &str,
     msg: &serde_json::Value,
@@ -2368,7 +2784,7 @@ fn ndjson_handle_message(
 fn run_interactive(
     cfg: &mut Config,
     registry: &ToolRegistry,
-    client: &mut AnthropicClient,
+    client: &dyn StreamClient,
 ) -> Result<(), String> {
     let sessions = SessionManager::new();
 
@@ -2476,17 +2892,12 @@ fn run_interactive(
                     if let Err(e) = oauth_login() {
                         eprintln!("\x1b[31mLogin error: {}\x1b[0m", e);
                     } else {
-                        // Reload auth
+                        // Reload auth (token stored in cfg for next session)
                         match get_oauth_access_token(false) {
                             Ok((token, sub_type)) => {
-                                cfg.auth_token = token.clone();
-                                *client = AnthropicClient::new(
-                                    &cfg.api_key,
-                                    &cfg.auth_token,
-                                    &cfg.api_url,
-                                );
+                                cfg.auth_token = token;
                                 eprintln!(
-                                    "\x1b[2mSwitched to {} subscription\x1b[0m",
+                                    "\x1b[2mSwitched to {} subscription (restart to apply)\x1b[0m",
                                     sub_type
                                 );
                             }
@@ -2596,7 +3007,7 @@ fn run_interactive(
 fn run_oneshot(
     cfg: &Config,
     registry: &ToolRegistry,
-    client: &AnthropicClient,
+    client: &dyn StreamClient,
     prompt: &str,
 ) -> Result<(), String> {
     let system_blocks = build_system_prompt(cfg);
@@ -2666,12 +3077,26 @@ fn main() {
         }
     }
 
-    if cfg.api_key.is_empty() && cfg.auth_token.is_empty() {
-        eprintln!("Error: No auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY");
-        std::process::exit(1);
-    }
-
-    let mut client = AnthropicClient::new(&cfg.api_key, &cfg.auth_token, &cfg.api_url);
+    // Determine backend
+    let use_openai = is_openai_model(&cfg.model);
+    let client: Box<dyn StreamClient> = if use_openai {
+        if cfg.openai_api_key.is_empty() {
+            eprintln!("Error: No OpenAI auth. Run --openai-login, use --openai-api-key, or set OPENAI_API_KEY");
+            std::process::exit(1);
+        }
+        eprintln!("\x1b[2mUsing OpenAI backend ({})\x1b[0m", cfg.model);
+        if is_responses_api_model(&cfg.model) {
+            Box::new(OpenAIResponsesClient::new(&cfg.openai_api_key, &cfg.openai_api_url))
+        } else {
+            Box::new(OpenAIClient::new(&cfg.openai_api_key, &cfg.openai_api_url))
+        }
+    } else {
+        if cfg.api_key.is_empty() && cfg.auth_token.is_empty() {
+            eprintln!("Error: No auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY");
+            std::process::exit(1);
+        }
+        Box::new(AnthropicClient::new(&cfg.api_key, &cfg.auth_token, &cfg.api_url))
+    };
     let mut registry = ToolRegistry::new();
     register_builtin_tools(&mut registry);
 
@@ -2689,11 +3114,11 @@ fn main() {
 
     // Mode dispatch
     let result = if cfg.ndjson {
-        run_ndjson_bridge(&mut cfg, &registry, &client)
+        run_ndjson_bridge(&mut cfg, &registry, &*client)
     } else if let Some(ref prompt) = cfg.prompt.clone() {
-        run_oneshot(&cfg, &registry, &client, prompt)
+        run_oneshot(&cfg, &registry, &*client, prompt)
     } else {
-        run_interactive(&mut cfg, &registry, &mut client)
+        run_interactive(&mut cfg, &registry, &*client)
     };
 
     if let Err(e) = result {

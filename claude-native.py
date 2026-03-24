@@ -32,15 +32,32 @@ def log(*args: str) -> None:
 # ── Model Aliases ────────────────────────────────────────────────
 
 MODEL_ALIASES = {
-    "opus": "claude-opus-4-6",
-    "sonnet": "claude-sonnet-4-6",
+    "opus": "claude-opus-4-6", "sonnet": "claude-sonnet-4-6",
     "haiku": "claude-haiku-4-5-20251001",
-    "opus-4": "claude-opus-4-6",
-    "sonnet-4": "claude-sonnet-4-6",
+    "opus-4": "claude-opus-4-6", "sonnet-4": "claude-sonnet-4-6",
+    # OpenAI
+    "gpt-5.4": "gpt-5.4", "gpt5": "gpt-5.4", "5.4": "gpt-5.4",
+    "codex": "gpt-5.3-codex", "gpt-5.3-codex": "gpt-5.3-codex",
+    "gpt-5.2-codex": "gpt-5.2-codex", "gpt-5.1-codex": "gpt-5.1-codex",
+    "gpt-4.1": "gpt-4.1", "4.1": "gpt-4.1",
+    "gpt-4.1-mini": "gpt-4.1-mini", "4.1-mini": "gpt-4.1-mini",
+    "gpt-4o": "gpt-4o", "gpt-4": "gpt-4o", "4o": "gpt-4o",
+    "gpt-4o-mini": "gpt-4o-mini", "4o-mini": "gpt-4o-mini",
+    "o3": "o3", "o3-pro": "o3-pro", "o3-mini": "o3-mini", "o4-mini": "o4-mini",
 }
 
 def resolve_model(name: str) -> str:
     return MODEL_ALIASES.get(name, name)
+
+def is_openai_model(model: str) -> bool:
+    return model.startswith("gpt-") or model.startswith("o3") or model.startswith("o4") or model in ("o1", "o1-mini")
+
+def is_responses_api_model(model: str) -> bool:
+    return "-codex" in model
+
+def _is_reasoning_model(model: str) -> bool:
+    import re
+    return bool(re.match(r"^o[1-9]", model))
 
 # ── OAuth Constants ──────────────────────────────────────────────
 
@@ -61,7 +78,10 @@ def parse_args(argv: object = None) -> dict:
         "apiKey": os.environ.get("ANTHROPIC_API_KEY", ""),
         "authToken": os.environ.get("ANTHROPIC_AUTH_TOKEN", ""),
         "apiUrl": os.environ.get("ANTHROPIC_API_URL", "https://api.anthropic.com"),
+        "openaiApiKey": os.environ.get("OPENAI_API_KEY", ""),
+        "openaiApiUrl": os.environ.get("OPENAI_API_URL", "https://api.openai.com"),
         "useOAuth": False,
+        "useOpenAIOAuth": False,
         "ndjson": False,
         "interactive": True,
         "prompt": None,
@@ -116,10 +136,20 @@ def parse_args(argv: object = None) -> dict:
         elif a == "--disallowed-tools":
             i += 1
             cfg["disallowedTools"] = (cfg["disallowedTools"] or []) + argv[i].split(",")
+        elif a == "--openai-api-key":
+            i += 1; cfg["openaiApiKey"] = argv[i]
+        elif a == "--openai-api-url":
+            i += 1; cfg["openaiApiUrl"] = argv[i]
+        elif a == "--openai":
+            cfg["useOpenAIOAuth"] = True
         elif a == "--login":
             oauth_login(); sys.exit(0)
         elif a == "--logout":
             oauth_logout(); sys.exit(0)
+        elif a == "--openai-login":
+            openai_oauth_login(); sys.exit(0)
+        elif a == "--openai-logout":
+            openai_oauth_logout(); sys.exit(0)
         elif a in ("--help", "-h"):
             print_help(); sys.exit(0)
         else:
@@ -140,17 +170,22 @@ Usage:
   claude-native.py --ndjson                NDJSON bridge mode
 
 Options:
-  -m, --model <name>          Model (sonnet, opus, haiku, or full ID)
+  -m, --model <name>          Model (sonnet, opus, haiku, codex, gpt-5.4, o3, or full ID)
   -p, --print <prompt>        One-shot mode, print response and exit
   --ndjson                    NDJSON bridge protocol on stdin/stdout
   --max-turns <n>             Max agent loop turns (default: 25)
   --max-tokens <n>            Max output tokens (default: 16384)
-  --login                     Login via browser (OAuth, saves to keychain)
-  --logout                    Remove saved credentials
-  --oauth                     Use Pro/Max subscription (reads macOS keychain)
-  --api-key <key>             API key (or ANTHROPIC_API_KEY env)
+  --login                     Login to Anthropic via browser (OAuth)
+  --logout                    Remove Anthropic credentials
+  --oauth                     Use Anthropic Pro/Max subscription (keychain)
+  --openai-login              Login to OpenAI via browser (OAuth)
+  --openai-logout             Remove OpenAI credentials
+  --openai                    Use OpenAI subscription (keychain)
+  --api-key <key>             Anthropic API key (or ANTHROPIC_API_KEY env)
+  --openai-api-key <key>      OpenAI API key (or OPENAI_API_KEY env)
   --auth-token <token>        OAuth bearer token directly
-  --api-url <url>             API base URL
+  --api-url <url>             Anthropic API base URL
+  --openai-api-url <url>      OpenAI API base URL
   --thinking <budget>         Enable extended thinking with token budget
   --system-prompt <text>      Override system prompt
   --append-system-prompt <t>  Append to system prompt
@@ -268,6 +303,387 @@ class AnthropicClient:
                         yield (event_type, json.loads(data))
                     except json.JSONDecodeError:
                         pass
+
+# ── OpenAIClient (Chat Completions) ──────────────────────────────
+
+class OpenAIClient:
+    """Drop-in replacement for AnthropicClient. Translates OpenAI Chat Completions
+    SSE into the same (event_type, data) tuples that AgentLoop expects."""
+
+    def __init__(self, api_key: str = "", api_url: str = "https://api.openai.com"):
+        self.api_key = api_key
+        self.api_url = api_url
+
+    def _convert_tools(self, tools):
+        if not tools:
+            return None
+        return [{"type": "function", "function": {"name": t["name"], "description": t["description"],
+                 "parameters": t["input_schema"]}} for t in tools if "type" not in t]
+
+    def _convert_messages(self, system_blocks, messages, model):
+        out = []
+        if system_blocks:
+            text = "\n\n".join(b.get("text", "") for b in system_blocks)
+            role = "developer" if _is_reasoning_model(model) else "system"
+            out.append({"role": role, "content": text})
+        for msg in messages:
+            if msg["role"] == "assistant":
+                if isinstance(msg.get("content"), list):
+                    text = "".join(b.get("text", "") for b in msg["content"] if b.get("type") == "text")
+                    tcs = [{"id": b["id"], "type": "function",
+                            "function": {"name": b["name"], "arguments": json.dumps(b["input"])}}
+                           for b in msg["content"] if b.get("type") == "tool_use"]
+                    m = {"role": "assistant"}
+                    if text: m["content"] = text
+                    if tcs: m["tool_calls"] = tcs
+                    out.append(m)
+                else:
+                    out.append({"role": "assistant", "content": msg["content"]})
+            elif msg["role"] == "user":
+                if isinstance(msg.get("content"), list):
+                    trs = [b for b in msg["content"] if b.get("type") == "tool_result"]
+                    if trs:
+                        for tr in trs:
+                            c = tr.get("content", "")
+                            out.append({"role": "tool", "tool_call_id": tr["tool_use_id"],
+                                        "content": c if isinstance(c, str) else json.dumps(c)})
+                    else:
+                        text = "".join(b.get("text", "") for b in msg["content"] if b.get("type") == "text")
+                        out.append({"role": "user", "content": text or json.dumps(msg["content"])})
+                else:
+                    out.append({"role": "user", "content": msg["content"]})
+        return out
+
+    def stream(self, body: dict):
+        model = body.get("model", "gpt-4o")
+        oai_tools = self._convert_tools(body.get("tools"))
+        oai_messages = self._convert_messages(body.get("system"), body.get("messages", []), model)
+        oai_body = {"model": model, "messages": oai_messages, "max_completion_tokens": body.get("max_tokens", 16384),
+                     "stream": True, "stream_options": {"include_usage": True}}
+        if oai_tools:
+            oai_body["tools"] = oai_tools
+
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
+        payload = json.dumps(oai_body).encode()
+        last_error = None
+
+        for attempt in range(3):
+            if attempt > 0:
+                time.sleep(1.0 * (2 ** attempt))
+            try:
+                status, resp = http_stream(f"{self.api_url}/v1/chat/completions", headers=headers, body=payload, timeout=300)
+            except HTTPError as e:
+                if e.code in (429, 529):
+                    last_error = Exception(f"HTTP {e.code}")
+                    continue
+                raise Exception(f"OpenAI API error {e.code}: {e.read().decode(errors='replace')}")
+            except (URLError, OSError) as e:
+                last_error = e
+                continue
+            yield from self._translate(resp)
+            return
+        raise last_error or Exception("Max retries exceeded")
+
+    def _translate(self, resp):
+        tool_calls = {}
+        sent_start = False
+        text_idx = None
+        usage = None
+        buf = ""
+
+        for raw in iter(lambda: resp.read(4096), b""):
+            buf += raw.decode("utf-8", errors="replace")
+            lines = buf.split("\n")
+            buf = lines[-1]
+            for line in lines[:-1]:
+                if not line.startswith("data: "):
+                    continue
+                payload = line[6:].strip()
+                if payload == "[DONE]":
+                    continue
+                try:
+                    chunk = json.loads(payload)
+                except json.JSONDecodeError:
+                    continue
+                if not sent_start:
+                    sent_start = True
+                    yield ("message_start", {"message": {"usage": {"input_tokens": 0, "output_tokens": 0}}})
+                if chunk.get("usage"):
+                    usage = {"input_tokens": chunk["usage"].get("prompt_tokens", 0),
+                             "output_tokens": chunk["usage"].get("completion_tokens", 0)}
+                delta = (chunk.get("choices") or [{}])[0].get("delta")
+                finish = (chunk.get("choices") or [{}])[0].get("finish_reason")
+                if delta and delta.get("content"):
+                    if text_idx is None:
+                        text_idx = 0
+                        yield ("content_block_start", {"index": 0, "content_block": {"type": "text", "text": ""}})
+                    yield ("content_block_delta", {"index": 0, "delta": {"type": "text_delta", "text": delta["content"]}})
+                if delta and delta.get("tool_calls"):
+                    for tc in delta["tool_calls"]:
+                        idx = tc["index"]
+                        if idx not in tool_calls:
+                            if text_idx is not None:
+                                yield ("content_block_stop", {"index": text_idx})
+                                text_idx = None
+                            tool_calls[idx] = {"id": tc.get("id", ""), "name": tc.get("function", {}).get("name", ""), "args": ""}
+                            yield ("content_block_start", {"index": idx + 1,
+                                   "content_block": {"type": "tool_use", "id": tc.get("id", ""), "name": tc.get("function", {}).get("name", "")}})
+                        if tc.get("function", {}).get("arguments"):
+                            tool_calls[idx]["args"] += tc["function"]["arguments"]
+                            yield ("content_block_delta", {"index": idx + 1,
+                                   "delta": {"type": "input_json_delta", "partial_json": tc["function"]["arguments"]}})
+                if finish:
+                    if text_idx is not None:
+                        yield ("content_block_stop", {"index": text_idx})
+                    for idx in tool_calls:
+                        yield ("content_block_stop", {"index": idx + 1})
+                    stop = "tool_use" if finish == "tool_calls" else ("max_tokens" if finish == "length" else "end_turn")
+                    yield ("message_delta", {"delta": {"stop_reason": stop}, "usage": usage or {"output_tokens": 0}})
+                    yield ("message_stop", {})
+
+
+# ── OpenAIResponsesClient (Responses API for *-codex) ───────────
+
+class OpenAIResponsesClient:
+    """For codex models that only work on POST /v1/responses."""
+
+    def __init__(self, api_key: str = "", api_url: str = "https://api.openai.com"):
+        self.api_key = api_key
+        self.api_url = api_url
+        self._call_id_to_item_id = {}
+
+    def _convert_tools(self, tools):
+        if not tools:
+            return None
+        return [{"type": "function", "name": t["name"], "description": t["description"],
+                 "parameters": t["input_schema"]} for t in tools if "type" not in t]
+
+    def _convert_input(self, system_blocks, messages):
+        inp = []
+        for msg in messages:
+            if msg["role"] == "user":
+                if isinstance(msg.get("content"), list):
+                    trs = [b for b in msg["content"] if b.get("type") == "tool_result"]
+                    if trs:
+                        for tr in trs:
+                            c = tr.get("content", "")
+                            inp.append({"type": "function_call_output", "call_id": tr["tool_use_id"],
+                                        "output": c if isinstance(c, str) else json.dumps(c)})
+                    else:
+                        text = "".join(b.get("text", "") for b in msg["content"] if b.get("type") == "text")
+                        inp.append({"role": "user", "content": text or json.dumps(msg["content"])})
+                else:
+                    inp.append({"role": "user", "content": msg["content"]})
+            elif msg["role"] == "assistant":
+                if isinstance(msg.get("content"), list):
+                    text = "".join(b.get("text", "") for b in msg["content"] if b.get("type") == "text")
+                    if text:
+                        inp.append({"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": text}]})
+                    for b in msg["content"]:
+                        if b.get("type") == "tool_use":
+                            item_id = self._call_id_to_item_id.get(b["id"], b["id"])
+                            inp.append({"type": "function_call", "id": item_id, "call_id": b["id"],
+                                        "name": b["name"], "arguments": json.dumps(b["input"])})
+                else:
+                    inp.append({"type": "message", "role": "assistant", "content": [{"type": "output_text", "text": msg["content"]}]})
+        return inp
+
+    def stream(self, body: dict):
+        instructions = "\n\n".join(b.get("text", "") for b in (body.get("system") or [])) or None
+        inp = self._convert_input(body.get("system"), body.get("messages", []))
+        tools = self._convert_tools(body.get("tools"))
+        req = {"model": body.get("model"), "input": inp, "stream": True, "store": False,
+               "max_output_tokens": body.get("max_tokens", 16384)}
+        if instructions:
+            req["instructions"] = instructions
+        if tools:
+            req["tools"] = tools
+
+        headers = {"Content-Type": "application/json", "Authorization": f"Bearer {self.api_key}"}
+        payload = json.dumps(req).encode()
+        last_error = None
+
+        for attempt in range(3):
+            if attempt > 0:
+                time.sleep(1.0 * (2 ** attempt))
+            try:
+                status, resp = http_stream(f"{self.api_url}/v1/responses", headers=headers, body=payload, timeout=300)
+            except HTTPError as e:
+                if e.code in (429, 529):
+                    last_error = Exception(f"HTTP {e.code}")
+                    continue
+                raise Exception(f"OpenAI Responses API error {e.code}: {e.read().decode(errors='replace')}")
+            except (URLError, OSError) as e:
+                last_error = e
+                continue
+            yield from self._translate(resp)
+            return
+        raise last_error or Exception("Max retries exceeded")
+
+    def _translate(self, resp):
+        buf = ""
+        sent_start = False
+        text_started = False
+        block_idx = 0
+
+        for raw in iter(lambda: resp.read(4096), b""):
+            buf += raw.decode("utf-8", errors="replace")
+            chunks = buf.split("\n\n")
+            buf = chunks[-1]
+            for chunk in chunks[:-1]:
+                data_line = None
+                for line in chunk.split("\n"):
+                    if line.startswith("data: "):
+                        data_line = line[6:]
+                if not data_line:
+                    continue
+                try:
+                    ev = json.loads(data_line)
+                except json.JSONDecodeError:
+                    continue
+                if not sent_start:
+                    sent_start = True
+                    yield ("message_start", {"message": {"usage": {"input_tokens": 0, "output_tokens": 0}}})
+                t = ev.get("type", "")
+                if t == "response.output_item.added":
+                    item = ev.get("item", {})
+                    if item.get("type") == "function_call":
+                        if text_started:
+                            yield ("content_block_stop", {"index": block_idx})
+                            text_started = False
+                            block_idx += 1
+                        self._call_id_to_item_id[item.get("call_id", "")] = item.get("id", "")
+                        yield ("content_block_start", {"index": block_idx,
+                               "content_block": {"type": "tool_use", "id": item.get("call_id", ""), "name": item.get("name", "")}})
+                elif t == "response.output_text.delta":
+                    if not text_started:
+                        text_started = True
+                        yield ("content_block_start", {"index": block_idx, "content_block": {"type": "text", "text": ""}})
+                    yield ("content_block_delta", {"index": block_idx, "delta": {"type": "text_delta", "text": ev.get("delta", "")}})
+                elif t == "response.function_call_arguments.delta":
+                    yield ("content_block_delta", {"index": block_idx, "delta": {"type": "input_json_delta", "partial_json": ev.get("delta", "")}})
+                elif t == "response.output_item.done":
+                    if text_started:
+                        yield ("content_block_stop", {"index": block_idx})
+                        text_started = False
+                        block_idx += 1
+                    elif ev.get("item", {}).get("type") == "function_call":
+                        yield ("content_block_stop", {"index": block_idx})
+                        block_idx += 1
+                elif t == "response.completed":
+                    if text_started:
+                        yield ("content_block_stop", {"index": block_idx})
+                        text_started = False
+                    response = ev.get("response", {})
+                    has_tc = any(o.get("type") == "function_call" for o in response.get("output", []))
+                    usage = response.get("usage", {})
+                    yield ("message_delta", {"delta": {"stop_reason": "tool_use" if has_tc else "end_turn"},
+                           "usage": {"input_tokens": usage.get("input_tokens", 0), "output_tokens": usage.get("output_tokens", 0)}})
+                    yield ("message_stop", {})
+                elif t == "response.failed":
+                    raise Exception(ev.get("response", {}).get("error", {}).get("message", "Responses API failed"))
+
+
+# ── OpenAI OAuth ────────────────────────────────────────────────
+
+OPENAI_AUTH_URL = "https://auth.openai.com/oauth/authorize"
+OPENAI_TOKEN_URL = "https://auth.openai.com/oauth/token"
+OPENAI_CLIENT_ID = "app_codex_cli"
+OPENAI_KEYCHAIN_SERVICE = "Claude Native OpenAI-credentials"
+
+def openai_oauth_login():
+    import base64
+    state = str(uuid.uuid4())
+    code_verifier = secrets.token_urlsafe(64)
+    code_challenge = base64.urlsafe_b64encode(hashlib.sha256(code_verifier.encode()).digest()).rstrip(b"=").decode()
+    params = urlencode({"response_type": "code", "client_id": OPENAI_CLIENT_ID,
+                        "redirect_uri": "http://127.0.0.1:9876/callback",
+                        "scope": "openid profile email offline_access",
+                        "state": state, "code_challenge": code_challenge, "code_challenge_method": "S256"})
+    auth_url = f"{OPENAI_AUTH_URL}?{params}"
+    result = {}
+    class Handler(http.server.BaseHTTPRequestHandler):
+        def do_GET(self):
+            qs = parse_qs(urlparse(self.path).query)
+            if "/callback" in self.path:
+                result["code"] = qs.get("code", [None])[0]
+                result["state"] = qs.get("state", [None])[0]
+                self.send_response(200)
+                self.send_header("Content-Type", "text/html")
+                self.end_headers()
+                self.wfile.write(b"<h2>Login successful!</h2><p>You can close this tab.</p>")
+                threading.Thread(target=self.server.shutdown).start()
+            else:
+                self.send_response(404); self.end_headers()
+        def log_message(self, *a): pass
+    srv = http.server.HTTPServer(("127.0.0.1", 9876), Handler)
+    sys.stderr.write("\nOpening browser for OpenAI login...\n")
+    subprocess.Popen(["open", auth_url] if platform.system() == "Darwin" else ["xdg-open", auth_url])
+    srv.handle_request(); srv.handle_request()
+    srv.server_close()
+    if result.get("state") != state:
+        raise Exception("OAuth state mismatch")
+    # Exchange code for tokens
+    token_body = urlencode({"grant_type": "authorization_code", "client_id": OPENAI_CLIENT_ID,
+                            "code": result["code"], "redirect_uri": "http://127.0.0.1:9876/callback",
+                            "code_verifier": code_verifier}).encode()
+    req = Request(OPENAI_TOKEN_URL, data=token_body, headers={"Content-Type": "application/x-www-form-urlencoded"}, method="POST")
+    resp = urlopen(req, timeout=30)
+    tokens = json.loads(resp.read())
+    creds = json.dumps({"access_token": tokens["access_token"],
+                        "refresh_token": tokens.get("refresh_token", ""),
+                        "expires_at": int(time.time()) + tokens.get("expires_in", 3600)})
+    _keychain_save(OPENAI_KEYCHAIN_SERVICE, creds)
+    sys.stderr.write("OpenAI credentials saved to macOS keychain.\n")
+    return tokens["access_token"]
+
+def get_openai_access_token(verbose=False):
+    raw = _keychain_load(OPENAI_KEYCHAIN_SERVICE)
+    if not raw:
+        raise Exception("No OpenAI credentials found. Run --openai-login first.")
+    creds = json.loads(raw)
+    if creds.get("expires_at", 0) < time.time() + 60 and creds.get("refresh_token"):
+        if verbose: log("OpenAI token expired, refreshing...")
+        body = urlencode({"grant_type": "refresh_token", "client_id": OPENAI_CLIENT_ID,
+                          "refresh_token": creds["refresh_token"]}).encode()
+        req = Request(OPENAI_TOKEN_URL, data=body, headers={"Content-Type": "application/x-www-form-urlencoded"}, method="POST")
+        try:
+            resp = urlopen(req, timeout=30)
+            tokens = json.loads(resp.read())
+            creds["access_token"] = tokens["access_token"]
+            if tokens.get("refresh_token"):
+                creds["refresh_token"] = tokens["refresh_token"]
+            creds["expires_at"] = int(time.time()) + tokens.get("expires_in", 3600)
+            _keychain_save(OPENAI_KEYCHAIN_SERVICE, json.dumps(creds))
+        except Exception:
+            raise Exception("OpenAI token refresh failed. Run --openai-login again.")
+    return creds["access_token"]
+
+def openai_oauth_logout():
+    try:
+        user = os.environ.get("USER", os.getlogin())
+        subprocess.run(["security", "delete-generic-password", "-a", user, "-s", OPENAI_KEYCHAIN_SERVICE],
+                       capture_output=True, check=True)
+        sys.stderr.write("OpenAI credentials removed from keychain.\n")
+    except Exception:
+        sys.stderr.write("No OpenAI credentials found in keychain.\n")
+
+def _keychain_save(service, data):
+    user = os.environ.get("USER", os.getlogin())
+    subprocess.run(["security", "delete-generic-password", "-a", user, "-s", service],
+                   capture_output=True)
+    subprocess.run(["security", "add-generic-password", "-a", user, "-s", service, "-w", data],
+                   capture_output=True, check=True)
+
+def _keychain_load(service):
+    user = os.environ.get("USER", os.getlogin())
+    try:
+        r = subprocess.run(["security", "find-generic-password", "-a", user, "-s", service, "-w"],
+                           capture_output=True, text=True, check=True)
+        return r.stdout.strip()
+    except Exception:
+        return None
+
 
 # ── ToolRegistry ─────────────────────────────────────────────────
 
@@ -598,7 +1014,7 @@ def build_system_prompt(cfg: dict) -> list[dict]:
 # ── AgentLoop ────────────────────────────────────────────────────
 
 class AgentLoop:
-    def __init__(self, client: AnthropicClient, registry: ToolRegistry,
+    def __init__(self, client, registry: ToolRegistry,
                  cfg: dict, callbacks: object = None):
         self.client = client
         self.registry = registry
@@ -624,7 +1040,7 @@ class AgentLoop:
                 "tools": self.registry.get_definitions(),
             }
 
-            if self.cfg.get("thinkingBudget", 0) > 0:
+            if self.cfg.get("thinkingBudget", 0) > 0 and not is_openai_model(self.cfg.get("model", "")):
                 body["thinking"] = {"type": "enabled", "budget_tokens": self.cfg["thinkingBudget"]}
 
             # Stream the response
@@ -1363,7 +1779,7 @@ def main():
     cfg = parse_args()
     _verbose = cfg["verbose"]
 
-    # Resolve auth: --oauth (keychain) > --auth-token > --api-key > ANTHROPIC_API_KEY
+    # Resolve Anthropic auth
     if cfg["useOAuth"] or (not cfg["apiKey"] and not cfg["authToken"]):
         try:
             auth_token, subscription_type = get_oauth_access_token(cfg["verbose"])
@@ -1375,15 +1791,34 @@ def main():
                 sys.stderr.write(f"Error: {e}\n")
                 sys.exit(1)
 
-    if not cfg["apiKey"] and not cfg["authToken"]:
-        sys.stderr.write("Error: No auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY\n")
-        sys.exit(1)
+    # Resolve OpenAI auth
+    if cfg["useOpenAIOAuth"] or (is_openai_model(cfg["model"]) and not cfg["openaiApiKey"]):
+        try:
+            cfg["openaiApiKey"] = get_openai_access_token(cfg["verbose"])
+            sys.stderr.write("\033[2mUsing OpenAI subscription (OAuth)\033[0m\n")
+            sys.stderr.flush()
+        except Exception as e:
+            if cfg["useOpenAIOAuth"]:
+                sys.stderr.write(f"Error: {e}\n")
+                sys.exit(1)
 
-    client = AnthropicClient(
-        api_key=cfg["apiKey"],
-        auth_token=cfg.get("authToken", ""),
-        api_url=cfg["apiUrl"],
-    )
+    # Determine backend
+    use_openai = is_openai_model(cfg["model"])
+    if use_openai:
+        if not cfg["openaiApiKey"]:
+            sys.stderr.write("Error: No OpenAI auth. Run --openai-login, use --openai-api-key, or set OPENAI_API_KEY\n")
+            sys.exit(1)
+        sys.stderr.write(f"\033[2mUsing OpenAI backend ({cfg['model']})\033[0m\n")
+        sys.stderr.flush()
+        if is_responses_api_model(cfg["model"]):
+            client = OpenAIResponsesClient(api_key=cfg["openaiApiKey"], api_url=cfg["openaiApiUrl"])
+        else:
+            client = OpenAIClient(api_key=cfg["openaiApiKey"], api_url=cfg["openaiApiUrl"])
+    else:
+        if not cfg["apiKey"] and not cfg["authToken"]:
+            sys.stderr.write("Error: No auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY\n")
+            sys.exit(1)
+        client = AnthropicClient(api_key=cfg["apiKey"], auth_token=cfg.get("authToken", ""), api_url=cfg["apiUrl"])
     registry = ToolRegistry()
     register_builtin_tools(registry)
 
