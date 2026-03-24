@@ -283,6 +283,200 @@ class ToolRegistry {
   }
 }
 
+// ── SecurityClassifier v1 ────────────────────────────────────────
+//
+// 28 BLOCK rules extracted from the original Claude Code binary.
+// Each rule has: name, description, applies(toolName, input) → bool
+// Returns: { blocked, rule, reason } or { blocked: false }
+//
+// Used by PermissionManager in "auto" mode before tool execution.
+
+class SecurityClassifier {
+  constructor() {
+    this.blockRules = [
+      {
+        name: "git_destructive",
+        desc: "Force pushing, deleting remote branches, or rewriting remote history",
+        test: (tool, input) => tool === "Bash" && /git\s+push\s+.*(-f|--force)|git\s+push\s+.*--delete|git\s+branch\s+-[dD]\s+.*\borigin\b/.test(input.command || ""),
+      },
+      {
+        name: "git_push_default_branch",
+        desc: "Pushing directly to main/master bypasses pull request review",
+        test: (tool, input) => tool === "Bash" && /git\s+push\b/.test(input.command || "") && /\b(main|master)\b/.test(input.command || "") && !/origin\s+\S+:\S+/.test(input.command || ""),
+      },
+      {
+        name: "code_from_external",
+        desc: "Downloading and executing code from external sources",
+        test: (tool, input) => tool === "Bash" && /curl\s[^|]*\|\s*(ba)?sh|wget\s[^|]*\|\s*(ba)?sh|eval\s*\$\(\s*curl|pip\s+install\s+git\+http|npm\s+install\s+https?:/.test(input.command || ""),
+      },
+      {
+        name: "cloud_storage_mass_delete",
+        desc: "Deleting or mass modifying files on cloud storage",
+        test: (tool, input) => tool === "Bash" && /aws\s+s3\s+(rm|rb)\s+.*--recursive|gsutil\s+(-m\s+)?rm\s+-r|az\s+storage\s+blob\s+delete-batch/.test(input.command || ""),
+      },
+      {
+        name: "production_deploy",
+        desc: "Deploying to production or running production database migrations",
+        test: (tool, input) => tool === "Bash" && /(kubectl|helm|gcloud|aws)\s.*(deploy|apply|upgrade)\s.*(\bprod\b|production)|migrate.*--database.*prod/.test(input.command || ""),
+      },
+      {
+        name: "remote_shell_writes",
+        desc: "Writing to running production/shared hosts via remote shell",
+        test: (tool, input) => tool === "Bash" && /(kubectl|docker)\s+exec\s.*--?\s*(sh|bash|rm|mv|cp|tee|cat\s*>)|ssh\s+\S+\s+['"]?(rm|mv|cat\s*>|tee)/.test(input.command || ""),
+      },
+      {
+        name: "blind_apply",
+        desc: "Skipping dry-run/preview for infrastructure changes",
+        test: (tool, input) => tool === "Bash" && /terraform\s+apply\s+.*-auto-approve|pulumi\s+up\s+--yes|ansible.*--extra-vars.*force|kubectl\s+delete.*--force/.test(input.command || ""),
+      },
+      {
+        name: "logging_audit_tamper",
+        desc: "Stopping logging, deleting logs, removing audit trails",
+        test: (tool, input) => tool === "Bash" && /rm\s+(-rf?\s+)?(\/var\/log|.*\.log\b)|systemctl\s+stop\s+.*log|journalctl\s+--vacuum/.test(input.command || ""),
+      },
+      {
+        name: "permission_grant",
+        desc: "Granting admin/owner roles or elevating IAM/RBAC permissions",
+        test: (tool, input) => tool === "Bash" && /gcloud\s+.*add-iam|aws\s+iam\s+.*attach-.*-policy|kubectl\s+.*create\s+.*rolebinding|chmod\s+(777|a\+[rwx])/.test(input.command || ""),
+      },
+      {
+        name: "tls_auth_weaken",
+        desc: "Disabling TLS verification or authentication",
+        test: (tool, input) => tool === "Bash" && /(--insecure|--no-check-certificate|--allow-unauthenticated|NODE_TLS_REJECT_UNAUTHORIZED\s*=\s*['"]?0|PYTHONHTTPSVERIFY\s*=\s*['"]?0|verify\s*=\s*False)/.test(input.command || ""),
+      },
+      {
+        name: "security_weaken",
+        desc: "Disabling security mitigations or firewall rules",
+        test: (tool, input) => tool === "Bash" && /(--dangerously-skip|--no-sandbox|--disable-security|ufw\s+disable|iptables\s+-F|setenforce\s+0|--no-verify)/.test(input.command || ""),
+      },
+      {
+        name: "create_unsafe_agents",
+        desc: "Creating autonomous agent loops without safety frameworks",
+        test: (tool, input) => tool === "Bash" && /(--dangerously-skip-permissions|--no-sandbox.*exec|eval.*while.*true)/.test(input.command || ""),
+      },
+      {
+        name: "irreversible_local_destruction",
+        desc: "Irreversibly deleting files not created by the agent",
+        test: (tool, input) => {
+          if (tool !== "Bash") return false;
+          const cmd = input.command || "";
+          // rm -rf with absolute/home paths or bare "."
+          if (/rm\s+-rf?\s+(\/|~\/|\.\s*$)/.test(cmd)) return true;
+          // git clean -fdx, git checkout ., git reset --hard
+          if (/git\s+clean\s+-fdx|git\s+checkout\s+\.\s*$|git\s+reset\s+--hard/.test(cmd)) return true;
+          // Truncation of existing files
+          if (/>\s*\S+\.(js|py|ts|go|rs|md|json|yaml|yml|toml|cfg|conf|sh)\s*$/.test(cmd)) return true;
+          return false;
+        },
+      },
+      {
+        name: "create_rce_surface",
+        desc: "Creating services that accept and execute arbitrary code",
+        test: (tool, input) => {
+          if (tool === "Bash") return /(eval\s*\(\s*req\.|exec\s*\(\s*req\.|child_process.*req\.|os\.system\s*\(\s*request)/.test(input.command || "");
+          if (tool === "Write" || tool === "Edit") return /(eval\s*\(\s*req\.|exec\s*\(\s*req\.|os\.system\s*\(\s*request|subprocess\.call\s*\(\s*request)/.test(input.new_string || input.content || "");
+          return false;
+        },
+      },
+      {
+        name: "expose_local_services",
+        desc: "Exposing local files or services to the network",
+        test: (tool, input) => tool === "Bash" && /(python3?\s+-m\s+http\.server|nc\s+-l\s|socat\s+TCP-LISTEN|ngrok\s|localtunnel)/.test(input.command || ""),
+      },
+      {
+        name: "credential_leakage",
+        desc: "Embedding secrets in visible/queryable fields",
+        test: (tool, input) => tool === "Bash" && /echo\s+.*(\$\{?(API_KEY|SECRET|PASSWORD|TOKEN|AWS_SECRET)|sk-ant-|sk-[a-z]|ghp_|gho_|xox[bpras]-)/.test(input.command || ""),
+      },
+      {
+        name: "credential_exploration",
+        desc: "Systematically scanning credential stores",
+        test: (tool, input) => tool === "Bash" && /(find|grep|rg|ag)\s.*(-r\s+)?\/(etc|home|root|var)\s.*\.(env|pem|key|secret|password)|kubectl\s+get\s+secret/.test(input.command || ""),
+      },
+      {
+        name: "data_exfiltration",
+        desc: "Sending sensitive data to external endpoints",
+        test: (tool, input) => tool === "Bash" && /(curl|wget|http)\s.*(-d\s+@|-F\s+.*=@|--data.*@|--post-file|--upload-file)/.test(input.command || ""),
+      },
+      {
+        name: "exfil_scouting",
+        desc: "Testing reachability of external endpoints",
+        test: (tool, input) => tool === "Bash" && /(curl|wget|nc)\s.*(webhook\.site|requestbin|pipedream|ngrok|burpcollaborator)/.test(input.command || ""),
+      },
+      {
+        name: "unauthorized_persistence",
+        desc: "Adding SSH keys, cron jobs, modifying shell profiles",
+        test: (tool, input) => {
+          const cmd = input.command || "";
+          const content = input.new_string || input.content || "";
+          if (tool === "Bash" && /(crontab\s|systemctl\s+enable|>>?\s*~\/\.(bashrc|zshrc|profile|bash_profile)|ssh-keygen.*>>.*authorized_keys)/.test(cmd)) return true;
+          if ((tool === "Write" || tool === "Edit") && /~\/\.(bashrc|zshrc|profile|bash_profile|ssh\/authorized_keys)/.test(input.file_path || "")) return true;
+          return false;
+        },
+      },
+      {
+        name: "self_modification",
+        desc: "Modifying the agent's own config or permissions",
+        test: (tool, input) => {
+          const path = input.file_path || "";
+          if ((tool === "Write" || tool === "Edit") && /\.claude\/(settings|CLAUDE\.md|permissions)/.test(path)) return true;
+          if (tool === "Bash" && />\s*.*\.claude\/(settings|CLAUDE\.md)/.test(input.command || "")) return true;
+          return false;
+        },
+      },
+      {
+        name: "content_integrity",
+        desc: "Posting fabricated or false content to external systems",
+        test: (tool, input) => tool === "Bash" && /(gh\s+(issue|pr)\s+(create|comment|close|merge)|curl\s+.*-X\s+(POST|PUT|PATCH)\s+.*api\.github\.com)/.test(input.command || ""),
+      },
+      {
+        name: "external_system_writes",
+        desc: "Modifying items in external collaboration tools",
+        test: (tool, input) => tool === "Bash" && /(gh\s+(issue|pr)\s+(close|delete|merge)|jira\s|linear\s.*update|slack\s.*post)/.test(input.command || ""),
+      },
+      {
+        name: "interfere_with_others",
+        desc: "Deleting jobs or disrupting shared infrastructure",
+        test: (tool, input) => tool === "Bash" && /(kubectl\s+delete\s+(pod|job|deploy|service|namespace)|scancel\s|kill\s+-9\s+|pkill\s)/.test(input.command || ""),
+      },
+      {
+        name: "modify_shared_resources",
+        desc: "In-place modification of shared artifacts",
+        test: (tool, input) => tool === "Bash" && /(kubectl\s+(apply|patch|edit)\s|helm\s+upgrade\s|docker\s+service\s+update)/.test(input.command || ""),
+      },
+      {
+        name: "real_world_transactions",
+        desc: "Actions with real-world financial consequences",
+        test: (tool, input) => tool === "Bash" && /(stripe\s|paypal\s|aws\s+marketplace\s+.*subscribe|gcloud\s+billing)/.test(input.command || ""),
+      },
+      {
+        name: "trusting_guessed_external",
+        desc: "Sending data to agent-guessed external services",
+        test: (tool, input) => tool === "Bash" && /(curl|wget|http)\s+.*(-d|-X\s+POST)\s+.*https?:\/\/(?!localhost|127\.0\.0\.1|api\.anthropic)/.test(input.command || ""),
+      },
+      {
+        name: "untrusted_code_integration",
+        desc: "Pulling and executing code from external repos",
+        test: (tool, input) => tool === "Bash" && /(git\s+clone\s+https?:\/\/.*&&\s*(cd|pip\s+install|npm\s+install|make|python|node)\b|git\s+submodule\s+add\s+https?:\/\/)/.test(input.command || ""),
+      },
+    ];
+  }
+
+  // Returns: { blocked: bool, rule?: string, reason?: string }
+  classify(toolName, input) {
+    for (const rule of this.blockRules) {
+      if (rule.test(toolName, input)) {
+        return {
+          blocked: true,
+          rule: rule.name,
+          reason: rule.desc,
+        };
+      }
+    }
+    return { blocked: false };
+  }
+}
+
 // ── PermissionManager ───────────────────────────────────────────
 
 // Permission modes:
@@ -291,6 +485,7 @@ class ToolRegistry {
 // - acceptEdits:       allow reads + edits, ask for Bash/dangerous
 // - bypassPermissions: allow everything (no prompts)
 // - dontAsk:           deny anything that would normally ask
+// - auto:              allow safe ops, block dangerous, ask for ambiguous
 
 const READ_ONLY_TOOLS = new Set(["Read", "Glob", "Grep", "WebFetch", "WebSearch"]);
 const WRITE_TOOLS = new Set(["Write", "Edit", "NotebookEdit"]);
@@ -300,6 +495,7 @@ class PermissionManager {
     this.mode = cfg.permissionMode || "default";
     this.rules = []; // { tool, pattern, behavior }
     this.callbacks = cfg.permissionCallbacks || false;
+    this.classifier = new SecurityClassifier();
     this._pendingCallbacks = new Map(); // requestId → { resolve }
 
     // Build rules from --allowed-tools / --disallowed-tools
@@ -318,43 +514,68 @@ class PermissionManager {
   }
 
   // Returns: { behavior: "allow"|"deny"|"ask", message? }
+  // Returns: { behavior: "allow"|"deny"|"ask", message?, rule?, reason? }
   async check(toolName, input, opts = {}) {
-    // 1. Check explicit deny rules
+    // 1. Check explicit deny rules (always first — overrides everything)
     const denyRule = this.rules.find((r) => r.behavior === "deny" && this._matchRule(r, toolName, input));
-    if (denyRule) return { behavior: "deny", message: `${toolName} is denied by rule.` };
+    if (denyRule) return { behavior: "deny", message: `${toolName} is denied by rule.`, rule: "explicit_deny" };
 
-    // 2. Check explicit allow rules
+    // 2. Security classifier — runs in ALL modes as a safety net
+    //    In auto mode: blocks dangerous, allows safe, asks for ambiguous
+    //    In other modes: only blocks truly dangerous (doesn't override mode logic for safe ops)
+    const classification = this.classifier.classify(toolName, input);
+    if (classification.blocked) {
+      if (this.mode === "bypassPermissions") {
+        // Even bypass mode warns about dangerous ops but doesn't block
+        log(`[security] WARNING: ${classification.rule} — ${classification.reason}`);
+      } else {
+        // All other modes: block dangerous operations
+        return {
+          behavior: "deny",
+          message: `BLOCKED [${classification.rule}]: ${classification.reason}`,
+          rule: classification.rule,
+          reason: classification.reason,
+        };
+      }
+    }
+
+    // 3. Check explicit allow rules
     const allowRule = this.rules.find((r) => r.behavior === "allow" && this._matchRule(r, toolName, input));
-    if (allowRule) return { behavior: "allow" };
+    if (allowRule) return { behavior: "allow", rule: "explicit_allow" };
 
-    // 3. Apply permission mode
+    // 4. Apply permission mode
     switch (this.mode) {
       case "bypassPermissions":
-        return { behavior: "allow" };
+        return { behavior: "allow", rule: "mode_bypass" };
 
       case "dontAsk":
-        // Allow read-only tools, deny everything else silently
-        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: "allow" };
-        return { behavior: "deny", message: `${toolName} denied in dontAsk mode.` };
+        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: "allow", rule: "mode_dontask_readonly" };
+        return { behavior: "deny", message: `${toolName} denied in dontAsk mode.`, rule: "mode_dontask" };
 
       case "plan":
-        // Read-only mode — allow reads, deny writes and Bash
-        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: "allow" };
-        return { behavior: "deny", message: `${toolName} denied in plan mode (read-only).` };
+        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: "allow", rule: "mode_plan_readonly" };
+        return { behavior: "deny", message: `${toolName} denied in plan mode (read-only).`, rule: "mode_plan" };
 
       case "acceptEdits":
-        // Allow reads + file edits, ask for Bash and dangerous operations
-        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: "allow" };
-        if (WRITE_TOOLS.has(toolName)) return { behavior: "allow" };
-        // Bash and other tools: ask
-        return { behavior: "ask", message: `${toolName} requires permission in acceptEdits mode.` };
+        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: "allow", rule: "mode_accept_readonly" };
+        if (WRITE_TOOLS.has(toolName)) return { behavior: "allow", rule: "mode_accept_write" };
+        return { behavior: "ask", message: `${toolName} requires permission in acceptEdits mode.`, rule: "mode_accept_ask" };
+
+      case "auto":
+        // Auto mode: classifier already ran above. If we're here, it wasn't blocked.
+        // Allow read-only tools
+        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: "allow", rule: "auto_readonly" };
+        // Allow file edits (same as acceptEdits)
+        if (WRITE_TOOLS.has(toolName)) return { behavior: "allow", rule: "auto_write" };
+        // Bash not blocked by classifier = likely safe, allow
+        if (toolName === "Bash") return { behavior: "allow", rule: "auto_bash_safe" };
+        // Unknown tools: ask
+        return { behavior: "ask", message: `Allow ${toolName}?`, rule: "auto_ask" };
 
       case "default":
       default:
-        // Read-only tools are always allowed
-        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: "allow" };
-        // Everything else needs permission
-        return { behavior: "ask", message: `Allow ${toolName}?` };
+        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: "allow", rule: "mode_default_readonly" };
+        return { behavior: "ask", message: `Allow ${toolName}?`, rule: "mode_default_ask" };
     }
   }
 
@@ -385,7 +606,7 @@ class PermissionManager {
   }
 
   setMode(mode) {
-    const valid = ["default", "plan", "acceptEdits", "bypassPermissions", "dontAsk"];
+    const valid = ["default", "plan", "acceptEdits", "bypassPermissions", "dontAsk", "auto"];
     if (valid.includes(mode)) this.mode = mode;
   }
 }
