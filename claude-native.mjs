@@ -1032,6 +1032,8 @@ function registerBuiltinTools(registry) {
       required: ["file_path", "content"],
     },
   }, async (input) => {
+    // Checkpoint before mutation
+    if (registry._checkpoints) registry._checkpoints.backupBeforeMutation(input.file_path, registry._messageId);
     await fs.promises.mkdir(path.dirname(input.file_path), { recursive: true });
     await fs.promises.writeFile(input.file_path, input.content);
     const lines = input.content.split("\n").length;
@@ -1058,6 +1060,8 @@ Usage:
       required: ["file_path", "old_string", "new_string"],
     },
   }, async (input) => {
+    // Checkpoint before mutation
+    if (registry._checkpoints) registry._checkpoints.backupBeforeMutation(input.file_path, registry._messageId);
     const filePath = input.file_path;
     const oldStr = input.old_string ?? "";
     const newStr = input.new_string ?? "";
@@ -1654,11 +1658,14 @@ class AgentLoop {
         { type: "web_search_20250305", name: "web_search", max_uses: 8 },
       ];
 
+      // Strip non-API fields (messageId) from messages before sending
+      const apiMessages = messages.map(({ messageId, ...rest }) => rest);
+
       const body = {
         model: this.cfg.model,
         max_tokens: this.cfg.maxTokens,
         system: systemBlocks,
-        messages,
+        messages: apiMessages,
         tools: [...toolDefs, ...serverTools],
       };
 
@@ -1856,6 +1863,256 @@ class SessionManager {
   }
 }
 
+// ── CheckpointStore ─────────────────────────────────────────────
+//
+// Backs up files before Write/Edit mutations. Supports dry-run preview
+// and live rewind to any snapshot. Persists manifest to disk.
+
+class CheckpointStore {
+  constructor(sessionId) {
+    this.sessionId = sessionId;
+    this.dir = path.join(os.homedir(), ".claude-native", "file-history", sessionId);
+    this.manifestPath = path.join(this.dir, "manifest.jsonl");
+    this.snapshots = [];
+    this.trackedFiles = new Set();
+    this.maxSnapshots = 100;
+    fs.mkdirSync(this.dir, { recursive: true });
+    this._loadManifest();
+  }
+
+  _loadManifest() {
+    try {
+      const data = fs.readFileSync(this.manifestPath, "utf-8");
+      for (const line of data.split("\n").filter(Boolean)) {
+        try {
+          const snap = JSON.parse(line);
+          this.snapshots.push(snap);
+          if (snap.trackedFiles) snap.trackedFiles.forEach((f) => this.trackedFiles.add(f));
+        } catch { /* skip malformed */ }
+      }
+      // Trim to max
+      if (this.snapshots.length > this.maxSnapshots) {
+        this.snapshots = this.snapshots.slice(-this.maxSnapshots);
+      }
+    } catch { /* no manifest yet */ }
+  }
+
+  _appendManifest(snapshot) {
+    fs.appendFileSync(this.manifestPath, JSON.stringify(snapshot) + "\n");
+  }
+
+  _rewriteManifest() {
+    // Rewrite entire manifest with current snapshots (after in-place updates)
+    const data = this.snapshots.map((s) => JSON.stringify(s)).join("\n") + "\n";
+    fs.writeFileSync(this.manifestPath, data);
+  }
+
+  _backupName(absPath, version) {
+    const hash = createHash("sha256").update(absPath).digest("hex").slice(0, 16);
+    return `${hash}@v${version}`;
+  }
+
+  _backupPath(backupFile) {
+    return path.join(this.dir, backupFile);
+  }
+
+  _backupFile(absPath, version) {
+    const backupFile = this._backupName(absPath, version);
+    const dest = this._backupPath(backupFile);
+    try {
+      const content = fs.readFileSync(absPath, "utf-8");
+      fs.writeFileSync(dest, content, { encoding: "utf-8", flush: true });
+      // Preserve permissions
+      try { const stat = fs.statSync(absPath); fs.chmodSync(dest, stat.mode); } catch {}
+    } catch { /* file might not exist */ }
+    return { backupFile, version, backupTime: new Date().toISOString() };
+  }
+
+  _restoreFile(absPath, backupFile) {
+    const src = this._backupPath(backupFile);
+    const content = fs.readFileSync(src, "utf-8");
+    fs.mkdirSync(path.dirname(absPath), { recursive: true });
+    fs.writeFileSync(absPath, content, { encoding: "utf-8" });
+    try { const stat = fs.statSync(src); fs.chmodSync(absPath, stat.mode); } catch {}
+  }
+
+  _diffFile(absPath, backupFile) {
+    const backupPath = this._backupPath(backupFile);
+    let currentExists = false, backupExists = false;
+    let currentContent = "", backupContent = "";
+
+    try { currentContent = fs.readFileSync(absPath, "utf-8"); currentExists = true; } catch {}
+    try { backupContent = fs.readFileSync(backupPath, "utf-8"); backupExists = true; } catch {}
+
+    if (!currentExists && !backupExists) return { changed: false, conflict: false, insertions: 0, deletions: 0 };
+    if (currentContent === backupContent) return { changed: false, conflict: false, insertions: 0, deletions: 0 };
+
+    // Count insertions/deletions (simple line diff)
+    const curLines = currentContent.split("\n");
+    const bakLines = backupContent.split("\n");
+    const insertions = Math.max(0, bakLines.length - curLines.length);
+    const deletions = Math.max(0, curLines.length - bakLines.length);
+
+    // Conflict: file was modified externally (not by our tools) since backup
+    let conflict = false;
+    if (currentExists && backupExists) {
+      try {
+        const curStat = fs.statSync(absPath);
+        const bakStat = fs.statSync(backupPath);
+        // If current file is newer than backup AND content differs, potential conflict
+        if (curStat.mtimeMs > bakStat.mtimeMs) conflict = true;
+      } catch {}
+    }
+
+    return { changed: true, conflict, insertions, deletions };
+  }
+
+  // Create a snapshot for all tracked files at a user message boundary
+  createSnapshot(messageId) {
+    const backups = {};
+    const trackedArr = [...this.trackedFiles];
+
+    for (const relPath of trackedArr) {
+      const absPath = path.resolve(relPath);
+      const prevSnap = this.snapshots[this.snapshots.length - 1];
+      const prevBackup = prevSnap?.backups?.[relPath];
+
+      if (!fs.existsSync(absPath)) {
+        // File was deleted — record null backup
+        backups[relPath] = { backupFile: null, version: (prevBackup?.version || 0) + 1, backupTime: new Date().toISOString() };
+      } else if (prevBackup?.backupFile) {
+        // Check if file changed since last backup
+        const diff = this._diffFile(absPath, prevBackup.backupFile);
+        if (!diff.changed) {
+          backups[relPath] = prevBackup; // Reuse
+        } else {
+          backups[relPath] = this._backupFile(absPath, (prevBackup.version || 0) + 1);
+        }
+      } else {
+        backups[relPath] = this._backupFile(absPath, 1);
+      }
+    }
+
+    const snapshot = {
+      messageId,
+      timestamp: new Date().toISOString(),
+      backups,
+      trackedFiles: trackedArr,
+    };
+
+    this.snapshots.push(snapshot);
+    if (this.snapshots.length > this.maxSnapshots) {
+      this.snapshots = this.snapshots.slice(-this.maxSnapshots);
+    }
+    this._appendManifest(snapshot);
+    log(`Checkpoint created: ${messageId} (${trackedArr.length} files)`);
+    return snapshot;
+  }
+
+  // Backup a file before Write/Edit mutates it
+  backupBeforeMutation(filePath, messageId) {
+    const absPath = path.resolve(filePath);
+    const relPath = path.relative(process.cwd(), absPath);
+    this.trackedFiles.add(relPath);
+
+    // Find current snapshot (last one matching this messageId)
+    let snap = this.snapshots.findLast((s) => s.messageId === messageId);
+    if (!snap) {
+      // No snapshot for this message yet — create one
+      snap = this.createSnapshot(messageId);
+    }
+
+    // Already backed up in this snapshot?
+    if (snap.backups[relPath]) return;
+
+    // Backup the file (or record null if it doesn't exist)
+    if (fs.existsSync(absPath)) {
+      const prevBackup = snap.backups[relPath];
+      const version = (prevBackup?.version || 0) + 1;
+      snap.backups[relPath] = this._backupFile(absPath, version);
+    } else {
+      snap.backups[relPath] = { backupFile: null, version: 1, backupTime: new Date().toISOString() };
+    }
+
+    // Update tracked files in snapshot
+    if (!snap.trackedFiles.includes(relPath)) {
+      snap.trackedFiles = [...snap.trackedFiles, relPath];
+    }
+
+    // Persist updated snapshot to manifest
+    this._rewriteManifest();
+    log(`Backed up: ${relPath} (before mutation)`);
+  }
+
+  // Rewind to a snapshot. dryRun=true returns preview without restoring.
+  rewind(messageId, dryRun = false) {
+    const snap = this.snapshots.findLast((s) => s.messageId === messageId);
+    if (!snap) return { canRewind: false, error: "No checkpoint found for this message." };
+
+    const conflicts = [];
+    const created = [];   // Files that will be deleted (didn't exist at snapshot)
+    const deleted = [];   // Files that will be recreated (were deleted since)
+    const restored = [];  // Files that will be reverted
+    let insertions = 0, deletions = 0;
+
+    for (const relPath of snap.trackedFiles || []) {
+      const absPath = path.resolve(relPath);
+      const backup = snap.backups[relPath];
+
+      if (!backup || backup.backupFile === null) {
+        // File didn't exist at snapshot time — if it exists now, it should be deleted
+        if (fs.existsSync(absPath)) {
+          created.push(relPath);
+          if (!dryRun) {
+            try { fs.unlinkSync(absPath); } catch {}
+          }
+        }
+        continue;
+      }
+
+      // File had a backup
+      const diff = this._diffFile(absPath, backup.backupFile);
+      if (!diff.changed) continue; // Same content, skip
+
+      if (diff.conflict) {
+        conflicts.push({ file: relPath, reason: "File modified externally since checkpoint" });
+      }
+
+      insertions += diff.insertions;
+      deletions += diff.deletions;
+
+      if (!fs.existsSync(absPath)) {
+        deleted.push(relPath);
+      } else {
+        restored.push(relPath);
+      }
+
+      if (!dryRun) {
+        this._restoreFile(absPath, backup.backupFile);
+      }
+    }
+
+    return {
+      canRewind: true,
+      targetMessageId: messageId,
+      conflicts,
+      created,
+      deleted,
+      restored,
+      insertions,
+      deletions,
+    };
+  }
+
+  getSnapshots() {
+    return this.snapshots.map((s) => ({
+      messageId: s.messageId,
+      timestamp: s.timestamp,
+      fileCount: (s.trackedFiles || []).length,
+    }));
+  }
+}
+
 // ── NdjsonBridge ────────────────────────────────────────────────
 
 class NdjsonBridge {
@@ -1876,6 +2133,7 @@ class NdjsonBridge {
 
   async run() {
     const sessionId = this.sessions.create();
+    this.checkpoints = new CheckpointStore(sessionId);
     this.emit({ type: "ready", version: "1.0.0", mode: "native", session_id: sessionId });
 
     // Non-blocking stdin reader: pushes messages to a queue and resolves waiters
@@ -1948,6 +2206,19 @@ class NdjsonBridge {
           this.emit({ type: "pong" });
           break;
 
+        case "rewind":
+          if (this.checkpoints) {
+            const result = this.checkpoints.rewind(msg.message_id, msg.dry_run ?? true);
+            this.emit({ type: "checkpoint_result", ...result });
+          } else {
+            this.emit({ type: "checkpoint_result", canRewind: false, error: "Checkpointing not enabled." });
+          }
+          break;
+
+        case "checkpoint_list":
+          this.emit({ type: "checkpoint_list_result", snapshots: this.checkpoints?.getSnapshots() || [] });
+          break;
+
         default:
           this.emit({ type: "error", error: `Unknown message type: ${msg.type}` });
       }
@@ -1976,8 +2247,16 @@ class NdjsonBridge {
     });
 
     // Load session messages
+    const messageId = randomUUID();
     const messages = this.sessions.load(sessionId);
-    messages.push({ role: "user", content: msg.content });
+    messages.push({ role: "user", content: msg.content, messageId });
+
+    // Snapshot before agent runs
+    if (this.checkpoints) {
+      this.checkpoints.createSnapshot(messageId);
+      this.registry._checkpoints = this.checkpoints;
+      this.registry._messageId = messageId;
+    }
 
     const loop = new AgentLoop(this.client, this.registry, this.cfg, {
       onText: (delta) => {
@@ -2069,6 +2348,7 @@ class InteractiveMode {
     if (!this.sessionId) {
       this.sessionId = this.sessions.create();
     }
+    this.checkpoints = new CheckpointStore(this.sessionId);
 
     process.stderr.write(`\x1b[1mclaude-native\x1b[0m \x1b[2m(${this.cfg.model})\x1b[0m\n`);
     process.stderr.write(`\x1b[2mSession: ${this.sessionId}\x1b[0m\n`);
@@ -2130,6 +2410,48 @@ class InteractiveMode {
         this.cfg.thinkingBudget = budget || (this.cfg.thinkingBudget ? 0 : 10000);
         process.stderr.write(`\x1b[2mThinking: ${this.cfg.thinkingBudget ? `enabled (${this.cfg.thinkingBudget} tokens)` : "disabled"}\x1b[0m\n`);
         break;
+      case "/checkpoints": case "/ckpt":
+        if (this.checkpoints) {
+          const snaps = this.checkpoints.getSnapshots();
+          if (snaps.length === 0) { process.stderr.write("\x1b[2mNo checkpoints yet.\x1b[0m\n"); break; }
+          for (const s of snaps) {
+            const ago = Math.floor((Date.now() - new Date(s.timestamp).getTime()) / 1000);
+            const agoStr = ago < 60 ? `${ago}s ago` : ago < 3600 ? `${Math.floor(ago/60)}m ago` : `${Math.floor(ago/3600)}h ago`;
+            process.stderr.write(`\x1b[2m  [${s.messageId.slice(0,8)}] ${s.fileCount} files | ${agoStr}\x1b[0m\n`);
+          }
+        } else { process.stderr.write("\x1b[2mCheckpointing not enabled.\x1b[0m\n"); }
+        break;
+      case "/rewind":
+        if (!this.checkpoints) { process.stderr.write("\x1b[2mCheckpointing not enabled.\x1b[0m\n"); break; }
+        const targetId = args[0] || this.checkpoints.getSnapshots().at(-1)?.messageId;
+        if (!targetId) { process.stderr.write("\x1b[2mNo checkpoints to rewind to.\x1b[0m\n"); break; }
+        // Dry-run first
+        const preview = this.checkpoints.rewind(targetId, true);
+        if (!preview.canRewind) { process.stderr.write(`\x1b[31m${preview.error}\x1b[0m\n`); break; }
+        const total = preview.restored.length + preview.created.length + preview.deleted.length;
+        if (total === 0) { process.stderr.write("\x1b[2mNothing to rewind.\x1b[0m\n"); break; }
+        process.stderr.write(`\x1b[33mRewind to ${targetId.slice(0,8)}:\x1b[0m\n`);
+        for (const f of preview.restored) process.stderr.write(`  \x1b[33mrestore\x1b[0m ${f}\n`);
+        for (const f of preview.created) process.stderr.write(`  \x1b[31mdelete\x1b[0m  ${f} (created after checkpoint)\n`);
+        for (const f of preview.deleted) process.stderr.write(`  \x1b[32mrecreate\x1b[0m ${f}\n`);
+        for (const c of preview.conflicts) process.stderr.write(`  \x1b[33m⚠ conflict\x1b[0m ${c.file}: ${c.reason}\n`);
+        process.stderr.write(`  (${preview.insertions}+ ${preview.deletions}-)\n`);
+        // Confirm
+        await new Promise((resolve) => {
+          process.stderr.write(`\x1b[33mProceed? (y/n): \x1b[0m`);
+          const confirmRl = createInterface({ input: process.stdin, output: process.stderr });
+          confirmRl.question("", (answer) => {
+            confirmRl.close();
+            if (answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes") {
+              const result = this.checkpoints.rewind(targetId, false);
+              process.stderr.write(`\x1b[32mRewound ${result.restored.length + result.created.length + result.deleted.length} files.\x1b[0m\n`);
+            } else {
+              process.stderr.write("\x1b[2mRewind cancelled.\x1b[0m\n");
+            }
+            resolve();
+          });
+        });
+        break;
       case "/permission": case "/permissions": case "/mode":
         if (args[0]) {
           this.permissions?.setMode(args[0]);
@@ -2159,8 +2481,16 @@ class InteractiveMode {
   }
 
   async _processInput(input) {
-    this.messages.push({ role: "user", content: input });
-    this.sessions.append(this.sessionId, { role: "user", content: input });
+    const messageId = randomUUID();
+    this.messages.push({ role: "user", content: input, messageId });
+    this.sessions.append(this.sessionId, { role: "user", content: input, messageId });
+
+    // Snapshot before agent runs
+    if (this.checkpoints) {
+      this.checkpoints.createSnapshot(messageId);
+      this.registry._checkpoints = this.checkpoints;
+      this.registry._messageId = messageId;
+    }
 
     const systemBlocks = buildSystemPrompt(this.cfg);
     let toolCalls = 0;
@@ -2569,6 +2899,9 @@ async function main() {
   // Permission manager
   const permissions = new PermissionManager(cfg);
 
+  // File checkpointing
+  // CheckpointStore created per-mode (needs session ID first)
+
   // MCP servers
   const mcpManager = new McpManager();
   if (cfg.mcpConfig) {
@@ -2583,11 +2916,18 @@ async function main() {
   // Mode dispatch
   if (cfg.ndjson) {
     const bridge = new NdjsonBridge(cfg, registry, client, mcpManager, permissions);
+    // CheckpointStore created inside bridge.run() with its session ID
     await bridge.run();
   } else if (cfg.prompt) {
     // One-shot mode
+    const messageId = randomUUID();
+    const checkpoints = new CheckpointStore(cfg.sessionId || messageId);
+    checkpoints.createSnapshot(messageId);
+    registry._checkpoints = checkpoints;
+    registry._messageId = messageId;
+
     const systemBlocks = buildSystemPrompt(cfg);
-    const messages = [{ role: "user", content: cfg.prompt }];
+    const messages = [{ role: "user", content: cfg.prompt, messageId }];
 
     const loop = new AgentLoop(client, registry, cfg, {
       onText: (delta) => process.stdout.write(delta),
@@ -2605,6 +2945,7 @@ async function main() {
   } else {
     // Interactive REPL
     const repl = new InteractiveMode(cfg, registry, client, mcpManager, permissions);
+    // CheckpointStore created inside repl.run() with its session ID
     await repl.run();
   }
 
