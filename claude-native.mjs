@@ -41,6 +41,9 @@ async function parseArgs(argv = process.argv.slice(2)) {
     mcpConfig: null,
     allowedTools: null,
     disallowedTools: null,
+    permissionMode: "default",  // default|plan|acceptEdits|bypassPermissions|dontAsk
+    permissionRules: [],        // [{tool, pattern, behavior: "allow"|"deny"}]
+    permissionCallbacks: false, // forward permission requests to NDJSON agent
     cwd: process.cwd(),
   };
 
@@ -65,6 +68,8 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "--mcp-config": cfg.mcpConfig = argv[++i]; break;
       case "--allowed-tools": cfg.allowedTools = (cfg.allowedTools || []).concat(argv[++i].split(",")); break;
       case "--disallowed-tools": cfg.disallowedTools = (cfg.disallowedTools || []).concat(argv[++i].split(",")); break;
+      case "--permission-mode": cfg.permissionMode = argv[++i]; break;
+      case "--permission-callbacks": cfg.permissionCallbacks = true; break;
       case "--login": await oauthLogin(); process.exit(0);
       case "--logout": oauthLogout(); process.exit(0);
       case "--help": case "-h": printHelp(); process.exit(0);
@@ -275,6 +280,113 @@ class ToolRegistry {
   setFilter(allowed, disallowed) {
     this._allowed = allowed;
     this._disallowed = disallowed;
+  }
+}
+
+// ── PermissionManager ───────────────────────────────────────────
+
+// Permission modes:
+// - default:           ask for everything (interactive prompt)
+// - plan:              read-only — deny all writes, allow reads
+// - acceptEdits:       allow reads + edits, ask for Bash/dangerous
+// - bypassPermissions: allow everything (no prompts)
+// - dontAsk:           deny anything that would normally ask
+
+const READ_ONLY_TOOLS = new Set(["Read", "Glob", "Grep", "WebFetch", "WebSearch"]);
+const WRITE_TOOLS = new Set(["Write", "Edit", "NotebookEdit"]);
+
+class PermissionManager {
+  constructor(cfg) {
+    this.mode = cfg.permissionMode || "default";
+    this.rules = []; // { tool, pattern, behavior }
+    this.callbacks = cfg.permissionCallbacks || false;
+    this._pendingCallbacks = new Map(); // requestId → { resolve }
+
+    // Build rules from --allowed-tools / --disallowed-tools
+    if (cfg.allowedTools) {
+      for (const t of cfg.allowedTools) {
+        const [tool, pattern] = t.includes("(") ? [t.split("(")[0], t.split("(")[1]?.replace(")", "")] : [t, null];
+        this.rules.push({ tool, pattern, behavior: "allow" });
+      }
+    }
+    if (cfg.disallowedTools) {
+      for (const t of cfg.disallowedTools) {
+        const [tool, pattern] = t.includes("(") ? [t.split("(")[0], t.split("(")[1]?.replace(")", "")] : [t, null];
+        this.rules.push({ tool, pattern, behavior: "deny" });
+      }
+    }
+  }
+
+  // Returns: { behavior: "allow"|"deny"|"ask", message? }
+  async check(toolName, input, opts = {}) {
+    // 1. Check explicit deny rules
+    const denyRule = this.rules.find((r) => r.behavior === "deny" && this._matchRule(r, toolName, input));
+    if (denyRule) return { behavior: "deny", message: `${toolName} is denied by rule.` };
+
+    // 2. Check explicit allow rules
+    const allowRule = this.rules.find((r) => r.behavior === "allow" && this._matchRule(r, toolName, input));
+    if (allowRule) return { behavior: "allow" };
+
+    // 3. Apply permission mode
+    switch (this.mode) {
+      case "bypassPermissions":
+        return { behavior: "allow" };
+
+      case "dontAsk":
+        // Allow read-only tools, deny everything else silently
+        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: "allow" };
+        return { behavior: "deny", message: `${toolName} denied in dontAsk mode.` };
+
+      case "plan":
+        // Read-only mode — allow reads, deny writes and Bash
+        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: "allow" };
+        return { behavior: "deny", message: `${toolName} denied in plan mode (read-only).` };
+
+      case "acceptEdits":
+        // Allow reads + file edits, ask for Bash and dangerous operations
+        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: "allow" };
+        if (WRITE_TOOLS.has(toolName)) return { behavior: "allow" };
+        // Bash and other tools: ask
+        return { behavior: "ask", message: `${toolName} requires permission in acceptEdits mode.` };
+
+      case "default":
+      default:
+        // Read-only tools are always allowed
+        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: "allow" };
+        // Everything else needs permission
+        return { behavior: "ask", message: `Allow ${toolName}?` };
+    }
+  }
+
+  _matchRule(rule, toolName, input) {
+    if (rule.tool !== toolName && rule.tool !== "*") return false;
+    if (!rule.pattern) return true;
+    // Pattern matching for Bash commands: Bash(npm run build) matches commands starting with "npm run build"
+    if (toolName === "Bash" && input?.command) {
+      return input.command.startsWith(rule.pattern) || this._globMatch(rule.pattern, input.command);
+    }
+    // Pattern matching for file tools: Edit(src/**) matches file paths
+    if (input?.file_path) {
+      return this._globMatch(rule.pattern, input.file_path);
+    }
+    return true;
+  }
+
+  _globMatch(pattern, str) {
+    if (pattern.includes("*")) {
+      const re = pattern.replace(/[.+^${}()|[\]\\]/g, "\\$&").replace(/\*/g, ".*");
+      return new RegExp(`^${re}$`).test(str);
+    }
+    return str.startsWith(pattern);
+  }
+
+  addRule(tool, pattern, behavior) {
+    this.rules.push({ tool, pattern, behavior });
+  }
+
+  setMode(mode) {
+    const valid = ["default", "plan", "acceptEdits", "bypassPermissions", "dontAsk"];
+    if (valid.includes(mode)) this.mode = mode;
   }
 }
 
@@ -947,12 +1059,26 @@ ${cfg.appendSystemPrompt ? `\n${cfg.appendSystemPrompt}` : ""}`;
 // ── AgentLoop ───────────────────────────────────────────────────
 
 class AgentLoop {
-  constructor(client, registry, cfg, callbacks = {}) {
+  constructor(client, registry, cfg, callbacks = {}, permissionManager = null) {
     this.client = client;
     this.registry = registry;
     this.cfg = cfg;
     this.cb = callbacks;
+    this.permissions = permissionManager;
     this.totalUsage = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
+  }
+
+  async _askPermission(block, message) {
+    // If NDJSON callback mode: emit permission_request, wait for response
+    if (this.cb.onPermissionAsk) {
+      return this.cb.onPermissionAsk(block, message);
+    }
+    // Interactive mode: prompt on stderr
+    if (this.cb.onInteractivePermission) {
+      return this.cb.onInteractivePermission(block, message);
+    }
+    // No handler: deny by default
+    return false;
   }
 
   async run(messages, systemBlocks) {
@@ -1066,6 +1192,36 @@ class AgentLoop {
         this.cb.onToolUse?.(block);
         log(`Tool: ${block.name}(${JSON.stringify(block.input).substring(0, 100)})`);
 
+        // Check permissions before execution
+        if (this.permissions) {
+          const perm = await this.permissions.check(block.name, block.input);
+          if (perm.behavior === "deny") {
+            log(`Permission denied: ${block.name} — ${perm.message}`);
+            this.cb.onPermissionDeny?.(block, perm.message);
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: `Permission denied: ${perm.message || block.name + " is not allowed in current mode."}`,
+              is_error: true,
+            });
+            continue;
+          }
+          if (perm.behavior === "ask") {
+            // In interactive mode: prompt user. In NDJSON: forward callback or deny.
+            const allowed = await this._askPermission(block, perm.message);
+            if (!allowed) {
+              toolResults.push({
+                type: "tool_result",
+                tool_use_id: block.id,
+                content: `Permission denied by user: ${block.name}`,
+                is_error: true,
+              });
+              continue;
+            }
+          }
+          // behavior === "allow" — proceed
+        }
+
         // Check if it's an external tool (NDJSON bridge mode)
         const isExternal = this.registry.isExternal(block.name) || (!this.registry.has(block.name) && this.cb.onExternalToolUse);
         if (isExternal && this.cb.onExternalToolUse) {
@@ -1144,13 +1300,15 @@ class SessionManager {
 // ── NdjsonBridge ────────────────────────────────────────────────
 
 class NdjsonBridge {
-  constructor(cfg, registry, client, mcpManager) {
+  constructor(cfg, registry, client, mcpManager, permissions = null) {
     this.cfg = cfg;
     this.registry = registry;
     this.client = client;
     this.mcpManager = mcpManager;
+    this.permissions = permissions;
     this.sessions = new SessionManager();
     this._pendingToolCalls = new Map(); // id → { resolve }
+    this._pendingPermissions = new Map(); // requestId → { resolve }
   }
 
   emit(obj) {
@@ -1175,6 +1333,20 @@ class NdjsonBridge {
       // tool_result goes directly to pending tool calls (unblocks agent loop)
       if (msg.type === "tool_result") {
         this._handleToolResult(msg);
+        return;
+      }
+
+      // permission_response goes directly to pending permission requests
+      if (msg.type === "permission_response") {
+        const pending = this._pendingPermissions.get(msg.request_id);
+        if (pending) {
+          this._pendingPermissions.delete(msg.request_id);
+          pending.resolve(msg.allow === true);
+          // Optionally add permanent rule
+          if (msg.allow && msg.remember && this.permissions) {
+            this.permissions.addRule(msg.tool || "*", null, "allow");
+          }
+        }
         return;
       }
 
@@ -1256,13 +1428,29 @@ class NdjsonBridge {
         this.emit({ type: "tool_use", id: block.id, name: block.name, input: block.input });
       },
       onExternalToolUse: (block) => {
-        // Emit tool_use and wait for tool_result from stdin
         this.emit({ type: "tool_use", id: block.id, name: block.name, input: block.input });
         return new Promise((resolve) => {
           this._pendingToolCalls.set(block.id, { resolve });
         });
       },
-    });
+      onPermissionDeny: (block, msg) => {
+        this.emit({ type: "permission_denied", tool: block.name, message: msg });
+      },
+      onPermissionAsk: this.permissions?.callbacks ? (block, message) => {
+        // Forward permission request to NDJSON agent
+        const requestId = randomUUID();
+        this.emit({
+          type: "permission_request",
+          request_id: requestId,
+          tool: block.name,
+          input: block.input,
+          message,
+        });
+        return new Promise((resolve) => {
+          this._pendingPermissions.set(requestId, { resolve: (allow) => resolve(allow) });
+        });
+      } : undefined,
+    }, this.permissions);
 
     try {
       const result = await loop.run(messages, systemBlocks);
@@ -1298,11 +1486,12 @@ class NdjsonBridge {
 // ── InteractiveMode ─────────────────────────────────────────────
 
 class InteractiveMode {
-  constructor(cfg, registry, client, mcpManager) {
+  constructor(cfg, registry, client, mcpManager, permissions = null) {
     this.cfg = cfg;
     this.registry = registry;
     this.client = client;
     this.mcpManager = mcpManager;
+    this.permissions = permissions;
     this.sessions = new SessionManager();
     this.sessionId = null;
     this.messages = [];
@@ -1382,6 +1571,15 @@ class InteractiveMode {
         this.cfg.thinkingBudget = budget || (this.cfg.thinkingBudget ? 0 : 10000);
         process.stderr.write(`\x1b[2mThinking: ${this.cfg.thinkingBudget ? `enabled (${this.cfg.thinkingBudget} tokens)` : "disabled"}\x1b[0m\n`);
         break;
+      case "/permission": case "/permissions": case "/mode":
+        if (args[0]) {
+          this.permissions?.setMode(args[0]);
+          process.stderr.write(`\x1b[2mPermission mode: ${args[0]}\x1b[0m\n`);
+        } else {
+          process.stderr.write(`\x1b[2mPermission mode: ${this.permissions?.mode || "default"}\x1b[0m\n`);
+          process.stderr.write(`\x1b[2mModes: default, plan, acceptEdits, bypassPermissions, dontAsk\x1b[0m\n`);
+        }
+        break;
       case "/login":
         await oauthLogin();
         // Reload auth after login
@@ -1425,7 +1623,29 @@ class InteractiveMode {
           process.stderr.write(`\x1b[31m[Error]\x1b[0m\n`);
         }
       },
-    });
+      onPermissionDeny: (block, msg) => {
+        process.stderr.write(`\x1b[33m[Denied: ${block.name}] ${msg}\x1b[0m\n`);
+      },
+      onInteractivePermission: (block, message) => {
+        return new Promise((resolve) => {
+          const inputStr = JSON.stringify(block.input).substring(0, 100);
+          process.stderr.write(`\n\x1b[33m${message}\x1b[0m\n`);
+          process.stderr.write(`\x1b[2m  ${block.name}: ${inputStr}\x1b[0m\n`);
+          process.stderr.write(`\x1b[33mAllow? (y/n/always): \x1b[0m`);
+          const rl = createInterface({ input: process.stdin, output: process.stderr });
+          rl.question("", (answer) => {
+            rl.close();
+            const a = answer.trim().toLowerCase();
+            if (a === "always" || a === "a") {
+              this.permissions?.addRule(block.name, null, "allow");
+              resolve(true);
+            } else {
+              resolve(a === "y" || a === "yes");
+            }
+          });
+        });
+      },
+    }, this.permissions);
 
     try {
       const result = await loop.run(this.messages, systemBlocks);
@@ -1787,6 +2007,9 @@ async function main() {
     registry.setFilter(cfg.allowedTools, cfg.disallowedTools);
   }
 
+  // Permission manager
+  const permissions = new PermissionManager(cfg);
+
   // MCP servers
   const mcpManager = new McpManager();
   if (cfg.mcpConfig) {
@@ -1800,7 +2023,7 @@ async function main() {
 
   // Mode dispatch
   if (cfg.ndjson) {
-    const bridge = new NdjsonBridge(cfg, registry, client, mcpManager);
+    const bridge = new NdjsonBridge(cfg, registry, client, mcpManager, permissions);
     await bridge.run();
   } else if (cfg.prompt) {
     // One-shot mode
@@ -1812,7 +2035,7 @@ async function main() {
       onToolUse: (block) => {
         if (_verbose) process.stderr.write(`\x1b[2m[${block.name}]\x1b[0m\n`);
       },
-    });
+    }, permissions);
 
     const result = await loop.run(messages, systemBlocks);
     process.stdout.write("\n");
@@ -1822,7 +2045,7 @@ async function main() {
     }
   } else {
     // Interactive REPL
-    const repl = new InteractiveMode(cfg, registry, client, mcpManager);
+    const repl = new InteractiveMode(cfg, registry, client, mcpManager, permissions);
     await repl.run();
   }
 
