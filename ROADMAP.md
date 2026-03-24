@@ -6,9 +6,9 @@ Priority: **safe → useful → stateful → recoverable → extensible**
 
 | # | Feature | Impact | Effort | Status |
 |:-:|---------|:------:|:------:|:------:|
-| 1 | Permission modes (default/plan/acceptEdits/bypassPermissions/dontAsk) | Critical | Medium | Planned |
-| 1 | Tool allow/deny rules | Critical | Easy | Planned |
-| 1 | Permission callbacks (forward to agent for decision) | High | Medium | Planned |
+| 1 | ~~Permission modes (default/plan/acceptEdits/bypassPermissions/dontAsk)~~ | Critical | Medium | **Done** |
+| 1 | ~~Tool allow/deny rules~~ | Critical | Easy | **Done** |
+| 1 | ~~Permission callbacks (forward to agent for decision)~~ | High | Medium | **Done** |
 
 ## v1.2 — Recoverability
 
