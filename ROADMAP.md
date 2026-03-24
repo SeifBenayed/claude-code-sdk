@@ -5,7 +5,7 @@
 | Feature | Impact | Effort | Status |
 |---------|:------:|:------:|:------:|
 | ~~Edit tool (string replacement)~~ | High | Medium | **Done** |
-| WebFetch / WebSearch | Medium | Easy | Planned |
+| ~~WebFetch / WebSearch~~ | Medium | Easy | **Done** |
 | Plugin/skill system (`/commit`, `/review`) | Medium | Easy | Planned |
 
 ## v1.2 — Agent Intelligence
@@ -39,7 +39,7 @@
 - [x] Token refresh + auto-detect
 - [x] SSE streaming with all API events
 - [x] Multi-turn agent loop with tool calling
-- [x] 6 built-in tools (Bash, Read, Write, Edit, Glob, Grep)
+- [x] 8 built-in tools (Bash, Read, Write, Edit, Glob, Grep, WebFetch, WebSearch)
 - [x] NDJSON bridge protocol
 - [x] Interactive REPL with slash commands
 - [x] Session persistence (JSONL)
