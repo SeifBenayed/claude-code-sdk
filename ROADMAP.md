@@ -1,37 +1,44 @@
 # Roadmap
 
-## v1.1 — Core Tools
+Priority: **safe → useful → stateful → recoverable → extensible**
 
-| Feature | Impact | Effort | Status |
-|---------|:------:|:------:|:------:|
-| ~~Edit tool (string replacement)~~ | High | Medium | **Done** |
-| ~~WebFetch / WebSearch~~ | Medium | Easy | **Done** |
-| Plugin/skill system (`/commit`, `/review`) | Medium | Easy | Planned |
+## v1.1 — Safety (Permissions)
 
-## v1.2 — Agent Intelligence
+| # | Feature | Impact | Effort | Status |
+|:-:|---------|:------:|:------:|:------:|
+| 1 | Permission modes (default/plan/acceptEdits/bypassPermissions/dontAsk) | Critical | Medium | Planned |
+| 1 | Tool allow/deny rules | Critical | Easy | Planned |
+| 1 | Permission callbacks (forward to agent for decision) | High | Medium | Planned |
 
-| Feature | Impact | Effort | Status |
-|---------|:------:|:------:|:------:|
-| Sub-agents (Agent tool, parallel spawn) | High | High | Planned |
-| Context compaction (auto-summary when context full) | High | High | Planned |
-| Permission classifier (28 BLOCK/ALLOW rules) | Medium | Medium | Planned |
+## v1.2 — Recoverability
 
-## v1.3 — Persistence & Notebooks
+| # | Feature | Impact | Effort | Status |
+|:-:|---------|:------:|:------:|:------:|
+| 2 | File checkpointing (snapshot before edits) | Critical | Medium | Planned |
+| 2 | Rewind (restore files to pre-edit state) | Critical | Medium | Planned |
 
-| Feature | Impact | Effort | Status |
-|---------|:------:|:------:|:------:|
-| Memory system (MEMORY.md, auto-save) | Medium | Easy | Planned |
-| NotebookEdit (Jupyter cells) | Low | Easy | Planned |
-| File checkpointing / rewind | Low | High | Planned |
+## v1.3 — Statefulness
 
-## v2.0 — Cross-Platform & Distribution
+| # | Feature | Impact | Effort | Status |
+|:-:|---------|:------:|:------:|:------:|
+| 3 | Context compaction (auto-summary when context full) | Critical | High | Planned |
+| 4 | Memory system (MEMORY.md, auto-save/recall) | High | Medium | Planned |
 
-| Feature | Impact | Effort | Status |
-|---------|:------:|:------:|:------:|
-| Linux keychain (secret-tool / keyring) | High | Medium | Planned |
-| Windows credential manager | High | Medium | Planned |
-| Marketplace compatible (browse/install plugins) | Medium | Medium | Planned |
-| npm / pip / cargo publish | Medium | Easy | Planned |
+## v1.4 — Agent Intelligence
+
+| # | Feature | Impact | Effort | Status |
+|:-:|---------|:------:|:------:|:------:|
+| 5 | Sub-agents (Agent tool, parallel spawn) | High | High | Planned |
+
+## v2.0 — Extensibility
+
+| # | Feature | Impact | Effort | Status |
+|:-:|---------|:------:|:------:|:------:|
+| 6 | Plugin/skill system (`/commit`, `/review`) | Medium | Easy | Planned |
+| 7 | Cross-platform auth (Linux keychain, Windows credential manager) | High | Medium | Planned |
+| 8 | Marketplace (browse/install plugins) | Medium | Medium | Planned |
+| 9 | npm / pip / cargo publish | Medium | Easy | Planned |
+| 10 | NotebookEdit (Jupyter cells) | Low | Easy | Planned |
 
 ## Done (v1.0)
 
