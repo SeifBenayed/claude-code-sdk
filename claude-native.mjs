@@ -1564,10 +1564,11 @@ class McpManager {
   }
 }
 
-// ── Sub-Agent System (v1.4A) ────────────────────────────────────
+// ── Sub-Agent System (v1.4A + v1.4B) ────────────────────────────
 //
 // Each sub-agent is an independent API conversation with its own
 // system prompt, tool set, permissions, and turn limit.
+// v1.4B adds: background execution, worktree isolation, claude-code-guide, verification.
 
 const MAX_AGENT_DEPTH = 3;
 
@@ -1642,7 +1643,184 @@ Guidelines:
 - Return file paths as absolute paths
 - Avoid using emojis`,
   },
+
+  "claude-code-guide": {
+    agentType: "claude-code-guide",
+    description: "Documentation expert for Claude Code, Agent SDK, and Claude API",
+    model: "claude-haiku-4-5-20251001",
+    readOnly: true,
+    disallowedTools: ["Agent", "Write", "Edit", "Bash"],
+    getSystemPrompt: () => `You are the Claude guide agent. Your primary responsibility is helping users understand and use Claude Code, the Claude Agent SDK, and the Claude API effectively.
+
+Three domains of expertise:
+1. Claude Code (the CLI tool)
+2. Claude Agent SDK (Node.js/TypeScript and Python)
+3. Claude API (formerly Anthropic API)
+
+Approach:
+1. Determine which domain the question falls into
+2. Use WebFetch to fetch relevant documentation
+3. Provide clear, actionable guidance with examples
+4. Use WebSearch if docs don't cover the topic
+5. Reference local project files when relevant
+
+Guidelines:
+- Prioritize official documentation
+- Keep responses concise and actionable
+- Include code examples when helpful
+- Avoid using emojis`,
+  },
+
+  "verification": {
+    agentType: "verification",
+    description: "Adversarial verification agent that tries to break implementations",
+    model: null, // inherit from parent
+    readOnly: false, // can run Bash, but only write to /tmp
+    disallowedTools: ["Agent", "Write", "Edit"], // no project writes
+    getSystemPrompt: () => `You are a verification specialist. Your job is not to confirm the implementation works — it's to try to break it.
+
+=== CRITICAL: DO NOT MODIFY THE PROJECT ===
+- No creating, modifying, or deleting files IN THE PROJECT DIRECTORY
+- No installing dependencies
+- No git write operations
+- MAY write ephemeral test scripts to /tmp, must clean up after
+
+Required Steps:
+1. Read CLAUDE.md/README for build/test commands
+2. Run the build (broken build = automatic FAIL)
+3. Run test suite (failing tests = automatic FAIL)
+4. Run linters/type-checkers if available
+5. Check for regressions
+
+Anti-patterns to avoid:
+- "The code looks correct" — reading is not verification, RUN it
+- "The tests already pass" — verify independently
+- "This is probably fine" — probably is not verified
+
+Output Format: Every check must include:
+- Check name
+- Command run (exact)
+- Output observed (copy-paste)
+- Result (PASS/FAIL with Expected vs Actual)
+
+You MUST end with exactly one of: VERDICT: PASS, VERDICT: FAIL, or VERDICT: PARTIAL`,
+  },
 };
+
+// ── Background Agent Manager ────────────────────────────────────
+
+class BackgroundAgentManager {
+  constructor() {
+    this.agents = new Map(); // agentId → { promise, status, result, description, startTime }
+    this.outputDir = path.join(os.tmpdir(), `claude-native-${process.pid}`, "tasks");
+    fs.mkdirSync(this.outputDir, { recursive: true });
+  }
+
+  launch(agentId, description, runFn) {
+    const outputFile = path.join(this.outputDir, `${agentId}.output`);
+    const entry = {
+      status: "running",
+      description,
+      startTime: Date.now(),
+      outputFile,
+      result: null,
+    };
+
+    entry.promise = runFn().then((result) => {
+      entry.status = "completed";
+      entry.result = result;
+      fs.writeFileSync(outputFile, typeof result === "string" ? result : JSON.stringify(result));
+      return result;
+    }).catch((err) => {
+      entry.status = "failed";
+      entry.result = { error: err.message };
+      fs.writeFileSync(outputFile, `Error: ${err.message}`);
+    });
+
+    this.agents.set(agentId, entry);
+    return { agentId, outputFile, status: "running" };
+  }
+
+  get(agentId) {
+    return this.agents.get(agentId) || null;
+  }
+
+  list() {
+    const result = [];
+    for (const [id, entry] of this.agents) {
+      result.push({
+        agentId: id,
+        status: entry.status,
+        description: entry.description,
+        elapsedMs: Date.now() - entry.startTime,
+        outputFile: entry.outputFile,
+      });
+    }
+    return result;
+  }
+
+  async stop(agentId) {
+    const entry = this.agents.get(agentId);
+    if (!entry || entry.status !== "running") return false;
+    entry.status = "cancelled";
+    return true;
+  }
+
+  readOutput(agentId) {
+    const entry = this.agents.get(agentId);
+    if (!entry) return null;
+    try { return fs.readFileSync(entry.outputFile, "utf-8"); } catch { return null; }
+  }
+}
+
+// Singleton background manager
+const _backgroundManager = new BackgroundAgentManager();
+
+// ── Worktree Isolation ──────────────────────────────────────────
+
+async function createWorktree(agentId) {
+  const cwd = process.cwd();
+
+  // Check if we're in a git repo
+  try {
+    execSync("git rev-parse --git-dir", { cwd, stdio: ["pipe", "pipe", "pipe"] });
+  } catch {
+    return { error: "Not a git repository. Worktree isolation requires git." };
+  }
+
+  const worktreeDir = path.join(cwd, ".claude", "worktrees", `agent-${agentId.slice(0, 8)}`);
+  const branch = `worktree-${agentId.slice(0, 8)}`;
+
+  try {
+    // Get base branch
+    let baseBranch;
+    try {
+      baseBranch = execSync("git rev-parse --abbrev-ref HEAD", { cwd, encoding: "utf-8" }).trim();
+    } catch { baseBranch = "HEAD"; }
+
+    fs.mkdirSync(path.dirname(worktreeDir), { recursive: true });
+    execSync(`git worktree add -B "${branch}" "${worktreeDir}" HEAD`, { cwd, stdio: ["pipe", "pipe", "pipe"] });
+
+    return { worktreePath: worktreeDir, worktreeBranch: branch, baseBranch };
+  } catch (e) {
+    return { error: `Failed to create worktree: ${e.message}` };
+  }
+}
+
+async function removeWorktree(worktreePath) {
+  try {
+    const cwd = process.cwd();
+    execSync(`git worktree remove --force "${worktreePath}"`, { cwd, stdio: ["pipe", "pipe", "pipe"] });
+    return true;
+  } catch { return false; }
+}
+
+async function hasWorktreeChanges(worktreePath) {
+  try {
+    const result = execSync("git status --porcelain", { cwd: worktreePath, encoding: "utf-8" });
+    return result.trim().length > 0;
+  } catch { return false; }
+}
 
 class SubAgentRunner {
   constructor(client, parentRegistry, parentPermissions, cfg) {
@@ -1652,7 +1830,7 @@ class SubAgentRunner {
     this.cfg = cfg;
   }
 
-  async run({ prompt, subagentType, model, description, depth = 0, parentAgentId = null }) {
+  async run({ prompt, subagentType, model, description, depth = 0, parentAgentId = null, runInBackground = false, isolation = null }) {
     const agentId = randomUUID();
 
     // Depth check
@@ -1736,30 +1914,86 @@ class SubAgentRunner {
     // Build messages
     const messages = [{ role: "user", content: prompt }];
 
+    // Worktree isolation
+    let worktreeInfo = null;
+    let effectiveCwd = process.cwd();
+    if (isolation === "worktree") {
+      worktreeInfo = await createWorktree(agentId);
+      if (worktreeInfo.error) {
+        return {
+          agent_id: agentId, agent_type: agentDef.agentType,
+          content: `Worktree error: ${worktreeInfo.error}`,
+          model: resolvedModel, turns: 0, stop_reason: "error",
+          usage: { input_tokens: 0, output_tokens: 0 }, parent_agent_id: parentAgentId,
+        };
+      }
+      effectiveCwd = worktreeInfo.worktreePath;
+      log(`[sub-agent] Worktree created: ${effectiveCwd}`);
+    }
+
     // Run sub-agent loop
-    const subCfgWithModel = { ...this.cfg, model: resolvedModel, maxTurns: Math.min(this.cfg.maxTurns, 15) };
+    const subCfgWithModel = { ...this.cfg, model: resolvedModel, maxTurns: Math.min(this.cfg.maxTurns, 15), cwd: effectiveCwd };
 
-    log(`[sub-agent] Starting ${agentDef.agentType} (depth=${depth}, model=${resolvedModel}, id=${agentId.slice(0,8)})`);
+    const runAgent = async () => {
+      log(`[sub-agent] Starting ${agentDef.agentType} (depth=${depth}, model=${resolvedModel}, id=${agentId.slice(0,8)}${isolation === "worktree" ? `, worktree=${effectiveCwd}` : ""})`);
 
-    const loop = new AgentLoop(this.client, subRegistry, subCfgWithModel, {
-      onToolUse: (block) => {
-        log(`[sub-agent:${agentId.slice(0,8)}] Tool: ${block.name}`);
-      },
-    }, subPermissions);
+      const loop = new AgentLoop(this.client, subRegistry, subCfgWithModel, {
+        onToolUse: (block) => {
+          log(`[sub-agent:${agentId.slice(0,8)}] Tool: ${block.name}`);
+        },
+      }, subPermissions);
 
-    const result = await loop.run(messages, systemBlocks);
+      const result = await loop.run(messages, systemBlocks);
 
-    log(`[sub-agent] Finished ${agentDef.agentType}: ${result.turns} turns, ${result.usage.input_tokens} in / ${result.usage.output_tokens} out`);
+      // Cleanup worktree
+      let worktreeResult = {};
+      if (worktreeInfo) {
+        const hasChanges = await hasWorktreeChanges(worktreeInfo.worktreePath);
+        if (hasChanges) {
+          worktreeResult = { worktreePath: worktreeInfo.worktreePath, worktreeBranch: worktreeInfo.worktreeBranch };
+          log(`[sub-agent] Worktree has changes, keeping: ${worktreeInfo.worktreePath}`);
+        } else {
+          await removeWorktree(worktreeInfo.worktreePath);
+          log(`[sub-agent] Worktree clean, removed`);
+        }
+      }
 
+      log(`[sub-agent] Finished ${agentDef.agentType}: ${result.turns} turns, ${result.usage.input_tokens} in / ${result.usage.output_tokens} out`);
+
+      return {
+        agent_id: agentId,
+        agent_type: agentDef.agentType,
+        content: result.text,
+        model: resolvedModel,
+        turns: result.turns,
+        stop_reason: result.stopReason,
+        usage: result.usage,
+        parent_agent_id: parentAgentId,
+        ...worktreeResult,
+      };
+    };
+
+    // Background mode
+    if (runInBackground) {
+      const launched = _backgroundManager.launch(agentId, description, runAgent);
+      return {
+        agent_id: agentId,
+        agent_type: agentDef.agentType,
+        content: `Background agent launched (${agentDef.agentType}). Agent ID: ${agentId}. Output will be written to: ${launched.outputFile}`,
+        model: resolvedModel,
+        turns: 0,
+        stop_reason: "async_launched",
+        usage: { input_tokens: 0, output_tokens: 0 },
+        parent_agent_id: parentAgentId,
+        background: true,
+        outputFile: launched.outputFile,
+      };
+    }
+
+    // Synchronous execution
+    const agentResult = await runAgent();
     return {
-      agent_id: agentId,
-      agent_type: agentDef.agentType,
-      content: result.text,
-      model: resolvedModel,
-      turns: result.turns,
-      stop_reason: result.stopReason,
-      usage: result.usage,
-      parent_agent_id: parentAgentId,
+      ...agentResult,
     };
   }
 
@@ -1785,6 +2019,8 @@ class SubAgentRunner {
         description: input.description,
         depth: parentDepth + 1,
         parentAgentId,
+        runInBackground: input.run_in_background || false,
+        isolation: input.isolation || null,
       });
       return JSON.stringify(result);
     });
@@ -1802,20 +2038,25 @@ Available agent types:
 - general-purpose: For complex tasks requiring multiple tools. Has access to all tools.
 - Explore: Fast, read-only agent for searching codebases. Uses haiku model.
 - Plan: Software architect for designing implementation plans. Read-only.
+- claude-code-guide: Documentation expert for Claude Code/API. Read-only, uses haiku.
+- verification: Adversarial agent that tries to break implementations. Cannot modify project files.
 
 Guidelines:
 - Use Explore for quick searches and codebase navigation
 - Use Plan for designing implementation strategies
 - Use general-purpose for tasks that require writing code or running commands
-- Each agent runs independently with its own conversation and tools
-- Provide clear, detailed prompts so the agent can work autonomously`,
+- Use verification after implementing features to validate they work
+- Use run_in_background for tasks that don't need immediate results
+- Use isolation: "worktree" for tasks that modify code (prevents messing up main repo)`,
     input_schema: {
       type: "object",
       properties: {
         description: { type: "string", description: "A short (3-5 word) description of the task" },
         prompt: { type: "string", description: "The task for the agent to perform" },
-        subagent_type: { type: "string", enum: ["general-purpose", "Explore", "Plan"], description: "The type of agent to use" },
+        subagent_type: { type: "string", enum: ["general-purpose", "Explore", "Plan", "claude-code-guide", "verification"], description: "The type of agent to use" },
         model: { type: "string", enum: ["sonnet", "opus", "haiku"], description: "Optional model override" },
+        run_in_background: { type: "boolean", description: "Run agent in background. Returns immediately with agent ID." },
+        isolation: { type: "string", enum: ["worktree"], description: "Isolation mode. 'worktree' creates a git worktree." },
       },
       required: ["description", "prompt"],
     },
@@ -1827,6 +2068,8 @@ Guidelines:
       description: input.description,
       depth: 0,
       parentAgentId: null,
+      runInBackground: input.run_in_background || false,
+      isolation: input.isolation || null,
     });
 
     // Aggregate usage to parent (will be captured by AgentLoop)
