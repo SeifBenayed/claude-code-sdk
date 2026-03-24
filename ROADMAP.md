@@ -28,7 +28,7 @@ Priority: **safe → useful → stateful → recoverable → extensible**
 
 | # | Feature | Impact | Effort | Status |
 |:-:|---------|:------:|:------:|:------:|
-| 5 | Sub-agents (Agent tool, parallel spawn) | High | High | Planned |
+| 5 | ~~Sub-agents (Agent tool, parallel spawn)~~ | High | High | **Done** |
 
 ## v2.0 — Extensibility
 
