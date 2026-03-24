@@ -482,6 +482,136 @@ Usage:
     return `Applied ${count} edit${count > 1 ? "s" : ""} to ${filePath}`;
   });
 
+  // WebFetch
+  const _webFetchCache = new Map(); // url → { data, timestamp }
+  const WEB_FETCH_CACHE_TTL = 15 * 60 * 1000; // 15 minutes
+  const WEB_FETCH_MAX_CHARS = 100000;
+
+  registry.register("WebFetch", {
+    description: `Fetches content from a URL, converts HTML to readable text, and processes it with a prompt.
+
+Usage notes:
+  - The URL must be a fully-formed valid URL
+  - HTTP URLs will be automatically upgraded to HTTPS
+  - The prompt should describe what information you want to extract from the page
+  - Results may be summarized if the content is very large
+  - Includes a self-cleaning 15-minute cache
+  - For GitHub URLs, prefer using the gh CLI via Bash instead`,
+    input_schema: {
+      type: "object",
+      properties: {
+        url: { type: "string", description: "The URL to fetch content from" },
+        prompt: { type: "string", description: "What information to extract from the page" },
+      },
+      required: ["url", "prompt"],
+    },
+  }, async (input) => {
+    let url = input.url;
+    const prompt = input.prompt;
+
+    // Validate URL
+    try { new URL(url); } catch {
+      return { content: `Invalid URL: ${url}`, is_error: true };
+    }
+
+    // Upgrade HTTP → HTTPS
+    if (url.startsWith("http://")) url = url.replace("http://", "https://");
+
+    // Check cache
+    const cached = _webFetchCache.get(url);
+    if (cached && Date.now() - cached.timestamp < WEB_FETCH_CACHE_TTL) {
+      log(`WebFetch cache hit: ${url}`);
+      return cached.data;
+    }
+
+    // Fetch the page
+    let resp;
+    try {
+      resp = await fetch(url, {
+        headers: { "User-Agent": "Mozilla/5.0 (compatible; claude-native/1.0)" },
+        redirect: "manual",
+        signal: AbortSignal.timeout(30000),
+      });
+    } catch (e) {
+      return { content: `Fetch error: ${e.message}`, is_error: true };
+    }
+
+    // Handle redirects to different host
+    if ([301, 302, 307, 308].includes(resp.status)) {
+      const location = resp.headers.get("location");
+      if (location) {
+        try {
+          const origHost = new URL(url).hostname;
+          const redirHost = new URL(location, url).hostname;
+          if (origHost !== redirHost) {
+            return `REDIRECT DETECTED: The URL redirects to a different host.\n\nOriginal URL: ${url}\nRedirect URL: ${location}\nStatus: ${resp.status}\n\nTo complete your request, use WebFetch again with url: "${location}"`;
+          }
+          // Same host redirect — follow it
+          resp = await fetch(new URL(location, url).href, {
+            headers: { "User-Agent": "Mozilla/5.0 (compatible; claude-native/1.0)" },
+            signal: AbortSignal.timeout(30000),
+          });
+        } catch {
+          return `Redirect to: ${location}`;
+        }
+      }
+    }
+
+    if (!resp.ok) {
+      return { content: `HTTP ${resp.status} ${resp.statusText}`, is_error: true };
+    }
+
+    const contentType = resp.headers.get("content-type") || "";
+    let text = await resp.text();
+    const bytes = Buffer.byteLength(text);
+
+    // Convert HTML to readable text
+    if (contentType.includes("text/html")) {
+      text = htmlToText(text);
+    }
+
+    // Truncate if too large
+    if (text.length > WEB_FETCH_MAX_CHARS) {
+      text = text.substring(0, WEB_FETCH_MAX_CHARS) + "\n\n[Content truncated due to length...]";
+    }
+
+    // If it's already markdown and small enough, return directly
+    if (contentType.includes("text/markdown") && text.length < WEB_FETCH_MAX_CHARS) {
+      const result = `Content from ${url} (${bytes} bytes):\n\n${text}`;
+      _webFetchCache.set(url, { data: result, timestamp: Date.now() });
+      return result;
+    }
+
+    // Use the API to process the content with the prompt (summarization)
+    // We make a separate small API call to extract what the user wants
+    try {
+      const summaryBody = {
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 4096,
+        messages: [{
+          role: "user",
+          content: `Here is content fetched from ${url}:\n\n<content>\n${text}\n</content>\n\nBased on the above content, ${prompt}`,
+        }],
+      };
+
+      let summaryText = "";
+      for await (const { event, data } of registry._client.stream(summaryBody)) {
+        if (event === "content_block_delta" && data.delta?.type === "text_delta") {
+          summaryText += data.delta.text;
+        }
+      }
+
+      const result = summaryText || `Content from ${url} (${bytes} bytes):\n\n${text.substring(0, 5000)}`;
+      _webFetchCache.set(url, { data: result, timestamp: Date.now() });
+      return result;
+    } catch (e) {
+      // Fallback: return raw content if summarization fails
+      const result = `Content from ${url} (${bytes} bytes):\n\n${text.substring(0, 10000)}`;
+      _webFetchCache.set(url, { data: result, timestamp: Date.now() });
+      return result;
+    }
+  });
+
   // Glob
   registry.register("Glob", {
     description: "Find files matching a glob pattern. Returns paths sorted by modification time.",
@@ -602,6 +732,25 @@ function globToRegex(pattern) {
     .replace(/\?/g, "[^/]")
     .replace(/\{\{GLOBSTAR\}\}/g, ".*");
   return new RegExp(`^${re}$`);
+}
+
+function htmlToText(html) {
+  return html
+    // Remove scripts and styles
+    .replace(/<script[\s\S]*?<\/script>/gi, "")
+    .replace(/<style[\s\S]*?<\/style>/gi, "")
+    // Convert common block elements to newlines
+    .replace(/<\/?(div|p|br|hr|h[1-6]|li|tr|section|article|header|footer|nav|blockquote|pre|table)[^>]*>/gi, "\n")
+    // Convert links to markdown
+    .replace(/<a[^>]+href="([^"]*)"[^>]*>([\s\S]*?)<\/a>/gi, "[$2]($1)")
+    // Remove all remaining tags
+    .replace(/<[^>]+>/g, "")
+    // Decode common HTML entities
+    .replace(/&amp;/g, "&").replace(/&lt;/g, "<").replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&nbsp;/g, " ")
+    // Clean up whitespace
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
 }
 
 async function commandExists(cmd) {
@@ -813,12 +962,19 @@ class AgentLoop {
       turnCount++;
       log(`Turn ${turnCount}/${this.cfg.maxTurns}`);
 
+      const toolDefs = this.registry.getDefinitions();
+
+      // Add WebSearch as a server-side tool (executed by the API, not client)
+      const serverTools = [
+        { type: "web_search_20250305", name: "web_search", max_uses: 8 },
+      ];
+
       const body = {
         model: this.cfg.model,
         max_tokens: this.cfg.maxTokens,
         system: systemBlocks,
         messages,
-        tools: this.registry.getDefinitions(),
+        tools: [...toolDefs, ...serverTools],
       };
 
       if (this.cfg.thinkingBudget > 0) {
@@ -842,6 +998,11 @@ class AgentLoop {
             if (currentBlock.type === "text") currentBlock.text = "";
             if (currentBlock.type === "thinking") currentBlock.thinking = "";
             if (currentBlock.type === "tool_use") currentBlock.input = "";
+            if (currentBlock.type === "server_tool_use") currentBlock.input = "";
+            if (currentBlock.type === "web_search_tool_result") {
+              // Server-side search results — pass through as content block
+              this.cb.onWebSearch?.(currentBlock);
+            }
             break;
 
           case "content_block_delta":
@@ -897,7 +1058,7 @@ class AgentLoop {
         return { text: textContent, usage: this.totalUsage, turns: turnCount, stopReason };
       }
 
-      // Execute tools
+      // Execute tools (only client-side tool_use, not server_tool_use)
       const toolUseBlocks = contentBlocks.filter((b) => b.type === "tool_use");
       const toolResults = [];
 
@@ -1619,6 +1780,7 @@ async function main() {
 
   const client = new AnthropicClient({ apiKey: cfg.apiKey, authToken: cfg.authToken, apiUrl: cfg.apiUrl });
   const registry = new ToolRegistry();
+  registry._client = client; // Used by WebFetch for AI summarization
   registerBuiltinTools(registry);
 
   if (cfg.allowedTools || cfg.disallowedTools) {
