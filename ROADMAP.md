@@ -14,8 +14,8 @@ Priority: **safe → useful → stateful → recoverable → extensible**
 
 | # | Feature | Impact | Effort | Status |
 |:-:|---------|:------:|:------:|:------:|
-| 2 | File checkpointing (snapshot before edits) | Critical | Medium | Planned |
-| 2 | Rewind (restore files to pre-edit state) | Critical | Medium | Planned |
+| 2 | ~~File checkpointing (snapshot before edits)~~ | Critical | Medium | **Done** |
+| 2 | ~~Rewind (restore files to pre-edit state)~~ | Critical | Medium | **Done** |
 
 ## v1.3 — Statefulness
 
