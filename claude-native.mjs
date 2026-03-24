@@ -367,6 +367,121 @@ function registerBuiltinTools(registry) {
     return `Wrote ${lines} lines to ${input.file_path}`;
   });
 
+  // Edit
+  registry.register("Edit", {
+    description: `Performs exact string replacements in files.
+
+Usage:
+- You must use the Read tool at least once before editing a file.
+- The edit will FAIL if old_string is not unique in the file. Provide more surrounding context to make it unique, or use replace_all.
+- Use replace_all for renaming variables or replacing all occurrences across the file.
+- When old_string is empty and the file doesn't exist, creates a new file with new_string as content.`,
+    input_schema: {
+      type: "object",
+      properties: {
+        file_path: { type: "string", description: "The absolute path to the file to modify" },
+        old_string: { type: "string", description: "The text to replace (must be unique in the file unless replace_all is true)" },
+        new_string: { type: "string", description: "The replacement text (must be different from old_string)" },
+        replace_all: { type: "boolean", description: "Replace all occurrences of old_string (default: false)", default: false },
+      },
+      required: ["file_path", "old_string", "new_string"],
+    },
+  }, async (input) => {
+    const filePath = input.file_path;
+    const oldStr = input.old_string ?? "";
+    const newStr = input.new_string ?? "";
+    const replaceAll = input.replace_all ?? false;
+
+    // Create new file if old_string is empty and file doesn't exist
+    if (oldStr === "" && newStr !== "") {
+      try {
+        await fs.promises.access(filePath);
+        // File exists — old_string="" means prepend or full replace
+        const content = await fs.promises.readFile(filePath, "utf-8");
+        if (content === "") {
+          await fs.promises.writeFile(filePath, newStr);
+          return `Created ${filePath}`;
+        }
+        return { content: "old_string is empty but file is not empty. Use Write to overwrite, or provide the text to replace.", is_error: true };
+      } catch {
+        // File doesn't exist — create it
+        await fs.promises.mkdir(path.dirname(filePath), { recursive: true });
+        await fs.promises.writeFile(filePath, newStr);
+        return `Created ${filePath} (${newStr.split("\n").length} lines)`;
+      }
+    }
+
+    if (oldStr === newStr) {
+      return { content: "old_string and new_string are identical. No changes made.", is_error: true };
+    }
+
+    // Read file
+    let content;
+    try {
+      content = await fs.promises.readFile(filePath, "utf-8");
+    } catch {
+      return { content: `File not found: ${filePath}`, is_error: true };
+    }
+
+    // Smart quote normalization — try matching with normalized quotes if exact match fails
+    let matchStr = oldStr;
+    if (!content.includes(oldStr)) {
+      const normalized = oldStr
+        .replace(/[\u2018\u2019]/g, "'")
+        .replace(/[\u201C\u201D]/g, '"');
+      if (content.includes(normalized)) {
+        matchStr = normalized;
+      } else {
+        // Try normalizing the content side too
+        const normContent = content
+          .replace(/[\u2018\u2019]/g, "'")
+          .replace(/[\u201C\u201D]/g, '"');
+        const idx = normContent.indexOf(normalized);
+        if (idx !== -1) {
+          matchStr = content.substring(idx, idx + oldStr.length);
+        } else {
+          return { content: "old_string not found in file. Make sure it matches exactly, including whitespace and indentation.", is_error: true };
+        }
+      }
+    }
+
+    // Uniqueness check (only when not replace_all)
+    if (!replaceAll) {
+      const firstIdx = content.indexOf(matchStr);
+      const secondIdx = content.indexOf(matchStr, firstIdx + 1);
+      if (secondIdx !== -1) {
+        return { content: `old_string appears multiple times in the file (at least 2 occurrences). Provide more surrounding context to make it unique, or set replace_all: true.`, is_error: true };
+      }
+    }
+
+    // Apply the replacement
+    let updated;
+    if (replaceAll) {
+      updated = content.replaceAll(matchStr, newStr);
+    } else {
+      updated = content.replace(matchStr, newStr);
+    }
+
+    // Handle trailing newline: if deleting (newStr="") and old_string didn't end with \n
+    // but old_string+\n exists, remove the extra newline too
+    if (newStr === "" && !matchStr.endsWith("\n") && content.includes(matchStr + "\n") && !replaceAll) {
+      updated = content.replace(matchStr + "\n", "");
+    }
+
+    if (updated === content) {
+      return { content: "No changes resulted from the edit.", is_error: true };
+    }
+
+    await fs.promises.writeFile(filePath, updated);
+
+    // Count changes
+    const count = replaceAll
+      ? (content.split(matchStr).length - 1)
+      : 1;
+
+    return `Applied ${count} edit${count > 1 ? "s" : ""} to ${filePath}`;
+  });
+
   // Glob
   registry.register("Glob", {
     description: "Find files matching a glob pattern. Returns paths sorted by modification time.",
