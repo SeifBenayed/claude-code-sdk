@@ -22,7 +22,7 @@ Priority: **safe → useful → stateful → recoverable → extensible**
 | # | Feature | Impact | Effort | Status |
 |:-:|---------|:------:|:------:|:------:|
 | 3 | Context compaction (auto-summary when context full) | Critical | High | Planned |
-| 4 | Memory system (MEMORY.md, auto-save/recall) | High | Medium | Planned |
+| 4 | ~~Memory system (MEMORY.md, auto-save/recall)~~ | High | Medium | **Done** |
 
 ## v1.4 — Agent Intelligence
 
