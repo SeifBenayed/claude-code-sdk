@@ -462,14 +462,176 @@ class SecurityClassifier {
     ];
   }
 
-  // Returns: { blocked: bool, rule?: string, reason?: string }
+  // 7 ALLOW rules — exceptions that override BLOCK rules
+  // These only apply AFTER a BLOCK rule has matched.
+  allowRules = [
+    {
+      name: "test_artifacts",
+      desc: "Hardcoded test API keys, placeholder credentials in test files",
+      test: (tool, input) => {
+        const cmd = input.command || "";
+        const fp = input.file_path || "";
+        return /test|spec|__test__|\.test\.|_test\.|fixture|mock|stub/i.test(cmd + fp);
+      },
+    },
+    {
+      name: "local_operations",
+      desc: "File operations within project working directory scope",
+      test: (tool, input) => {
+        if (tool !== "Bash") return false;
+        const cmd = input.command || "";
+        const cwd = process.cwd();
+        // rm/mv/cp within current directory (relative paths, not absolute dangerous ones)
+        if (/^(rm|mv|cp)\s/.test(cmd) && !/(\/|~)/.test(cmd.split(/\s+/)[1] || "")) return true;
+        // Operations explicitly within cwd
+        if (cmd.includes(cwd)) return true;
+        return false;
+      },
+    },
+    {
+      name: "read_only_operations",
+      desc: "GET requests, read-only API calls, queries that don't modify state",
+      test: (tool, input) => {
+        if (tool !== "Bash") return false;
+        const cmd = input.command || "";
+        // curl/wget without -d, -X POST, --data (read-only)
+        if (/^(curl|wget)\s/.test(cmd) && !/-d\s|-X\s*(POST|PUT|PATCH|DELETE)|--data|--post|--upload/.test(cmd)) return true;
+        return false;
+      },
+    },
+    {
+      name: "declared_dependencies",
+      desc: "Installing packages from repo manifest files via standard commands",
+      test: (tool, input) => {
+        if (tool !== "Bash") return false;
+        const cmd = (input.command || "").trim();
+        // Manifest-based installs only (no specific package names)
+        return /^(npm|yarn|pnpm)\s+install\s*$|^pip\s+install\s+-r\s+|^cargo\s+build\b|^bundle\s+install\b|^go\s+mod\s+(download|tidy)\b/.test(cmd);
+      },
+    },
+    {
+      name: "toolchain_bootstrap",
+      desc: "Installing language toolchains from official installers",
+      test: (tool, input) => {
+        if (tool !== "Bash") return false;
+        const cmd = input.command || "";
+        const officialInstallers = ["sh.rustup.rs", "bootstrap.pypa.io", "astral.sh", "bun.sh", "deb.nodesource.com", "get.docker.com", "brew.sh"];
+        return officialInstallers.some((d) => cmd.includes(d));
+      },
+    },
+    {
+      name: "standard_credentials",
+      desc: "Reading credentials from agent config and sending to intended provider",
+      test: (tool, input) => {
+        // This is hard to detect statically — allow .env reads
+        if (tool !== "Bash") return false;
+        const cmd = input.command || "";
+        return /^(cat|source|\.)\s+\.env\b|^export\s.*\$\(cat\s+\.env/.test(cmd);
+      },
+    },
+    {
+      name: "git_push_working_branch",
+      desc: "Pushing to the current working branch (not main/master)",
+      test: (tool, input) => {
+        if (tool !== "Bash") return false;
+        const cmd = input.command || "";
+        return /^git\s+push\b/.test(cmd) && !/\b(main|master)\b/.test(cmd);
+      },
+    },
+  ];
+
+  // Returns: { blocked: bool, rule?: string, reason?: string, exception?: string }
   classify(toolName, input) {
     for (const rule of this.blockRules) {
       if (rule.test(toolName, input)) {
+        // BLOCK matched — check ALLOW exceptions
+        for (const exception of this.allowRules) {
+          if (exception.test(toolName, input)) {
+            return { blocked: false, rule: rule.name, exception: exception.name };
+          }
+        }
         return { blocked: true, rule: rule.name, reason: rule.desc };
       }
     }
     return { blocked: false };
+  }
+}
+
+// ── WebFetch Domain Rules ───────────────────────────────────────
+// Preapproved domains from the original Claude Code binary.
+// These bypass the permission check for WebFetch.
+
+const PREAPPROVED_DOMAINS = new Set([
+  "platform.claude.com", "code.claude.com", "modelcontextprotocol.io",
+  "agentskills.io", "docs.python.org", "en.cppreference.com",
+  "docs.oracle.com", "learn.microsoft.com", "developer.mozilla.org",
+  "go.dev", "pkg.go.dev", "www.php.net", "docs.swift.org",
+  "kotlinlang.org", "ruby-doc.org", "doc.rust-lang.org",
+  "www.typescriptlang.org", "react.dev", "angular.io", "vuejs.org",
+  "nextjs.org", "expressjs.com", "nodejs.org", "bun.sh",
+  "jquery.com", "getbootstrap.com", "tailwindcss.com", "d3js.org",
+  "threejs.org", "redux.js.org", "webpack.js.org", "jestjs.io",
+  "reactrouter.com", "docs.djangoproject.com", "flask.palletsprojects.com",
+  "fastapi.tiangolo.com", "pandas.pydata.org", "numpy.org",
+  "www.tensorflow.org", "pytorch.org", "scikit-learn.org", "matplotlib.org",
+  "requests.readthedocs.io", "jupyter.org", "laravel.com", "symfony.com",
+  "wordpress.org", "docs.spring.io", "hibernate.org", "tomcat.apache.org",
+  "gradle.org", "maven.apache.org", "asp.net", "dotnet.microsoft.com",
+  "nuget.org", "blazor.net", "reactnative.dev", "docs.flutter.dev",
+  "developer.apple.com", "developer.android.com", "keras.io",
+  "spark.apache.org", "huggingface.co", "www.kaggle.com",
+  "www.mongodb.com", "redis.io", "www.postgresql.org", "dev.mysql.com",
+  "www.sqlite.org", "graphql.org", "prisma.io",
+  "docs.aws.amazon.com", "cloud.google.com", "kubernetes.io",
+  "www.docker.com", "www.terraform.io", "www.ansible.com",
+  "vercel.com", "docs.netlify.com", "devcenter.heroku.com",
+  "cypress.io", "selenium.dev", "docs.unity.com", "docs.unrealengine.com",
+  "git-scm.com", "nginx.org", "httpd.apache.org",
+  "github.com", "raw.githubusercontent.com", "stackoverflow.com",
+  "npmjs.com", "pypi.org", "crates.io", "httpbin.org",
+]);
+
+function isDomainPreapproved(url) {
+  try {
+    const hostname = new URL(url).hostname;
+    if (PREAPPROVED_DOMAINS.has(hostname)) return true;
+    // Check if it's a subdomain of a preapproved domain
+    for (const d of PREAPPROVED_DOMAINS) {
+      if (hostname.endsWith("." + d)) return true;
+    }
+    // github.com/anthropics special case
+    if (hostname === "github.com" && url.includes("/anthropics")) return true;
+    return false;
+  } catch { return false; }
+}
+
+// ── Denial Tracking ─────────────────────────────────────────────
+// Tracks consecutive and total denials. If thresholds exceeded,
+// the system becomes more restrictive (circuit breaker).
+
+class DenialTracker {
+  constructor() {
+    this.consecutiveDenials = 0;
+    this.totalDenials = 0;
+    this.maxConsecutive = 3;
+    this.maxTotal = 20;
+  }
+
+  recordDenial() {
+    this.consecutiveDenials++;
+    this.totalDenials++;
+  }
+
+  recordAllow() {
+    this.consecutiveDenials = 0; // Reset streak on allow
+  }
+
+  isCircuitBroken() {
+    return this.consecutiveDenials >= this.maxConsecutive || this.totalDenials >= this.maxTotal;
+  }
+
+  get stats() {
+    return { consecutive: this.consecutiveDenials, total: this.totalDenials, circuitBroken: this.isCircuitBroken() };
   }
 }
 
@@ -554,27 +716,19 @@ const toolPermissionChecks = {
     return { behavior: "allow", reason: "grep_safe" };
   },
 
-  // WebFetch: check domain
+  // WebFetch: check domain against preapproved list
   WebFetch(input, _cwd) {
     const url = input.url || "";
     try {
-      const hostname = new URL(url).hostname;
-      // Always allow known safe domains
-      const safeDomains = [
-        "github.com", "raw.githubusercontent.com",
-        "docs.anthropic.com", "platform.claude.com", "code.claude.com",
-        "stackoverflow.com", "developer.mozilla.org", "npmjs.com",
-        "pypi.org", "crates.io", "pkg.go.dev",
-        "httpbin.org", "jsonplaceholder.typicode.com",
-      ];
-      if (safeDomains.some((d) => hostname === d || hostname.endsWith("." + d))) {
-        return { behavior: "allow", reason: "safe_domain" };
-      }
-      // Default: no opinion
-      return { behavior: "passthrough", reason: "unknown_domain" };
+      new URL(url); // validate
     } catch {
       return { behavior: "deny", reason: "invalid_url", message: "Invalid URL" };
     }
+    if (isDomainPreapproved(url)) {
+      return { behavior: "allow", reason: "preapproved_domain" };
+    }
+    // Unknown domain: ask (user decides)
+    return { behavior: "ask", reason: "unknown_domain", message: `WebFetch to unknown domain: ${new URL(url).hostname}` };
   },
 
   // WebSearch: always safe (server-side, read-only)
@@ -634,12 +788,32 @@ function _checkFilePath(filePath, cwd, op) {
 const READ_ONLY_TOOLS = new Set(["Read", "Glob", "Grep", "WebFetch", "WebSearch"]);
 const WRITE_TOOLS = new Set(["Write", "Edit", "NotebookEdit"]);
 
+// Generate a permission suggestion for a blocked action
+function _suggestPattern(toolName, input) {
+  if (toolName === "Bash") {
+    const cmd = (input.command || "").trim();
+    // Suggest the first word/command as a pattern
+    const firstWord = cmd.split(/\s+/)[0];
+    return `${firstWord} *`;
+  }
+  if (toolName === "Edit" || toolName === "Write") {
+    const fp = input.file_path || "";
+    const dir = path.dirname(fp);
+    return `${dir}/**`;
+  }
+  if (toolName === "WebFetch") {
+    try { return `domain:${new URL(input.url).hostname}`; } catch { return null; }
+  }
+  return null;
+}
+
 class PermissionManager {
   constructor(cfg) {
     this.mode = cfg.permissionMode || "default";
     this.rules = []; // { tool, pattern, behavior }
     this.callbacks = cfg.permissionCallbacks || false;
     this.classifier = new SecurityClassifier();
+    this.denials = new DenialTracker();
     this._pendingCallbacks = new Map(); // requestId → { resolve }
 
     // Build rules from --allowed-tools / --disallowed-tools
@@ -660,9 +834,16 @@ class PermissionManager {
   // Returns: { behavior: "allow"|"deny"|"ask", message? }
   // Returns: { behavior: "allow"|"deny"|"ask", message?, rule?, reason? }
   async check(toolName, input, opts = {}) {
+    // 0. Circuit breaker — too many denials, become maximally restrictive
+    if (this.denials.isCircuitBroken() && this.mode === "auto") {
+      if (!READ_ONLY_TOOLS.has(toolName)) {
+        return { behavior: "deny", message: `Too many denied actions (${this.denials.stats.consecutive} consecutive). Switching to restrictive mode.`, rule: "circuit_breaker" };
+      }
+    }
+
     // 1. Check explicit deny rules (always first — overrides everything)
     const denyRule = this.rules.find((r) => r.behavior === "deny" && this._matchRule(r, toolName, input));
-    if (denyRule) return { behavior: "deny", message: `${toolName} is denied by rule.`, rule: "explicit_deny" };
+    if (denyRule) { this.denials.recordDenial(); return { behavior: "deny", message: `${toolName} is denied by rule.`, rule: "explicit_deny" }; }
 
     // 2. Security classifier — runs in ALL modes as a safety net
     //    In auto mode: blocks dangerous, allows safe, asks for ambiguous
@@ -670,15 +851,16 @@ class PermissionManager {
     const classification = this.classifier.classify(toolName, input);
     if (classification.blocked) {
       if (this.mode === "bypassPermissions") {
-        // Even bypass mode warns about dangerous ops but doesn't block
         log(`[security] WARNING: ${classification.rule} — ${classification.reason}`);
       } else {
-        // All other modes: block dangerous operations
+        this.denials.recordDenial();
         return {
           behavior: "deny",
           message: `BLOCKED [${classification.rule}]: ${classification.reason}`,
           rule: classification.rule,
           reason: classification.reason,
+          // Permission suggestion: what rule would the user need to add?
+          suggestion: { tool: toolName, pattern: _suggestPattern(toolName, input), behavior: "allow" },
         };
       }
     }
@@ -720,13 +902,9 @@ class PermissionManager {
 
       case "auto":
         // Auto mode: classifier already ran above. If we're here, it wasn't blocked.
-        // Allow read-only tools
-        if (READ_ONLY_TOOLS.has(toolName)) return { behavior: "allow", rule: "auto_readonly" };
-        // Allow file edits (same as acceptEdits)
-        if (WRITE_TOOLS.has(toolName)) return { behavior: "allow", rule: "auto_write" };
-        // Bash not blocked by classifier = likely safe, allow
-        if (toolName === "Bash") return { behavior: "allow", rule: "auto_bash_safe" };
-        // Unknown tools: ask
+        if (READ_ONLY_TOOLS.has(toolName)) { this._recordAllow(); return { behavior: "allow", rule: "auto_readonly" }; }
+        if (WRITE_TOOLS.has(toolName)) { this._recordAllow(); return { behavior: "allow", rule: "auto_write" }; }
+        if (toolName === "Bash") { this._recordAllow(); return { behavior: "allow", rule: "auto_bash_safe" }; }
         return { behavior: "ask", message: `Allow ${toolName}?`, rule: "auto_ask" };
 
       case "default":
@@ -757,6 +935,9 @@ class PermissionManager {
     }
     return str.startsWith(pattern);
   }
+
+  // Track allows to reset denial streak
+  _recordAllow() { this.denials.recordAllow(); }
 
   addRule(tool, pattern, behavior) {
     this.rules.push({ tool, pattern, behavior });
