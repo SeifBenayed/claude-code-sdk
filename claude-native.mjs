@@ -735,6 +735,11 @@ const toolPermissionChecks = {
   WebSearch(_input, _cwd) {
     return { behavior: "allow", reason: "search_safe" };
   },
+
+  // Agent: allow — sub-agents enforce their own permissions
+  Agent(_input, _cwd) {
+    return { behavior: "allow", reason: "agent_self_enforcing" };
+  },
 };
 
 function _checkFilePath(filePath, cwd, op) {
@@ -1557,6 +1562,276 @@ class McpManager {
     }
     this._servers.clear();
   }
+}
+
+// ── Sub-Agent System (v1.4A) ────────────────────────────────────
+//
+// Each sub-agent is an independent API conversation with its own
+// system prompt, tool set, permissions, and turn limit.
+
+const MAX_AGENT_DEPTH = 3;
+
+const AGENT_DEFINITIONS = {
+  "general-purpose": {
+    agentType: "general-purpose",
+    description: "General-purpose agent for complex, multi-step tasks",
+    model: null, // inherit from parent
+    readOnly: false,
+    disallowedTools: [], // all parent tools allowed
+    getSystemPrompt: () => `You are an agent for a coding CLI. Given the user's message, use the tools available to complete the task. Do what has been asked; nothing more, nothing less.
+
+When you complete the task, respond with a concise report covering what was done and any key findings.
+
+Guidelines:
+- Search broadly when you don't know where something lives
+- Start broad and narrow down
+- Be thorough: check multiple locations, consider different naming conventions
+- NEVER create files unless absolutely necessary
+- Share file paths (always absolute) relevant to the task
+- Avoid using emojis`,
+  },
+
+  "Explore": {
+    agentType: "Explore",
+    description: "Fast read-only agent for searching and exploring codebases",
+    model: "claude-haiku-4-5-20251001",
+    readOnly: true,
+    disallowedTools: ["Agent", "Write", "Edit", "Bash"],
+    getSystemPrompt: () => `You are a file search specialist. You excel at rapidly navigating and exploring codebases.
+
+=== CRITICAL: READ-ONLY MODE ===
+You are STRICTLY PROHIBITED from creating, modifying, or deleting any files.
+Your role is EXCLUSIVELY to search and analyze existing code.
+
+Your strengths:
+- Rapidly finding files using glob patterns
+- Searching code with powerful regex patterns
+- Reading and analyzing file contents
+
+Guidelines:
+- Use Glob for broad file pattern matching
+- Use Grep for searching file contents with regex
+- Use Read when you know the specific file path
+- Return file paths as absolute paths
+- Be fast and efficient — make parallel tool calls where possible
+- Avoid using emojis`,
+  },
+
+  "Plan": {
+    agentType: "Plan",
+    description: "Software architect agent for designing implementation plans",
+    model: null, // inherit from parent
+    readOnly: true,
+    disallowedTools: ["Agent", "Write", "Edit", "Bash"],
+    getSystemPrompt: () => `You are a software architect and planning specialist. Your role is to explore the codebase and design implementation plans.
+
+=== CRITICAL: READ-ONLY MODE ===
+You CANNOT and MUST NOT write, edit, or modify any files.
+
+Your Process:
+1. Understand Requirements
+2. Explore Thoroughly — read files, find patterns, understand architecture
+3. Design Solution — create implementation approach, consider trade-offs
+4. Detail the Plan — step-by-step strategy, dependencies, sequencing
+
+Required Output:
+End with a "Critical Files for Implementation" section listing 3-5 most important files.
+
+Guidelines:
+- Use Glob, Grep, Read to explore
+- Return file paths as absolute paths
+- Avoid using emojis`,
+  },
+};
+
+class SubAgentRunner {
+  constructor(client, parentRegistry, parentPermissions, cfg) {
+    this.client = client;
+    this.parentRegistry = parentRegistry;
+    this.parentPermissions = parentPermissions;
+    this.cfg = cfg;
+  }
+
+  async run({ prompt, subagentType, model, description, depth = 0, parentAgentId = null }) {
+    const agentId = randomUUID();
+
+    // Depth check
+    if (depth >= MAX_AGENT_DEPTH) {
+      return {
+        agent_id: agentId,
+        agent_type: subagentType || "general-purpose",
+        content: `Error: Maximum agent depth (${MAX_AGENT_DEPTH}) reached. Complete the task directly with your available tools.`,
+        model: null,
+        turns: 0,
+        stop_reason: "max_depth",
+        usage: { input_tokens: 0, output_tokens: 0 },
+        parent_agent_id: parentAgentId,
+      };
+    }
+
+    // Resolve agent definition
+    const agentDef = AGENT_DEFINITIONS[subagentType || "general-purpose"];
+    if (!agentDef) {
+      return {
+        agent_id: agentId,
+        agent_type: subagentType,
+        content: `Error: Unknown agent type '${subagentType}'. Available: ${Object.keys(AGENT_DEFINITIONS).join(", ")}`,
+        model: null, turns: 0, stop_reason: "error",
+        usage: { input_tokens: 0, output_tokens: 0 },
+        parent_agent_id: parentAgentId,
+      };
+    }
+
+    // Resolve model
+    const resolvedModel = model
+      ? resolveModel(model)
+      : (agentDef.model || this.cfg.model);
+
+    // Build sub-agent tool registry (filtered)
+    const subRegistry = new ToolRegistry();
+    for (const toolDef of this.parentRegistry.getDefinitions()) {
+      // Skip disallowed tools for this agent type
+      if (agentDef.disallowedTools.includes(toolDef.name)) continue;
+
+      // Get the executor from parent registry
+      const parentTool = this.parentRegistry._tools.get(toolDef.name);
+      if (parentTool) {
+        subRegistry.register(toolDef.name, parentTool.definition, parentTool.executor);
+      }
+    }
+
+    // Register Agent tool for general-purpose (allows recursion, but with depth+1)
+    if (!agentDef.readOnly && !agentDef.disallowedTools.includes("Agent")) {
+      this._registerAgentTool(subRegistry, depth, agentId);
+    }
+
+    // Copy checkpoint/message state from parent
+    subRegistry._client = this.parentRegistry._client;
+    subRegistry._checkpoints = this.parentRegistry._checkpoints;
+    subRegistry._messageId = this.parentRegistry._messageId;
+
+    // Build sub-agent permissions (never more permissive than parent)
+    const subPermissions = new PermissionManager({
+      ...this.cfg,
+      permissionMode: agentDef.readOnly ? "plan" : (this.parentPermissions?.mode || "default"),
+    });
+    // Inherit parent's deny rules
+    if (this.parentPermissions) {
+      for (const rule of this.parentPermissions.rules) {
+        if (rule.behavior === "deny") subPermissions.addRule(rule.tool, rule.pattern, "deny");
+      }
+    }
+
+    // Build system prompt
+    const subCfg = { ...this.cfg, model: resolvedModel };
+    const systemBlocks = buildSystemPrompt(subCfg);
+    // Prepend agent-specific prompt
+    const agentPromptBlock = {
+      type: "text",
+      text: agentDef.getSystemPrompt(),
+      cache_control: { type: "ephemeral" },
+    };
+    systemBlocks.splice(systemBlocks.length > 1 ? 1 : 0, 0, agentPromptBlock);
+
+    // Build messages
+    const messages = [{ role: "user", content: prompt }];
+
+    // Run sub-agent loop
+    const subCfgWithModel = { ...this.cfg, model: resolvedModel, maxTurns: Math.min(this.cfg.maxTurns, 15) };
+
+    log(`[sub-agent] Starting ${agentDef.agentType} (depth=${depth}, model=${resolvedModel}, id=${agentId.slice(0,8)})`);
+
+    const loop = new AgentLoop(this.client, subRegistry, subCfgWithModel, {
+      onToolUse: (block) => {
+        log(`[sub-agent:${agentId.slice(0,8)}] Tool: ${block.name}`);
+      },
+    }, subPermissions);
+
+    const result = await loop.run(messages, systemBlocks);
+
+    log(`[sub-agent] Finished ${agentDef.agentType}: ${result.turns} turns, ${result.usage.input_tokens} in / ${result.usage.output_tokens} out`);
+
+    return {
+      agent_id: agentId,
+      agent_type: agentDef.agentType,
+      content: result.text,
+      model: resolvedModel,
+      turns: result.turns,
+      stop_reason: result.stopReason,
+      usage: result.usage,
+      parent_agent_id: parentAgentId,
+    };
+  }
+
+  _registerAgentTool(registry, parentDepth, parentAgentId) {
+    const runner = this;
+    registry.register("Agent", {
+      description: "Launch a sub-agent to handle a task. Available types: general-purpose, Explore, Plan.",
+      input_schema: {
+        type: "object",
+        properties: {
+          description: { type: "string", description: "A short (3-5 word) description of the task" },
+          prompt: { type: "string", description: "The task for the agent to perform" },
+          subagent_type: { type: "string", enum: ["general-purpose", "Explore", "Plan"], description: "Agent type" },
+          model: { type: "string", enum: ["sonnet", "opus", "haiku"], description: "Optional model override" },
+        },
+        required: ["description", "prompt"],
+      },
+    }, async (input) => {
+      const result = await runner.run({
+        prompt: input.prompt,
+        subagentType: input.subagent_type,
+        model: input.model,
+        description: input.description,
+        depth: parentDepth + 1,
+        parentAgentId,
+      });
+      return JSON.stringify(result);
+    });
+  }
+}
+
+// Register the Agent tool on the main registry
+function registerAgentTool(registry, client, permissions, cfg) {
+  const runner = new SubAgentRunner(client, registry, permissions, cfg);
+
+  registry.register("Agent", {
+    description: `Launch a new agent to handle complex, multi-step tasks autonomously.
+
+Available agent types:
+- general-purpose: For complex tasks requiring multiple tools. Has access to all tools.
+- Explore: Fast, read-only agent for searching codebases. Uses haiku model.
+- Plan: Software architect for designing implementation plans. Read-only.
+
+Guidelines:
+- Use Explore for quick searches and codebase navigation
+- Use Plan for designing implementation strategies
+- Use general-purpose for tasks that require writing code or running commands
+- Each agent runs independently with its own conversation and tools
+- Provide clear, detailed prompts so the agent can work autonomously`,
+    input_schema: {
+      type: "object",
+      properties: {
+        description: { type: "string", description: "A short (3-5 word) description of the task" },
+        prompt: { type: "string", description: "The task for the agent to perform" },
+        subagent_type: { type: "string", enum: ["general-purpose", "Explore", "Plan"], description: "The type of agent to use" },
+        model: { type: "string", enum: ["sonnet", "opus", "haiku"], description: "Optional model override" },
+      },
+      required: ["description", "prompt"],
+    },
+  }, async (input) => {
+    const result = await runner.run({
+      prompt: input.prompt,
+      subagentType: input.subagent_type,
+      model: input.model,
+      description: input.description,
+      depth: 0,
+      parentAgentId: null,
+    });
+
+    // Aggregate usage to parent (will be captured by AgentLoop)
+    return result.content;
+  });
 }
 
 // ── PromptBuilder ───────────────────────────────────────────────
@@ -3018,6 +3293,9 @@ async function main() {
 
   // Permission manager
   const permissions = new PermissionManager(cfg);
+
+  // Register Agent tool (sub-agents)
+  registerAgentTool(registry, client, permissions, cfg);
 
   // File checkpointing
   // CheckpointStore created per-mode (needs session ID first)
