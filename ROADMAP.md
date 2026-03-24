@@ -4,7 +4,7 @@
 
 | Feature | Impact | Effort | Status |
 |---------|:------:|:------:|:------:|
-| Edit tool (string replacement) | High | Medium | Planned |
+| ~~Edit tool (string replacement)~~ | High | Medium | **Done** |
 | WebFetch / WebSearch | Medium | Easy | Planned |
 | Plugin/skill system (`/commit`, `/review`) | Medium | Easy | Planned |
 
@@ -39,7 +39,7 @@
 - [x] Token refresh + auto-detect
 - [x] SSE streaming with all API events
 - [x] Multi-turn agent loop with tool calling
-- [x] 5 built-in tools (Bash, Read, Write, Glob, Grep)
+- [x] 6 built-in tools (Bash, Read, Write, Edit, Glob, Grep)
 - [x] NDJSON bridge protocol
 - [x] Interactive REPL with slash commands
 - [x] Session persistence (JSONL)
