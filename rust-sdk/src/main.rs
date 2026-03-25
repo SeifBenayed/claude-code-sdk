@@ -75,6 +75,7 @@ struct Config {
     max_tokens: u32,
     allowed_tools: Option<Vec<String>>,
     disallowed_tools: Option<Vec<String>>,
+    explicit_provider: String,
     cwd: String,
 }
 
@@ -104,6 +105,7 @@ impl Config {
             max_tokens: 16384,
             allowed_tools: None,
             disallowed_tools: None,
+            explicit_provider: String::new(),
             cwd: env::current_dir()
                 .unwrap_or_else(|_| PathBuf::from("."))
                 .to_string_lossy()
@@ -143,6 +145,129 @@ fn is_openai_model(model: &str) -> bool {
 
 fn is_responses_api_model(model: &str) -> bool {
     model.contains("-codex")
+}
+
+// ── Provider Registry ────────────────────────────────────────────
+
+#[derive(Clone)]
+struct Capabilities {
+    api_style: &'static str,
+    supports_thinking: bool,
+    supports_hosted_web_search: bool,
+    summary_model: Option<&'static str>,
+}
+
+#[derive(Clone)]
+struct ProviderDef {
+    name: &'static str,
+    env_key: Option<&'static str>,
+    default_url: &'static str,
+    capabilities: Capabilities,
+}
+
+fn detect_provider(model: &str, explicit: &str) -> ProviderDef {
+    let providers: Vec<(Box<dyn Fn(&str) -> bool>, ProviderDef)> = vec![
+        (Box::new(|m: &str| m.starts_with("claude-")), ProviderDef {
+            name: "Anthropic", env_key: Some("ANTHROPIC_API_KEY"), default_url: "https://api.anthropic.com",
+            capabilities: Capabilities { api_style: "anthropic", supports_thinking: true, supports_hosted_web_search: true, summary_model: Some("claude-haiku-4-5-20251001") },
+        }),
+        (Box::new(|m: &str| (m.starts_with("gpt-") || (m.len() >= 2 && m.as_bytes()[0] == b'o' && m.as_bytes()[1].is_ascii_digit())) && !m.contains("-codex")), ProviderDef {
+            name: "OpenAI", env_key: Some("OPENAI_API_KEY"), default_url: "https://api.openai.com",
+            capabilities: Capabilities { api_style: "openai-chat", supports_thinking: false, supports_hosted_web_search: false, summary_model: Some("gpt-4o-mini") },
+        }),
+        (Box::new(|m: &str| m.contains("-codex")), ProviderDef {
+            name: "OpenAI Responses", env_key: Some("OPENAI_API_KEY"), default_url: "https://api.openai.com",
+            capabilities: Capabilities { api_style: "openai-responses", supports_thinking: false, supports_hosted_web_search: false, summary_model: Some("gpt-4o-mini") },
+        }),
+        (Box::new(|m: &str| m.starts_with("gemini-")), ProviderDef {
+            name: "Google Gemini", env_key: Some("GOOGLE_API_KEY"), default_url: "https://generativelanguage.googleapis.com",
+            capabilities: Capabilities { api_style: "openai-chat", supports_thinking: false, supports_hosted_web_search: false, summary_model: Some("gemini-2.5-flash") },
+        }),
+        (Box::new(|m: &str| m.starts_with("deepseek")), ProviderDef {
+            name: "DeepSeek", env_key: Some("DEEPSEEK_API_KEY"), default_url: "https://api.deepseek.com",
+            capabilities: Capabilities { api_style: "openai-chat", supports_thinking: false, supports_hosted_web_search: false, summary_model: Some("deepseek-chat") },
+        }),
+        (Box::new(|m: &str| m.starts_with("mistral-") || m.starts_with("codestral") || m.starts_with("pixtral")), ProviderDef {
+            name: "Mistral", env_key: Some("MISTRAL_API_KEY"), default_url: "https://api.mistral.ai",
+            capabilities: Capabilities { api_style: "openai-chat", supports_thinking: false, supports_hosted_web_search: false, summary_model: Some("mistral-small-latest") },
+        }),
+        (Box::new(|m: &str| m.starts_with("llama-") || m.starts_with("mixtral-") || m.contains("groq")), ProviderDef {
+            name: "Groq", env_key: Some("GROQ_API_KEY"), default_url: "https://api.groq.com/openai",
+            capabilities: Capabilities { api_style: "openai-chat", supports_thinking: false, supports_hosted_web_search: false, summary_model: Some("llama-3.3-70b-versatile") },
+        }),
+        (Box::new(|m: &str| m.starts_with("ollama/") || m.starts_with("local/")), ProviderDef {
+            name: "Ollama (local)", env_key: None, default_url: "http://localhost:11434",
+            capabilities: Capabilities { api_style: "openai-chat", supports_thinking: false, supports_hosted_web_search: false, summary_model: None },
+        }),
+        (Box::new(|m: &str| m.starts_with("lmstudio/")), ProviderDef {
+            name: "LM Studio (local)", env_key: None, default_url: "http://localhost:1234",
+            capabilities: Capabilities { api_style: "openai-chat", supports_thinking: false, supports_hosted_web_search: false, summary_model: None },
+        }),
+        (Box::new(|m: &str| m.starts_with("vllm/")), ProviderDef {
+            name: "vLLM", env_key: None, default_url: "http://localhost:8000",
+            capabilities: Capabilities { api_style: "openai-chat", supports_thinking: false, supports_hosted_web_search: false, summary_model: None },
+        }),
+        (Box::new(|m: &str| m.starts_with("jan/")), ProviderDef {
+            name: "Jan (local)", env_key: None, default_url: "http://localhost:1337",
+            capabilities: Capabilities { api_style: "openai-chat", supports_thinking: false, supports_hosted_web_search: false, summary_model: None },
+        }),
+        (Box::new(|m: &str| m.starts_with("llamacpp/")), ProviderDef {
+            name: "llama.cpp", env_key: None, default_url: "http://localhost:8080",
+            capabilities: Capabilities { api_style: "openai-chat", supports_thinking: false, supports_hosted_web_search: false, summary_model: None },
+        }),
+    ];
+
+    // Explicit override by name
+    if !explicit.is_empty() {
+        for (_, p) in &providers {
+            if p.name.to_lowercase().replace(' ', "-") == explicit.to_lowercase() || p.name.to_lowercase() == explicit.to_lowercase() {
+                return p.clone();
+            }
+        }
+    }
+
+    for (detect, p) in &providers {
+        if detect(model) {
+            return p.clone();
+        }
+    }
+
+    // Fallback
+    ProviderDef {
+        name: "OpenAI-compatible", env_key: Some("OPENAI_API_KEY"), default_url: "https://api.openai.com",
+        capabilities: Capabilities { api_style: "openai-chat", supports_thinking: false, supports_hosted_web_search: false, summary_model: Some("gpt-4o-mini") },
+    }
+}
+
+fn transform_model(model: &str) -> String {
+    // Strip local provider prefixes
+    for prefix in &["ollama/", "local/", "lmstudio/", "vllm/", "jan/", "llamacpp/"] {
+        if let Some(stripped) = model.strip_prefix(prefix) {
+            return stripped.to_string();
+        }
+    }
+    model.to_string()
+}
+
+fn create_client_for_provider(prov: &ProviderDef, cfg: &Config) -> Box<dyn StreamClient> {
+    match prov.capabilities.api_style {
+        "anthropic" => Box::new(AnthropicClient::new(&cfg.api_key, &cfg.auth_token, &cfg.api_url)),
+        "openai-responses" => {
+            let key = if prov.env_key == Some("OPENAI_API_KEY") { &cfg.openai_api_key } else { "no-auth" };
+            let url = if prov.default_url != "https://api.openai.com" { prov.default_url } else { &cfg.openai_api_url };
+            Box::new(OpenAIResponsesClient::new(key, url))
+        }
+        _ => {
+            let key: &str = match prov.env_key {
+                Some("OPENAI_API_KEY") => &cfg.openai_api_key,
+                Some("ANTHROPIC_API_KEY") => &cfg.api_key,
+                Some(k) => &env::var(k).unwrap_or_else(|_| "no-auth".to_string()),
+                None => "no-auth",
+            };
+            let url = if prov.default_url != "https://api.openai.com" { prov.default_url } else { &cfg.openai_api_url };
+            Box::new(OpenAIClient::new(key, url))
+        }
+    }
 }
 
 // ── Arg Parsing ─────────────────────────────────────────────────
@@ -257,6 +382,10 @@ fn parse_args() -> Result<Config, String> {
                 i += 1;
                 cfg.openai_api_url = args.get(i).ok_or("Missing openai-api-url arg")?.clone();
             }
+            "--provider" => {
+                i += 1;
+                cfg.explicit_provider = args.get(i).ok_or("Missing provider arg")?.clone();
+            }
             "--openai" => {
                 cfg.use_openai_oauth = true;
             }
@@ -289,7 +418,7 @@ fn parse_args() -> Result<Config, String> {
 
 fn print_help() {
     eprint!(
-        r#"claude-native — Direct Anthropic API CLI (Rust)
+        r#"claude-native — Multi-provider AI coding agent CLI (Rust)
 
 Usage:
   claude-native                         Interactive REPL
@@ -297,17 +426,20 @@ Usage:
   claude-native --ndjson                NDJSON bridge mode
 
 Options:
-  -m, --model <name>          Model (sonnet, opus, haiku, or full ID)
+  -m, --model <name>          Model (sonnet, opus, haiku, codex, gpt-5.4, o3, or full ID)
+  --provider <name>           Explicit provider override (see Providers below)
   -p, --print <prompt>        One-shot mode, print response and exit
   --ndjson                    NDJSON bridge protocol on stdin/stdout
   --max-turns <n>             Max agent loop turns (default: 25)
   --max-tokens <n>            Max output tokens (default: 16384)
-  --login                     Login via browser (OAuth, saves to keychain)
+  --login                     Login to Anthropic via browser (OAuth)
   --logout                    Remove saved credentials
   --oauth                     Use Pro/Max subscription (reads macOS keychain)
-  --api-key <key>             API key (or ANTHROPIC_API_KEY env)
+  --api-key <key>             Anthropic API key (or ANTHROPIC_API_KEY env)
+  --openai-api-key <key>      OpenAI API key (or OPENAI_API_KEY env)
   --auth-token <token>        OAuth bearer token directly
-  --api-url <url>             API base URL
+  --api-url <url>             Anthropic API base URL
+  --openai-api-url <url>      OpenAI API base URL
   --thinking <budget>         Enable extended thinking with token budget
   --system-prompt <text>      Override system prompt
   --append-system-prompt <t>  Append to system prompt
@@ -317,6 +449,20 @@ Options:
   --disallowed-tools <list>   Comma-separated tool denylist
   --verbose                   Debug logging to stderr
   -h, --help                  Show this help
+
+Providers:
+  anthropic        Anthropic (Claude)          ANTHROPIC_API_KEY or --login
+  openai           OpenAI (GPT, o-series)      OPENAI_API_KEY or --openai-login
+  openai-responses OpenAI Responses (*-codex)  OPENAI_API_KEY or --openai-login
+  google           Google Gemini               GOOGLE_API_KEY
+  deepseek         DeepSeek                    DEEPSEEK_API_KEY
+  mistral          Mistral                     MISTRAL_API_KEY
+  groq             Groq                        GROQ_API_KEY
+  ollama           Ollama (local)              OLLAMA_API_URL (no auth)
+  lmstudio         LM Studio (local)           LMSTUDIO_API_URL (no auth)
+  vllm             vLLM                        VLLM_API_URL (no auth)
+  jan              Jan (local)                 JAN_API_URL (no auth)
+  llamacpp         llama.cpp server            LLAMACPP_API_URL (no auth)
 "#
     );
 }
@@ -2239,7 +2385,8 @@ fn run_agent_loop(
             "tools": registry.get_definitions(),
         });
 
-        if cfg.thinking_budget > 0 {
+        let prov = detect_provider(&cfg.model, &cfg.explicit_provider);
+        if cfg.thinking_budget > 0 && prov.capabilities.supports_thinking {
             body["thinking"] = serde_json::json!({
                 "type": "enabled",
                 "budget_tokens": cfg.thinking_budget
@@ -3077,26 +3224,32 @@ fn main() {
         }
     }
 
-    // Determine backend
-    let use_openai = is_openai_model(&cfg.model);
-    let client: Box<dyn StreamClient> = if use_openai {
-        if cfg.openai_api_key.is_empty() {
+    // Detect provider and create client
+    let provider = detect_provider(&cfg.model, &cfg.explicit_provider);
+    cfg.model = transform_model(&cfg.model);
+
+    // Validate auth
+    match provider.env_key {
+        Some("ANTHROPIC_API_KEY") if cfg.api_key.is_empty() && cfg.auth_token.is_empty() => {
+            eprintln!("Error: No Anthropic auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY");
+            std::process::exit(1);
+        }
+        Some("OPENAI_API_KEY") if cfg.openai_api_key.is_empty() => {
             eprintln!("Error: No OpenAI auth. Run --openai-login, use --openai-api-key, or set OPENAI_API_KEY");
             std::process::exit(1);
         }
-        eprintln!("\x1b[2mUsing OpenAI backend ({})\x1b[0m", cfg.model);
-        if is_responses_api_model(&cfg.model) {
-            Box::new(OpenAIResponsesClient::new(&cfg.openai_api_key, &cfg.openai_api_url))
-        } else {
-            Box::new(OpenAIClient::new(&cfg.openai_api_key, &cfg.openai_api_url))
-        }
-    } else {
-        if cfg.api_key.is_empty() && cfg.auth_token.is_empty() {
-            eprintln!("Error: No auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY");
+        Some(k) if k != "ANTHROPIC_API_KEY" && k != "OPENAI_API_KEY" && env::var(k).unwrap_or_default().is_empty() => {
+            eprintln!("Error: No {} auth. Set {}", provider.name, k);
             std::process::exit(1);
         }
-        Box::new(AnthropicClient::new(&cfg.api_key, &cfg.auth_token, &cfg.api_url))
-    };
+        _ => {}
+    }
+
+    if provider.name != "Anthropic" {
+        eprintln!("\x1b[2mUsing {} backend ({})\x1b[0m", provider.name, cfg.model);
+    }
+
+    let client: Box<dyn StreamClient> = create_client_for_provider(&provider, &cfg);
     let mut registry = ToolRegistry::new();
     register_builtin_tools(&mut registry);
 

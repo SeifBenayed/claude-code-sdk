@@ -51,7 +51,9 @@ type Config struct {
 	MaxTokens          int
 	AllowedTools       []string
 	DisallowedTools    []string
+	ExplicitProvider   string
 	CWD                string
+	ProviderRef        *Provider // resolved provider (set in main)
 }
 
 type ContentBlock struct {
@@ -158,6 +160,12 @@ type NDJSONIncoming struct {
 	IsError bool            `json:"is_error,omitempty"`
 }
 
+// ── StreamClient interface ─────────────────────────────────────
+
+type StreamClient interface {
+	Stream(body map[string]interface{}) (<-chan SSEEvent, <-chan error)
+}
+
 // ── Globals ────────────────────────────────────────────────────
 
 var verbose bool
@@ -201,6 +209,199 @@ func isResponsesAPIModel(model string) bool {
 
 func isReasoningModel(model string) bool {
 	return len(model) >= 2 && model[0] == 'o' && model[1] >= '1' && model[1] <= '9'
+}
+
+// ── Provider Registry ──────────────────────────────────────────
+
+type Capabilities struct {
+	APIStyle               string
+	ToolCallStyle          string
+	InstructionPlacement   string
+	SupportsToolCalling    bool
+	SupportsThinking       bool
+	SupportsHostedWebSearch bool
+	SummaryModel           string
+}
+
+type Provider struct {
+	Name           string
+	Detect         func(string) bool
+	EnvKey         string // empty = no auth
+	DefaultURL     string
+	TransformModel func(string) string
+	Capabilities   Capabilities
+}
+
+func getProviders() []Provider {
+	return []Provider{
+		{
+			Name: "Anthropic", Detect: func(m string) bool { return strings.HasPrefix(m, "claude-") },
+			EnvKey: "ANTHROPIC_API_KEY", DefaultURL: "https://api.anthropic.com",
+			TransformModel: func(m string) string { return m },
+			Capabilities: Capabilities{
+				APIStyle: "anthropic", ToolCallStyle: "anthropic", InstructionPlacement: "system-blocks",
+				SupportsToolCalling: true, SupportsThinking: true, SupportsHostedWebSearch: true,
+				SummaryModel: "claude-haiku-4-5-20251001",
+			},
+		},
+		{
+			Name: "OpenAI", Detect: func(m string) bool {
+				return (strings.HasPrefix(m, "gpt-") || (len(m) >= 2 && m[0] == 'o' && m[1] >= '1' && m[1] <= '9')) && !strings.Contains(m, "-codex")
+			},
+			EnvKey: "OPENAI_API_KEY", DefaultURL: "https://api.openai.com",
+			TransformModel: func(m string) string { return m },
+			Capabilities: Capabilities{
+				APIStyle: "openai-chat", ToolCallStyle: "openai-chat", InstructionPlacement: "system-message",
+				SupportsToolCalling: true, SupportsThinking: false, SupportsHostedWebSearch: false,
+				SummaryModel: "gpt-4o-mini",
+			},
+		},
+		{
+			Name: "OpenAI Responses", Detect: func(m string) bool { return strings.Contains(m, "-codex") },
+			EnvKey: "OPENAI_API_KEY", DefaultURL: "https://api.openai.com",
+			TransformModel: func(m string) string { return m },
+			Capabilities: Capabilities{
+				APIStyle: "openai-responses", ToolCallStyle: "responses", InstructionPlacement: "instructions-field",
+				SupportsToolCalling: true, SupportsThinking: false, SupportsHostedWebSearch: false,
+				SummaryModel: "gpt-4o-mini",
+			},
+		},
+		{
+			Name: "Google Gemini", Detect: func(m string) bool { return strings.HasPrefix(m, "gemini-") },
+			EnvKey: "GOOGLE_API_KEY", DefaultURL: "https://generativelanguage.googleapis.com",
+			TransformModel: func(m string) string { return m },
+			Capabilities: Capabilities{
+				APIStyle: "openai-chat", ToolCallStyle: "openai-chat", InstructionPlacement: "system-message",
+				SupportsToolCalling: true, SummaryModel: "gemini-2.5-flash",
+			},
+		},
+		{
+			Name: "DeepSeek", Detect: func(m string) bool { return strings.HasPrefix(m, "deepseek") },
+			EnvKey: "DEEPSEEK_API_KEY", DefaultURL: "https://api.deepseek.com",
+			TransformModel: func(m string) string { return m },
+			Capabilities: Capabilities{
+				APIStyle: "openai-chat", ToolCallStyle: "openai-chat", InstructionPlacement: "system-message",
+				SupportsToolCalling: true, SummaryModel: "deepseek-chat",
+			},
+		},
+		{
+			Name: "Mistral", Detect: func(m string) bool {
+				return strings.HasPrefix(m, "mistral-") || strings.HasPrefix(m, "codestral") || strings.HasPrefix(m, "pixtral")
+			},
+			EnvKey: "MISTRAL_API_KEY", DefaultURL: "https://api.mistral.ai",
+			TransformModel: func(m string) string { return m },
+			Capabilities: Capabilities{
+				APIStyle: "openai-chat", ToolCallStyle: "openai-chat", InstructionPlacement: "system-message",
+				SupportsToolCalling: true, SummaryModel: "mistral-small-latest",
+			},
+		},
+		{
+			Name: "Groq", Detect: func(m string) bool {
+				return strings.HasPrefix(m, "llama-") || strings.HasPrefix(m, "mixtral-") || strings.Contains(m, "groq")
+			},
+			EnvKey: "GROQ_API_KEY", DefaultURL: "https://api.groq.com/openai",
+			TransformModel: func(m string) string { return m },
+			Capabilities: Capabilities{
+				APIStyle: "openai-chat", ToolCallStyle: "openai-chat", InstructionPlacement: "system-message",
+				SupportsToolCalling: true, SummaryModel: "llama-3.3-70b-versatile",
+			},
+		},
+		{
+			Name: "Ollama (local)", Detect: func(m string) bool { return strings.HasPrefix(m, "ollama/") || strings.HasPrefix(m, "local/") },
+			DefaultURL: "http://localhost:11434",
+			TransformModel: func(m string) string { return strings.TrimPrefix(strings.TrimPrefix(m, "ollama/"), "local/") },
+			Capabilities: Capabilities{
+				APIStyle: "openai-chat", ToolCallStyle: "openai-chat", InstructionPlacement: "system-message",
+				SupportsToolCalling: true,
+			},
+		},
+		{
+			Name: "LM Studio (local)", Detect: func(m string) bool { return strings.HasPrefix(m, "lmstudio/") },
+			DefaultURL: "http://localhost:1234",
+			TransformModel: func(m string) string { return strings.TrimPrefix(m, "lmstudio/") },
+			Capabilities: Capabilities{
+				APIStyle: "openai-chat", ToolCallStyle: "openai-chat", InstructionPlacement: "system-message",
+				SupportsToolCalling: true,
+			},
+		},
+		{
+			Name: "vLLM", Detect: func(m string) bool { return strings.HasPrefix(m, "vllm/") },
+			DefaultURL: "http://localhost:8000",
+			TransformModel: func(m string) string { return strings.TrimPrefix(m, "vllm/") },
+			Capabilities: Capabilities{
+				APIStyle: "openai-chat", ToolCallStyle: "openai-chat", InstructionPlacement: "system-message",
+				SupportsToolCalling: true,
+			},
+		},
+		{
+			Name: "Jan (local)", Detect: func(m string) bool { return strings.HasPrefix(m, "jan/") },
+			DefaultURL: "http://localhost:1337",
+			TransformModel: func(m string) string { return strings.TrimPrefix(m, "jan/") },
+			Capabilities: Capabilities{
+				APIStyle: "openai-chat", ToolCallStyle: "openai-chat", InstructionPlacement: "system-message",
+				SupportsToolCalling: true,
+			},
+		},
+		{
+			Name: "llama.cpp", Detect: func(m string) bool { return strings.HasPrefix(m, "llamacpp/") },
+			DefaultURL: "http://localhost:8080",
+			TransformModel: func(m string) string { return strings.TrimPrefix(m, "llamacpp/") },
+			Capabilities: Capabilities{
+				APIStyle: "openai-chat", ToolCallStyle: "openai-chat", InstructionPlacement: "system-message",
+			},
+		},
+	}
+}
+
+func detectProvider(model, explicitProvider string) *Provider {
+	providers := getProviders()
+	if explicitProvider != "" {
+		for i := range providers {
+			if strings.EqualFold(providers[i].Name, explicitProvider) || strings.EqualFold(strings.ReplaceAll(strings.ToLower(providers[i].Name), " ", "-"), explicitProvider) {
+				return &providers[i]
+			}
+		}
+	}
+	for i := range providers {
+		if providers[i].Detect(model) {
+			return &providers[i]
+		}
+	}
+	// Fallback: OpenAI-compatible
+	fallback := Provider{
+		Name: "OpenAI-compatible", EnvKey: "OPENAI_API_KEY", DefaultURL: "https://api.openai.com",
+		TransformModel: func(m string) string { return m },
+		Capabilities: Capabilities{
+			APIStyle: "openai-chat", ToolCallStyle: "openai-chat", InstructionPlacement: "system-message",
+			SupportsToolCalling: true, SummaryModel: "gpt-4o-mini",
+		},
+	}
+	return &fallback
+}
+
+func createClientForProvider(prov *Provider, cfg *Config) StreamClient {
+	switch prov.Capabilities.APIStyle {
+	case "anthropic":
+		return NewAnthropicClient(cfg.APIKey, cfg.AuthToken, cfg.APIURL)
+	case "openai-responses":
+		key := cfg.OpenAIAPIKey
+		url := cfg.OpenAIAPIURL
+		if prov.EnvKey != "" && prov.EnvKey != "OPENAI_API_KEY" {
+			key = os.Getenv(prov.EnvKey)
+		}
+		if prov.EnvKey == "" { key = "no-auth" }
+		if prov.DefaultURL != "https://api.openai.com" { url = prov.DefaultURL }
+		return NewOpenAIResponsesClient(key, url)
+	default: // openai-chat
+		key := cfg.OpenAIAPIKey
+		url := cfg.OpenAIAPIURL
+		if prov.EnvKey != "" && prov.EnvKey != "OPENAI_API_KEY" && prov.EnvKey != "ANTHROPIC_API_KEY" {
+			key = os.Getenv(prov.EnvKey)
+		}
+		if prov.EnvKey == "" { key = "no-auth" }
+		if prov.DefaultURL != "https://api.openai.com" { url = prov.DefaultURL }
+		return NewOpenAIClient(key, url)
+	}
 }
 
 func parseArgs() *Config {
@@ -282,6 +483,8 @@ func parseArgs() *Config {
 			cfg.OpenAIAPIURL = next()
 		case "--openai":
 			cfg.UseOpenAIOAuth = true
+		case "--provider":
+			cfg.ExplicitProvider = next()
 		case "--login":
 			if err := oauthLogin(); err != nil {
 				fmt.Fprintf(os.Stderr, "Login error: %v\n", err)
@@ -290,6 +493,15 @@ func parseArgs() *Config {
 			os.Exit(0)
 		case "--logout":
 			oauthLogout()
+			os.Exit(0)
+		case "--openai-login":
+			if err := openaiOAuthLogin(); err != nil {
+				fmt.Fprintf(os.Stderr, "OpenAI login error: %v\n", err)
+				os.Exit(1)
+			}
+			os.Exit(0)
+		case "--openai-logout":
+			openaiOAuthLogout()
 			os.Exit(0)
 		case "--help", "-h":
 			printHelp()
@@ -308,7 +520,7 @@ func parseArgs() *Config {
 }
 
 func printHelp() {
-	fmt.Fprint(os.Stderr, `claude-native — Direct Anthropic API CLI (Go)
+	fmt.Fprint(os.Stderr, `claude-native — Multi-provider AI coding agent CLI (Go)
 
 Usage:
   claude-native                         Interactive REPL
@@ -316,17 +528,23 @@ Usage:
   claude-native --ndjson                NDJSON bridge mode
 
 Options:
-  -m, --model <name>          Model (sonnet, opus, haiku, or full ID)
+  -m, --model <name>          Model (sonnet, opus, haiku, gpt-4o, o3, codex, or full ID)
+  --provider <name>           Explicit provider override (see Providers below)
   -p, --print <prompt>        One-shot mode, print response and exit
   --ndjson                    NDJSON bridge protocol on stdin/stdout
   --max-turns <n>             Max agent loop turns (default: 25)
   --max-tokens <n>            Max output tokens (default: 16384)
-  --login                     Login via browser (OAuth, saves to keychain)
-  --logout                    Remove saved credentials
-  --oauth                     Use Pro/Max subscription (reads macOS keychain)
-  --api-key <key>             API key (or ANTHROPIC_API_KEY env)
+  --login                     Login to Anthropic via browser (OAuth)
+  --logout                    Remove Anthropic credentials
+  --oauth                     Use Anthropic Pro/Max subscription (keychain)
+  --openai-login              Login to OpenAI via browser (OAuth)
+  --openai-logout             Remove OpenAI credentials
+  --openai                    Use OpenAI subscription (keychain)
+  --api-key <key>             Anthropic API key (or ANTHROPIC_API_KEY env)
+  --openai-api-key <key>      OpenAI API key (or OPENAI_API_KEY env)
   --auth-token <token>        OAuth bearer token directly
-  --api-url <url>             API base URL
+  --api-url <url>             Anthropic API base URL
+  --openai-api-url <url>      OpenAI API base URL
   --thinking <budget>         Enable extended thinking with token budget
   --system-prompt <text>      Override system prompt
   --append-system-prompt <t>  Append to system prompt
@@ -336,6 +554,20 @@ Options:
   --disallowed-tools <list>   Comma-separated tool denylist
   --verbose                   Debug logging to stderr
   -h, --help                  Show this help
+
+Providers:
+  anthropic        Anthropic (Claude)          ANTHROPIC_API_KEY or --login
+  openai           OpenAI (GPT, o-series)      OPENAI_API_KEY or --openai-login
+  openai-responses OpenAI Responses (*-codex)  OPENAI_API_KEY or --openai-login
+  google           Google Gemini               GOOGLE_API_KEY
+  deepseek         DeepSeek                    DEEPSEEK_API_KEY
+  mistral          Mistral                     MISTRAL_API_KEY
+  groq             Groq                        GROQ_API_KEY
+  ollama           Ollama (local)              OLLAMA_API_URL (no auth)
+  lmstudio         LM Studio (local)           LMSTUDIO_API_URL (no auth)
+  vllm             vLLM                        VLLM_API_URL (no auth)
+  jan              Jan (local)                 JAN_API_URL (no auth)
+  llamacpp         llama.cpp server            LLAMACPP_API_URL (no auth)
 `)
 }
 
@@ -468,13 +700,7 @@ func (c *AnthropicClient) parseSSE(body io.Reader, events chan<- SSEEvent) {
 	}
 }
 
-// ── StreamClient interface ──────────────────────────────────────
-
-type StreamClient interface {
-	Stream(body map[string]interface{}) (<-chan SSEEvent, <-chan error)
-}
-
-// AnthropicClient implements StreamClient (already defined above)
+// AnthropicClient implements StreamClient (defined above)
 
 // ── OpenAIClient (Chat Completions) ────────────────────────────
 
@@ -1422,7 +1648,9 @@ func (a *AgentLoop) Run(messages []Message, systemBlocks []SystemBlock) (*AgentR
 			"tools":      toolsI,
 		}
 
-		if a.Cfg.ThinkingBudget > 0 && !isOpenAIModel(a.Cfg.Model) {
+		prov := a.Cfg.ProviderRef
+		if prov == nil { prov = detectProvider(a.Cfg.Model, a.Cfg.ExplicitProvider) }
+		if a.Cfg.ThinkingBudget > 0 && prov.Capabilities.SupportsThinking {
 			body["thinking"] = map[string]interface{}{
 				"type":          "enabled",
 				"budget_tokens": a.Cfg.ThinkingBudget,
@@ -1954,10 +2182,19 @@ func (m *InteractiveMode) handleSlashCommand(input string) bool {
 		return true
 	case "/model":
 		if len(args) > 0 {
-			m.Cfg.Model = resolveModel(args[0])
-			fmt.Fprintf(os.Stderr, "\033[2mSwitched to %s\033[0m\n", m.Cfg.Model)
+			newModel := resolveModel(args[0])
+			prov := detectProvider(newModel, m.Cfg.ExplicitProvider)
+			effectiveModel := prov.TransformModel(newModel)
+			m.Cfg.Model = effectiveModel
+			m.Cfg.ProviderRef = prov
+			m.Client = createClientForProvider(prov, m.Cfg)
+			backend := ""
+			if prov.Name != "Anthropic" { backend = " (" + prov.Name + ")" }
+			fmt.Fprintf(os.Stderr, "\033[2mSwitched to %s%s\033[0m\n", m.Cfg.Model, backend)
 		} else {
-			fmt.Fprintf(os.Stderr, "\033[2mCurrent model: %s\033[0m\n", m.Cfg.Model)
+			prov := m.Cfg.ProviderRef
+			if prov == nil { prov = detectProvider(m.Cfg.Model, "") }
+			fmt.Fprintf(os.Stderr, "\033[2mCurrent model: %s (%s)\033[0m\n", m.Cfg.Model, prov.Name)
 		}
 	case "/clear":
 		m.Messages = nil
@@ -2432,6 +2669,20 @@ func oauthLogout() {
 	}
 }
 
+// ── OpenAI OAuth (stubs — TODO: full implementation) ───────────
+
+func openaiOAuthLogin() error {
+	return fmt.Errorf("OpenAI OAuth login not yet implemented in Go SDK. Use OPENAI_API_KEY env var")
+}
+
+func openaiOAuthLogout() {
+	fmt.Fprintln(os.Stderr, "OpenAI OAuth not yet implemented in Go SDK.")
+}
+
+func getOpenAIAccessToken(verbose bool) (string, error) {
+	return "", fmt.Errorf("OpenAI OAuth not yet implemented in Go SDK. Use OPENAI_API_KEY env var")
+}
+
 // ── UUID ───────────────────────────────────────────────────────
 
 func generateUUID() string {
@@ -2461,27 +2712,28 @@ func main() {
 		}
 	}
 
-	// Determine backend and create client
-	useOpenAI := isOpenAIModel(cfg.Model)
-	var client StreamClient
-	if useOpenAI {
-		if cfg.OpenAIAPIKey == "" {
-			fmt.Fprintln(os.Stderr, "Error: No OpenAI auth. Run --openai-login, use --openai-api-key, or set OPENAI_API_KEY")
-			os.Exit(1)
-		}
-		fmt.Fprintf(os.Stderr, "\033[2mUsing OpenAI backend (%s)\033[0m\n", cfg.Model)
-		if isResponsesAPIModel(cfg.Model) {
-			client = NewOpenAIResponsesClient(cfg.OpenAIAPIKey, cfg.OpenAIAPIURL)
-		} else {
-			client = NewOpenAIClient(cfg.OpenAIAPIKey, cfg.OpenAIAPIURL)
-		}
-	} else {
-		if cfg.APIKey == "" && cfg.AuthToken == "" {
-			fmt.Fprintln(os.Stderr, "Error: No auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY")
-			os.Exit(1)
-		}
-		client = NewAnthropicClient(cfg.APIKey, cfg.AuthToken, cfg.APIURL)
+	// Detect provider and create client
+	provider := detectProvider(cfg.Model, cfg.ExplicitProvider)
+	cfg.Model = provider.TransformModel(cfg.Model)
+	cfg.ProviderRef = provider
+
+	// Validate auth
+	if provider.EnvKey == "ANTHROPIC_API_KEY" && cfg.APIKey == "" && cfg.AuthToken == "" {
+		fmt.Fprintln(os.Stderr, "Error: No Anthropic auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY")
+		os.Exit(1)
+	} else if provider.EnvKey == "OPENAI_API_KEY" && cfg.OpenAIAPIKey == "" {
+		fmt.Fprintln(os.Stderr, "Error: No OpenAI auth. Run --openai-login, use --openai-api-key, or set OPENAI_API_KEY")
+		os.Exit(1)
+	} else if provider.EnvKey != "" && provider.EnvKey != "ANTHROPIC_API_KEY" && provider.EnvKey != "OPENAI_API_KEY" && os.Getenv(provider.EnvKey) == "" {
+		fmt.Fprintf(os.Stderr, "Error: No %s auth. Set %s\n", provider.Name, provider.EnvKey)
+		os.Exit(1)
 	}
+
+	if provider.Name != "Anthropic" {
+		fmt.Fprintf(os.Stderr, "\033[2mUsing %s backend (%s)\033[0m\n", provider.Name, cfg.Model)
+	}
+
+	client := createClientForProvider(provider, cfg)
 	registry := NewToolRegistry()
 	registerBuiltinTools(registry)
 

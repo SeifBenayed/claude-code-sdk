@@ -50,7 +50,8 @@ def resolve_model(name: str) -> str:
     return MODEL_ALIASES.get(name, name)
 
 def is_openai_model(model: str) -> bool:
-    return model.startswith("gpt-") or model.startswith("o3") or model.startswith("o4") or model in ("o1", "o1-mini")
+    """Backwards compat wrapper — prefer detect_provider()."""
+    return detect_provider(model)["name"] != "Anthropic"
 
 def is_responses_api_model(model: str) -> bool:
     return "-codex" in model
@@ -58,6 +59,236 @@ def is_responses_api_model(model: str) -> bool:
 def _is_reasoning_model(model: str) -> bool:
     import re
     return bool(re.match(r"^o[1-9]", model))
+
+# ── Provider Registry ────────────────────────────────────────────
+
+PROVIDERS = {
+    "anthropic": {
+        "name": "Anthropic",
+        "detect": lambda m: m.startswith("claude-"),
+        "env_key": "ANTHROPIC_API_KEY",
+        "default_url": "https://api.anthropic.com",
+        "create_client": lambda cfg, key, url: AnthropicClient(api_key=cfg.get("apiKey", ""), auth_token=cfg.get("authToken", ""), api_url=url),
+        "resolve_auth": lambda cfg: cfg.get("apiKey") or cfg.get("authToken") or None,
+        "resolve_base_url": lambda cfg: cfg.get("apiUrl") or "https://api.anthropic.com",
+        "transform_model": lambda m: m,
+        "capabilities": {
+            "api_style": "anthropic",
+            "tool_call_style": "anthropic",
+            "instruction_placement": "system-blocks",
+            "supports_tool_calling": True,
+            "supports_thinking": True,
+            "supports_hosted_web_search": True,
+            "summary_model": "claude-haiku-4-5-20251001",
+        },
+    },
+    "openai": {
+        "name": "OpenAI",
+        "detect": lambda m: (m.startswith("gpt-") or bool(__import__("re").match(r"^o[1-9]", m))) and "-codex" not in m,
+        "env_key": "OPENAI_API_KEY",
+        "default_url": "https://api.openai.com",
+        "create_client": lambda cfg, key, url: OpenAIClient(api_key=key, api_url=url),
+        "resolve_auth": lambda cfg: cfg.get("openaiApiKey") or None,
+        "resolve_base_url": lambda cfg: cfg.get("openaiApiUrl") or "https://api.openai.com",
+        "transform_model": lambda m: m,
+        "capabilities": {
+            "api_style": "openai-chat",
+            "tool_call_style": "openai-chat",
+            "instruction_placement": "system-message",
+            "supports_tool_calling": True,
+            "supports_thinking": False,
+            "supports_hosted_web_search": False,
+            "summary_model": "gpt-4o-mini",
+        },
+    },
+    "openai-responses": {
+        "name": "OpenAI Responses",
+        "detect": lambda m: "-codex" in m,
+        "env_key": "OPENAI_API_KEY",
+        "default_url": "https://api.openai.com",
+        "create_client": lambda cfg, key, url: OpenAIResponsesClient(api_key=key, api_url=url),
+        "resolve_auth": lambda cfg: cfg.get("openaiApiKey") or None,
+        "resolve_base_url": lambda cfg: cfg.get("openaiApiUrl") or "https://api.openai.com",
+        "transform_model": lambda m: m,
+        "capabilities": {
+            "api_style": "openai-responses",
+            "tool_call_style": "responses",
+            "instruction_placement": "instructions-field",
+            "supports_tool_calling": True,
+            "supports_thinking": False,
+            "supports_hosted_web_search": False,
+            "summary_model": "gpt-4o-mini",
+        },
+    },
+    "google": {
+        "name": "Google Gemini",
+        "detect": lambda m: m.startswith("gemini-"),
+        "env_key": "GOOGLE_API_KEY",
+        "default_url": "https://generativelanguage.googleapis.com",
+        "create_client": lambda cfg, key, url: OpenAIClient(api_key=key, api_url=url + "/v1beta/openai"),
+        "resolve_auth": lambda cfg: os.environ.get("GOOGLE_API_KEY") or None,
+        "resolve_base_url": lambda cfg: "https://generativelanguage.googleapis.com",
+        "transform_model": lambda m: m,
+        "capabilities": {
+            "api_style": "openai-chat", "tool_call_style": "openai-chat",
+            "instruction_placement": "system-message", "supports_tool_calling": True,
+            "supports_thinking": False, "supports_hosted_web_search": False,
+            "summary_model": "gemini-2.5-flash",
+        },
+    },
+    "deepseek": {
+        "name": "DeepSeek",
+        "detect": lambda m: m.startswith("deepseek"),
+        "env_key": "DEEPSEEK_API_KEY",
+        "default_url": "https://api.deepseek.com",
+        "create_client": lambda cfg, key, url: OpenAIClient(api_key=key, api_url=url),
+        "resolve_auth": lambda cfg: os.environ.get("DEEPSEEK_API_KEY") or None,
+        "resolve_base_url": lambda cfg: "https://api.deepseek.com",
+        "transform_model": lambda m: m,
+        "capabilities": {
+            "api_style": "openai-chat", "tool_call_style": "openai-chat",
+            "instruction_placement": "system-message", "supports_tool_calling": True,
+            "supports_thinking": False, "supports_hosted_web_search": False,
+            "summary_model": "deepseek-chat",
+        },
+    },
+    "mistral": {
+        "name": "Mistral",
+        "detect": lambda m: m.startswith("mistral-") or m.startswith("codestral") or m.startswith("pixtral"),
+        "env_key": "MISTRAL_API_KEY",
+        "default_url": "https://api.mistral.ai",
+        "create_client": lambda cfg, key, url: OpenAIClient(api_key=key, api_url=url),
+        "resolve_auth": lambda cfg: os.environ.get("MISTRAL_API_KEY") or None,
+        "resolve_base_url": lambda cfg: "https://api.mistral.ai",
+        "transform_model": lambda m: m,
+        "capabilities": {
+            "api_style": "openai-chat", "tool_call_style": "openai-chat",
+            "instruction_placement": "system-message", "supports_tool_calling": True,
+            "supports_thinking": False, "supports_hosted_web_search": False,
+            "summary_model": "mistral-small-latest",
+        },
+    },
+    "groq": {
+        "name": "Groq",
+        "detect": lambda m: m.startswith("llama-") or m.startswith("mixtral-") or "groq" in m,
+        "env_key": "GROQ_API_KEY",
+        "default_url": "https://api.groq.com/openai",
+        "create_client": lambda cfg, key, url: OpenAIClient(api_key=key, api_url=url),
+        "resolve_auth": lambda cfg: os.environ.get("GROQ_API_KEY") or None,
+        "resolve_base_url": lambda cfg: "https://api.groq.com/openai",
+        "transform_model": lambda m: m,
+        "capabilities": {
+            "api_style": "openai-chat", "tool_call_style": "openai-chat",
+            "instruction_placement": "system-message", "supports_tool_calling": True,
+            "supports_thinking": False, "supports_hosted_web_search": False,
+            "summary_model": "llama-3.3-70b-versatile",
+        },
+    },
+    "ollama": {
+        "name": "Ollama (local)",
+        "detect": lambda m: m.startswith("ollama/") or m.startswith("local/"),
+        "env_key": None,
+        "default_url": "http://localhost:11434",
+        "create_client": lambda cfg, key, url: OpenAIClient(api_key="ollama", api_url=url),
+        "resolve_auth": lambda cfg: "no-auth",
+        "resolve_base_url": lambda cfg: os.environ.get("OLLAMA_API_URL", "http://localhost:11434"),
+        "transform_model": lambda m: __import__("re").sub(r"^(ollama|local)/", "", m),
+        "capabilities": {
+            "api_style": "openai-chat", "tool_call_style": "openai-chat",
+            "instruction_placement": "system-message", "supports_tool_calling": True,
+            "supports_thinking": False, "supports_hosted_web_search": False,
+            "summary_model": None,
+        },
+    },
+    "lmstudio": {
+        "name": "LM Studio (local)",
+        "detect": lambda m: m.startswith("lmstudio/"),
+        "env_key": None,
+        "default_url": "http://localhost:1234",
+        "create_client": lambda cfg, key, url: OpenAIClient(api_key="lm-studio", api_url=url),
+        "resolve_auth": lambda cfg: "no-auth",
+        "resolve_base_url": lambda cfg: os.environ.get("LMSTUDIO_API_URL", "http://localhost:1234"),
+        "transform_model": lambda m: m.removeprefix("lmstudio/"),
+        "capabilities": {
+            "api_style": "openai-chat", "tool_call_style": "openai-chat",
+            "instruction_placement": "system-message", "supports_tool_calling": True,
+            "supports_thinking": False, "supports_hosted_web_search": False,
+            "summary_model": None,
+        },
+    },
+    "vllm": {
+        "name": "vLLM",
+        "detect": lambda m: m.startswith("vllm/"),
+        "env_key": None,
+        "default_url": "http://localhost:8000",
+        "create_client": lambda cfg, key, url: OpenAIClient(api_key="vllm", api_url=url),
+        "resolve_auth": lambda cfg: "no-auth",
+        "resolve_base_url": lambda cfg: os.environ.get("VLLM_API_URL", "http://localhost:8000"),
+        "transform_model": lambda m: m.removeprefix("vllm/"),
+        "capabilities": {
+            "api_style": "openai-chat", "tool_call_style": "openai-chat",
+            "instruction_placement": "system-message", "supports_tool_calling": True,
+            "supports_thinking": False, "supports_hosted_web_search": False,
+            "summary_model": None,
+        },
+    },
+    "jan": {
+        "name": "Jan (local)",
+        "detect": lambda m: m.startswith("jan/"),
+        "env_key": None,
+        "default_url": "http://localhost:1337",
+        "create_client": lambda cfg, key, url: OpenAIClient(api_key="jan", api_url=url),
+        "resolve_auth": lambda cfg: "no-auth",
+        "resolve_base_url": lambda cfg: os.environ.get("JAN_API_URL", "http://localhost:1337"),
+        "transform_model": lambda m: m.removeprefix("jan/"),
+        "capabilities": {
+            "api_style": "openai-chat", "tool_call_style": "openai-chat",
+            "instruction_placement": "system-message", "supports_tool_calling": True,
+            "supports_thinking": False, "supports_hosted_web_search": False,
+            "summary_model": None,
+        },
+    },
+    "llamacpp": {
+        "name": "llama.cpp",
+        "detect": lambda m: m.startswith("llamacpp/"),
+        "env_key": None,
+        "default_url": "http://localhost:8080",
+        "create_client": lambda cfg, key, url: OpenAIClient(api_key="llamacpp", api_url=url),
+        "resolve_auth": lambda cfg: "no-auth",
+        "resolve_base_url": lambda cfg: os.environ.get("LLAMACPP_API_URL", "http://localhost:8080"),
+        "transform_model": lambda m: m.removeprefix("llamacpp/"),
+        "capabilities": {
+            "api_style": "openai-chat", "tool_call_style": "openai-chat",
+            "instruction_placement": "system-message", "supports_tool_calling": False,
+            "supports_thinking": False, "supports_hosted_web_search": False,
+            "summary_model": None,
+        },
+    },
+}
+
+def detect_provider(model: str, explicit_provider: str = None) -> dict:
+    if explicit_provider and explicit_provider in PROVIDERS:
+        return PROVIDERS[explicit_provider]
+    for p in PROVIDERS.values():
+        if p["detect"](model):
+            return p
+    # Fallback: OpenAI-compatible
+    return {
+        "name": "OpenAI-compatible",
+        "detect": lambda m: True,
+        "env_key": "OPENAI_API_KEY",
+        "default_url": "https://api.openai.com",
+        "create_client": lambda cfg, key, url: OpenAIClient(api_key=key, api_url=url),
+        "resolve_auth": lambda cfg: cfg.get("openaiApiKey") or None,
+        "resolve_base_url": lambda cfg: cfg.get("openaiApiUrl") or "https://api.openai.com",
+        "transform_model": lambda m: m,
+        "capabilities": {
+            "api_style": "openai-chat", "tool_call_style": "openai-chat",
+            "instruction_placement": "system-message", "supports_tool_calling": True,
+            "supports_thinking": False, "supports_hosted_web_search": False,
+            "summary_model": "gpt-4o-mini",
+        },
+    }
 
 # ── OAuth Constants ──────────────────────────────────────────────
 
@@ -94,6 +325,7 @@ def parse_args(argv: object = None) -> dict:
         "maxTokens": 16384,
         "allowedTools": None,
         "disallowedTools": None,
+        "provider": None,  # explicit provider override
         "cwd": os.getcwd(),
     }
 
@@ -142,6 +374,8 @@ def parse_args(argv: object = None) -> dict:
             i += 1; cfg["openaiApiUrl"] = argv[i]
         elif a == "--openai":
             cfg["useOpenAIOAuth"] = True
+        elif a == "--provider":
+            i += 1; cfg["provider"] = argv[i]
         elif a == "--login":
             oauth_login(); sys.exit(0)
         elif a == "--logout":
@@ -162,7 +396,7 @@ def parse_args(argv: object = None) -> dict:
     return cfg
 
 def print_help() -> None:
-    sys.stderr.write("""claude-native — Direct Anthropic API CLI (Python)
+    sys.stderr.write("""claude-native — Multi-provider AI coding agent CLI (Python)
 
 Usage:
   claude-native.py                         Interactive REPL
@@ -171,6 +405,7 @@ Usage:
 
 Options:
   -m, --model <name>          Model (sonnet, opus, haiku, codex, gpt-5.4, o3, or full ID)
+  --provider <name>           Explicit provider override (see Providers below)
   -p, --print <prompt>        One-shot mode, print response and exit
   --ndjson                    NDJSON bridge protocol on stdin/stdout
   --max-turns <n>             Max agent loop turns (default: 25)
@@ -195,6 +430,20 @@ Options:
   --disallowed-tools <list>   Comma-separated tool denylist
   --verbose                   Debug logging to stderr
   -h, --help                  Show this help
+
+Providers:
+  anthropic        Anthropic (Claude)          ANTHROPIC_API_KEY or --login
+  openai           OpenAI (GPT, o-series)      OPENAI_API_KEY or --openai-login
+  openai-responses OpenAI Responses (*-codex)  OPENAI_API_KEY or --openai-login
+  google           Google Gemini               GOOGLE_API_KEY
+  deepseek         DeepSeek                    DEEPSEEK_API_KEY
+  mistral          Mistral                     MISTRAL_API_KEY
+  groq             Groq                        GROQ_API_KEY
+  ollama           Ollama (local)              OLLAMA_API_URL (no auth)
+  lmstudio         LM Studio (local)           LMSTUDIO_API_URL (no auth)
+  vllm             vLLM                        VLLM_API_URL (no auth)
+  jan              Jan (local)                 JAN_API_URL (no auth)
+  llamacpp         llama.cpp server            LLAMACPP_API_URL (no auth)
 """)
 
 # ── HTTP Helpers ─────────────────────────────────────────────────
@@ -1040,7 +1289,9 @@ class AgentLoop:
                 "tools": self.registry.get_definitions(),
             }
 
-            if self.cfg.get("thinkingBudget", 0) > 0 and not is_openai_model(self.cfg.get("model", "")):
+            provider = self.cfg.get("_provider") or detect_provider(self.cfg.get("model", ""))
+            caps = provider["capabilities"]
+            if self.cfg.get("thinkingBudget", 0) > 0 and caps["supports_thinking"]:
                 body["thinking"] = {"type": "enabled", "budget_tokens": self.cfg["thinkingBudget"]}
 
             # Stream the response
@@ -1395,10 +1646,31 @@ class InteractiveMode:
             return "exit"
         elif cmd == "/model":
             if args:
-                self.cfg["model"] = resolve_model(args[0])
-                sys.stderr.write(f"\033[2mSwitched to {self.cfg['model']}\033[0m\n")
+                new_model = resolve_model(args[0])
+                new_provider = detect_provider(new_model, self.cfg.get("provider"))
+                effective_model = new_provider["transform_model"](new_model)
+                # Resolve credentials
+                pkey = None
+                if new_provider["env_key"] == "ANTHROPIC_API_KEY":
+                    pkey = self.cfg.get("apiKey") or self.cfg.get("authToken")
+                elif new_provider["env_key"] == "OPENAI_API_KEY":
+                    pkey = self.cfg.get("openaiApiKey")
+                elif new_provider["env_key"]:
+                    pkey = os.environ.get(new_provider["env_key"], "")
+                else:
+                    pkey = "no-auth"
+                if not pkey and new_provider["env_key"]:
+                    sys.stderr.write(f"\033[31mCannot switch to {new_model}: no {new_provider['name']} credentials.\033[0m\n")
+                else:
+                    purl = new_provider["resolve_base_url"](self.cfg)
+                    self.client = new_provider["create_client"](self.cfg, pkey, purl)
+                    self.cfg["model"] = effective_model
+                    self.cfg["_provider"] = new_provider
+                    backend = f" ({new_provider['name']})" if new_provider["name"] != "Anthropic" else ""
+                    sys.stderr.write(f"\033[2mSwitched to {self.cfg['model']}{backend}\033[0m\n")
             else:
-                sys.stderr.write(f"\033[2mCurrent model: {self.cfg['model']}\033[0m\n")
+                cur_provider = self.cfg.get("_provider") or detect_provider(self.cfg["model"])
+                sys.stderr.write(f"\033[2mCurrent model: {self.cfg['model']} ({cur_provider['name']})\033[0m\n")
         elif cmd == "/clear":
             self.messages = []
             self.session_id = self.sessions.create()
@@ -1792,7 +2064,8 @@ def main():
                 sys.exit(1)
 
     # Resolve OpenAI auth
-    if cfg["useOpenAIOAuth"] or (is_openai_model(cfg["model"]) and not cfg["openaiApiKey"]):
+    early_provider = detect_provider(cfg["model"], cfg.get("provider"))
+    if cfg["useOpenAIOAuth"] or (early_provider["env_key"] == "OPENAI_API_KEY" and not cfg["openaiApiKey"]):
         try:
             cfg["openaiApiKey"] = get_openai_access_token(cfg["verbose"])
             sys.stderr.write("\033[2mUsing OpenAI subscription (OAuth)\033[0m\n")
@@ -1802,23 +2075,34 @@ def main():
                 sys.stderr.write(f"Error: {e}\n")
                 sys.exit(1)
 
-    # Determine backend
-    use_openai = is_openai_model(cfg["model"])
-    if use_openai:
-        if not cfg["openaiApiKey"]:
-            sys.stderr.write("Error: No OpenAI auth. Run --openai-login, use --openai-api-key, or set OPENAI_API_KEY\n")
-            sys.exit(1)
-        sys.stderr.write(f"\033[2mUsing OpenAI backend ({cfg['model']})\033[0m\n")
-        sys.stderr.flush()
-        if is_responses_api_model(cfg["model"]):
-            client = OpenAIResponsesClient(api_key=cfg["openaiApiKey"], api_url=cfg["openaiApiUrl"])
-        else:
-            client = OpenAIClient(api_key=cfg["openaiApiKey"], api_url=cfg["openaiApiUrl"])
+    # Detect provider and create client
+    provider = detect_provider(cfg["model"], cfg.get("provider"))
+    effective_model = provider["transform_model"](cfg["model"])
+    cfg["model"] = effective_model
+    cfg["_provider"] = provider
+
+    # Resolve provider credentials
+    if provider["env_key"] == "ANTHROPIC_API_KEY":
+        provider_key = cfg.get("apiKey") or cfg.get("authToken") or ""
+    elif provider["env_key"] == "OPENAI_API_KEY":
+        provider_key = cfg.get("openaiApiKey", "")
+    elif provider["env_key"]:
+        provider_key = os.environ.get(provider["env_key"], "")
     else:
-        if not cfg["apiKey"] and not cfg["authToken"]:
-            sys.stderr.write("Error: No auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY\n")
-            sys.exit(1)
-        client = AnthropicClient(api_key=cfg["apiKey"], auth_token=cfg.get("authToken", ""), api_url=cfg["apiUrl"])
+        provider_key = "no-auth"
+
+    provider_url = provider["resolve_base_url"](cfg)
+
+    if not provider_key and provider["env_key"]:
+        hint = "Run --login, use --api-key, or set ANTHROPIC_API_KEY" if provider["name"] == "Anthropic" else f"Set {provider['env_key']}"
+        sys.stderr.write(f"Error: No {provider['name']} auth. {hint}\n")
+        sys.exit(1)
+
+    if provider["name"] != "Anthropic":
+        sys.stderr.write(f"\033[2mUsing {provider['name']} backend ({cfg['model']})\033[0m\n")
+        sys.stderr.flush()
+
+    client = provider["create_client"](cfg, provider_key, provider_url)
     registry = ToolRegistry()
     register_builtin_tools(registry)
 
