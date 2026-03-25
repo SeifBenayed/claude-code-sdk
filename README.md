@@ -230,20 +230,33 @@ Every provider implements:
 
 ### Supported Providers
 
-| Provider | Models | Auth | Status |
-|----------|--------|------|--------|
-| **Anthropic** | claude-* | `ANTHROPIC_API_KEY` or `--login` | Tested |
-| **OpenAI** | gpt-*, o1/o3/o4-* | `OPENAI_API_KEY` or `--openai-login` | Tested |
-| **OpenAI Responses** | *-codex | `OPENAI_API_KEY` or `--openai-login` | Tested |
-| **Google Gemini** | gemini-* | `GOOGLE_API_KEY` | Placeholder |
-| **DeepSeek** | deepseek-* | `DEEPSEEK_API_KEY` | Placeholder |
-| **Mistral** | mistral-*, codestral-* | `MISTRAL_API_KEY` | Placeholder |
-| **Groq** | llama-*, mixtral-* | `GROQ_API_KEY` | Placeholder |
-| **Ollama** | ollama/*, local/* | (none) | Placeholder |
+| Provider | Models | Auth | Default URL | Status |
+|----------|--------|------|-------------|--------|
+| **Anthropic** | claude-* | `ANTHROPIC_API_KEY` or `--login` | api.anthropic.com | Tested |
+| **OpenAI** | gpt-*, o1/o3/o4-* | `OPENAI_API_KEY` or `--openai-login` | api.openai.com | Tested |
+| **OpenAI Responses** | *-codex | `OPENAI_API_KEY` or `--openai-login` | api.openai.com | Tested |
+| **Google Gemini** | gemini-* | `GOOGLE_API_KEY` | generativelanguage.googleapis.com | Placeholder |
+| **DeepSeek** | deepseek-* | `DEEPSEEK_API_KEY` | api.deepseek.com | Placeholder |
+| **Mistral** | mistral-*, codestral-* | `MISTRAL_API_KEY` | api.mistral.ai | Placeholder |
+| **Groq** | llama-*, mixtral-* | `GROQ_API_KEY` | api.groq.com | Placeholder |
+| **Ollama** | ollama/*, local/* | (none) | localhost:11434 | Placeholder |
+| **LM Studio** | lmstudio/* | (none) | localhost:1234 | Placeholder |
+| **vLLM** | vllm/* | (none) | localhost:8000 | Placeholder |
+| **Jan** | jan/* | (none) | localhost:1337 | Placeholder |
+| **llama.cpp** | llamacpp/* | (none) | localhost:8080 | Placeholder |
 
-Use `--provider <name>` to force a specific provider (e.g., for fine-tuned models):
+Local providers use prefix-based model names:
 
 ```bash
+node claude-native.mjs -m ollama/llama3.2 -p "hello"
+node claude-native.mjs -m lmstudio/qwen2.5-coder -p "hello"
+node claude-native.mjs -m vllm/mistral-7b -p "hello"
+```
+
+Override the URL with env vars (`OLLAMA_API_URL`, `LMSTUDIO_API_URL`, `VLLM_API_URL`, `JAN_API_URL`, `LLAMACPP_API_URL`) or `--provider`:
+
+```bash
+OLLAMA_API_URL=http://gpu-box:11434 node claude-native.mjs -m ollama/llama3.2
 node claude-native.mjs --provider openai -m my-fine-tune -p "hello"
 ```
 

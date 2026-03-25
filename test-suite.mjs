@@ -387,6 +387,10 @@ section("UNIT: Provider Contract & Capabilities");
     assert(dp("mistral-large-latest").name === "Mistral", "detectProvider: mistral → Mistral");
     assert(dp("llama-3.3-70b-versatile").name === "Groq", "detectProvider: llama → Groq");
     assert(dp("ollama/llama3.2").name === "Ollama (local)", "detectProvider: ollama/ → Ollama");
+    assert(dp("lmstudio/qwen2.5-coder").name === "LM Studio (local)", "detectProvider: lmstudio/ → LM Studio");
+    assert(dp("vllm/mistral-7b").name === "vLLM", "detectProvider: vllm/ → vLLM");
+    assert(dp("jan/llama3").name === "Jan (local)", "detectProvider: jan/ → Jan");
+    assert(dp("llamacpp/phi-3").name === "llama.cpp", "detectProvider: llamacpp/ → llama.cpp");
 
     // Explicit provider override
     assert(dp("my-fine-tune", "openai").name === "OpenAI", "detectProvider: explicit override → OpenAI");
@@ -422,7 +426,18 @@ section("UNIT: Provider Contract & Capabilities");
 
     // transformModel
     assert(P.ollama.transformModel("ollama/llama3.2") === "llama3.2", "Ollama transformModel strips prefix");
+    assert(P.lmstudio.transformModel("lmstudio/qwen2.5-coder") === "qwen2.5-coder", "LM Studio transformModel strips prefix");
+    assert(P.vllm.transformModel("vllm/mistral-7b") === "mistral-7b", "vLLM transformModel strips prefix");
+    assert(P.jan.transformModel("jan/llama3") === "llama3", "Jan transformModel strips prefix");
+    assert(P.llamacpp.transformModel("llamacpp/phi-3") === "phi-3", "llama.cpp transformModel strips prefix");
     assert(P.anthropic.transformModel("claude-sonnet-4-6") === "claude-sonnet-4-6", "Anthropic transformModel identity");
+
+    // Local providers: no auth needed, no summary model
+    for (const k of ["ollama", "lmstudio", "vllm", "jan", "llamacpp"]) {
+      assert(P[k].envKey === null, `${k} envKey is null (no auth)`);
+      assert(P[k].capabilities.summaryModel === null, `${k} no summary model`);
+      assert(P[k].resolveAuth() === "no-auth", `${k} resolveAuth → no-auth`);
+    }
 
     // Fallback provider
     const fallback = dp("unknown-model-xyz");
@@ -487,6 +502,10 @@ section("UNIT: Provider URL Resolution");
     assert(P.mistral.resolveBaseUrl(baseCfg).includes("mistral.ai"), "Mistral resolveBaseUrl → mistral.ai");
     assert(P.groq.resolveBaseUrl(baseCfg).includes("groq.com"), "Groq resolveBaseUrl → groq.com");
     assert(P.ollama.resolveBaseUrl(baseCfg).includes("localhost:11434"), "Ollama resolveBaseUrl → localhost:11434");
+    assert(P.lmstudio.resolveBaseUrl(baseCfg).includes("localhost:1234"), "LM Studio resolveBaseUrl → localhost:1234");
+    assert(P.vllm.resolveBaseUrl(baseCfg).includes("localhost:8000"), "vLLM resolveBaseUrl → localhost:8000");
+    assert(P.jan.resolveBaseUrl(baseCfg).includes("localhost:1337"), "Jan resolveBaseUrl → localhost:1337");
+    assert(P.llamacpp.resolveBaseUrl(baseCfg).includes("localhost:8080"), "llama.cpp resolveBaseUrl → localhost:8080");
 
     // Anthropic respects cfg.apiUrl override
     assert(P.anthropic.resolveBaseUrl({ apiUrl: "https://custom.proxy.com" }).includes("custom.proxy.com"), "Anthropic resolveBaseUrl respects apiUrl override");

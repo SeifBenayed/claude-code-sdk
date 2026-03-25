@@ -119,6 +119,8 @@ const MODEL_ALIASES = {
   "mistral-small": "mistral-small-latest", "codestral": "codestral-latest",
   // Groq
   "llama": "llama-3.3-70b-versatile", "llama-70b": "llama-3.3-70b-versatile",
+  // Local providers (prefix-based: ollama/, lmstudio/, vllm/, jan/, llamacpp/)
+  // Use as: -m ollama/llama3.2, -m lmstudio/qwen2.5-coder, -m vllm/mistral, etc.
 };
 
 function resolveModel(name) {
@@ -276,13 +278,89 @@ const PROVIDERS = {
     defaultUrl: "http://localhost:11434",
     createClient: (cfg) => new OpenAIClient({ apiKey: "ollama", apiUrl: cfg.providerUrl }),
     resolveAuth: () => "no-auth",
-    resolveBaseUrl: () => "http://localhost:11434",
+    resolveBaseUrl: (cfg) => process.env.OLLAMA_API_URL || "http://localhost:11434",
     transformModel: (m) => m.replace(/^(ollama|local)\//, ""),
     capabilities: {
       apiStyle: "openai-chat",
       toolCallStyle: "openai-chat",
       instructionPlacement: "system-message",
       supportsToolCalling: true,
+      supportsThinking: false,
+      supportsHostedWebSearch: false,
+      summaryModel: null,
+    },
+  },
+  lmstudio: {
+    name: "LM Studio (local)",
+    detect: (m) => m.startsWith("lmstudio/"),
+    envKey: null,
+    defaultUrl: "http://localhost:1234",
+    createClient: (cfg) => new OpenAIClient({ apiKey: "lm-studio", apiUrl: cfg.providerUrl }),
+    resolveAuth: () => "no-auth",
+    resolveBaseUrl: () => process.env.LMSTUDIO_API_URL || "http://localhost:1234",
+    transformModel: (m) => m.replace(/^lmstudio\//, ""),
+    capabilities: {
+      apiStyle: "openai-chat",
+      toolCallStyle: "openai-chat",
+      instructionPlacement: "system-message",
+      supportsToolCalling: true,
+      supportsThinking: false,
+      supportsHostedWebSearch: false,
+      summaryModel: null,
+    },
+  },
+  vllm: {
+    name: "vLLM",
+    detect: (m) => m.startsWith("vllm/"),
+    envKey: null,
+    defaultUrl: "http://localhost:8000",
+    createClient: (cfg) => new OpenAIClient({ apiKey: "vllm", apiUrl: cfg.providerUrl }),
+    resolveAuth: () => "no-auth",
+    resolveBaseUrl: () => process.env.VLLM_API_URL || "http://localhost:8000",
+    transformModel: (m) => m.replace(/^vllm\//, ""),
+    capabilities: {
+      apiStyle: "openai-chat",
+      toolCallStyle: "openai-chat",
+      instructionPlacement: "system-message",
+      supportsToolCalling: true,
+      supportsThinking: false,
+      supportsHostedWebSearch: false,
+      summaryModel: null,
+    },
+  },
+  jan: {
+    name: "Jan (local)",
+    detect: (m) => m.startsWith("jan/"),
+    envKey: null,
+    defaultUrl: "http://localhost:1337",
+    createClient: (cfg) => new OpenAIClient({ apiKey: "jan", apiUrl: cfg.providerUrl }),
+    resolveAuth: () => "no-auth",
+    resolveBaseUrl: () => process.env.JAN_API_URL || "http://localhost:1337",
+    transformModel: (m) => m.replace(/^jan\//, ""),
+    capabilities: {
+      apiStyle: "openai-chat",
+      toolCallStyle: "openai-chat",
+      instructionPlacement: "system-message",
+      supportsToolCalling: true,
+      supportsThinking: false,
+      supportsHostedWebSearch: false,
+      summaryModel: null,
+    },
+  },
+  llamacpp: {
+    name: "llama.cpp",
+    detect: (m) => m.startsWith("llamacpp/"),
+    envKey: null,
+    defaultUrl: "http://localhost:8080",
+    createClient: (cfg) => new OpenAIClient({ apiKey: "llamacpp", apiUrl: cfg.providerUrl }),
+    resolveAuth: () => "no-auth",
+    resolveBaseUrl: () => process.env.LLAMACPP_API_URL || "http://localhost:8080",
+    transformModel: (m) => m.replace(/^llamacpp\//, ""),
+    capabilities: {
+      apiStyle: "openai-chat",
+      toolCallStyle: "openai-chat",
+      instructionPlacement: "system-message",
+      supportsToolCalling: false, // depends on model/build
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: null,
@@ -525,16 +603,24 @@ Options:
   -h, --help                  Show this help
 
 Providers:
-  anthropic       Anthropic (Claude)          ANTHROPIC_API_KEY or --login
-  openai          OpenAI (GPT, o-series)      OPENAI_API_KEY or --openai-login
+  anthropic        Anthropic (Claude)          ANTHROPIC_API_KEY or --login
+  openai           OpenAI (GPT, o-series)      OPENAI_API_KEY or --openai-login
   openai-responses OpenAI Responses (*-codex)  OPENAI_API_KEY or --openai-login
-  google          Google Gemini               GOOGLE_API_KEY
-  deepseek        DeepSeek                    DEEPSEEK_API_KEY
-  mistral         Mistral                     MISTRAL_API_KEY
-  groq            Groq                        GROQ_API_KEY
-  ollama          Ollama (local)              (no auth needed)
+  google           Google Gemini               GOOGLE_API_KEY
+  deepseek         DeepSeek                    DEEPSEEK_API_KEY
+  mistral          Mistral                     MISTRAL_API_KEY
+  groq             Groq                        GROQ_API_KEY
+  ollama           Ollama (local)              (no auth — OLLAMA_API_URL)
+  lmstudio         LM Studio (local)           (no auth — LMSTUDIO_API_URL)
+  vllm             vLLM                        (no auth — VLLM_API_URL)
+  jan              Jan (local)                 (no auth — JAN_API_URL)
+  llamacpp         llama.cpp server            (no auth — LLAMACPP_API_URL)
 
-  Provider is auto-detected from model name. Use --provider to override:
+  Provider is auto-detected from model name prefix:
+    claude-native -m ollama/llama3.2 -p "hello"
+    claude-native -m lmstudio/qwen2.5-coder -p "hello"
+    claude-native -m vllm/mistral-7b -p "hello"
+  Or use --provider to override:
     claude-native --provider openai -m my-fine-tune -p "hello"
 `);
 }
