@@ -3133,6 +3133,183 @@ section("UNIT: CLI — CLAUDE.md exists");
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// REVIEW + SKILL IMPORT — Agent definitions, core functions, commands
+// ═══════════════════════════════════════════════════════════════════
+
+section("UNIT: AGENT_DEFINITIONS — code-reviewer");
+
+{
+  const agentBlock = source.substring(source.indexOf("const AGENT_DEFINITIONS"), source.indexOf("// ── Background Agent Manager"));
+  assert(agentBlock.includes('"code-reviewer"'), "code-reviewer agent defined");
+  assert(agentBlock.includes('readOnly: true') || agentBlock.match(/code-reviewer[\s\S]*?readOnly:\s*true/), "code-reviewer is read-only");
+}
+
+section("UNIT: AGENT_DEFINITIONS — security-reviewer");
+
+{
+  const agentBlock = source.substring(source.indexOf("const AGENT_DEFINITIONS"), source.indexOf("// ── Background Agent Manager"));
+  assert(agentBlock.includes('"security-reviewer"'), "security-reviewer agent defined");
+  // Check prompt mentions key security topics
+  assert(agentBlock.includes("injection") || agentBlock.includes("Injection"), "security-reviewer mentions injection");
+  assert(agentBlock.includes("auth") || agentBlock.includes("Auth"), "security-reviewer mentions auth");
+  assert(agentBlock.includes("secrets") || agentBlock.includes("Secrets"), "security-reviewer mentions secrets");
+}
+
+section("UNIT: AGENT_DEFINITIONS — import-reviewer");
+
+{
+  const agentBlock = source.substring(source.indexOf("const AGENT_DEFINITIONS"), source.indexOf("// ── Background Agent Manager"));
+  assert(agentBlock.includes('"import-reviewer"'), "import-reviewer agent defined");
+  assert(agentBlock.includes("haiku"), "import-reviewer uses haiku model");
+  assert(agentBlock.includes("SAFE") && agentBlock.includes("WARN") && agentBlock.includes("BLOCK"), "import-reviewer has SAFE/WARN/BLOCK verdicts");
+}
+
+section("UNIT: code-reviewer prompt format");
+
+{
+  assert(source.includes("CRITICAL") && source.includes("WARNING") && source.includes("NOTE"), "code-reviewer has CRITICAL/WARNING/NOTE severities");
+  assert(source.includes("VERDICT: PASS") && source.includes("VERDICT: WARN") && source.includes("VERDICT: BLOCK"), "code-reviewer has PASS/WARN/BLOCK verdicts");
+}
+
+section("UNIT: aggregateVerdicts");
+
+{
+  // Extract and eval aggregateVerdicts
+  const funcStr = extractBlock(source, "function aggregateVerdicts(");
+  if (funcStr) {
+    const ns = {};
+    new Function("exports", funcStr + "\nexports.aggregateVerdicts = aggregateVerdicts;")(ns);
+    assert(ns.aggregateVerdicts("PASS", "BLOCK") === "BLOCK", "BLOCK wins over PASS");
+    assert(ns.aggregateVerdicts("WARN", "PASS") === "WARN", "WARN wins over PASS");
+    assert(ns.aggregateVerdicts("PASS", "PASS") === "PASS", "PASS when all PASS");
+    assert(ns.aggregateVerdicts("WARN", "BLOCK") === "BLOCK", "BLOCK wins over WARN");
+    assert(ns.aggregateVerdicts("PASS", "WARN", "PASS") === "WARN", "WARN wins with multiple args");
+  } else {
+    skip("aggregateVerdicts not extracted");
+  }
+}
+
+section("UNIT: parseSkillSource");
+
+{
+  const funcStr = extractBlock(source, "function parseSkillSource(");
+  if (funcStr) {
+    const ns = {};
+    new Function("exports", "fs", "path",
+      funcStr + "\nexports.parseSkillSource = parseSkillSource;"
+    )(ns, fs, path);
+
+    // GitHub source
+    const gh = ns.parseSkillSource("github:foo/bar");
+    assert(gh.type === "github", "github: prefix → type: github");
+    assert(gh.owner === "foo", "github owner parsed");
+    assert(gh.repo === "bar", "github repo parsed");
+
+    // URL source
+    const url = ns.parseSkillSource("https://example.com/SKILL.md");
+    assert(url.type === "url", "https:// → type: url");
+
+    // Invalid source
+    let threw = false;
+    try { ns.parseSkillSource("nonexistent-thing-12345"); } catch { threw = true; }
+    assert(threw, "Invalid source throws error");
+  } else {
+    skip("parseSkillSource not extracted");
+  }
+}
+
+section("UNIT: staticSkillScan — clean skill");
+
+{
+  const scanFunc = extractBlock(source, "function staticSkillScan(");
+  const fmFunc = extractBlock(source, "function parseYamlFrontmatter(");
+  if (scanFunc && fmFunc) {
+    const ns = {};
+    new Function("exports", fmFunc + "\n" + scanFunc + "\nexports.staticSkillScan = staticSkillScan;")(ns);
+    const result = ns.staticSkillScan({ "SKILL.md": "---\nname: test-skill\ndescription: A safe skill\n---\nDo something safe." });
+    assert(result.verdict === "SAFE", `Clean skill → SAFE (got ${result.verdict})`);
+    assert(result.findings.length === 0, "No findings for clean skill");
+  } else {
+    skip("staticSkillScan not extracted");
+  }
+}
+
+section("UNIT: staticSkillScan — detects dangerous patterns");
+
+{
+  const scanFunc = extractBlock(source, "function staticSkillScan(");
+  const fmFunc = extractBlock(source, "function parseYamlFrontmatter(");
+  if (scanFunc && fmFunc) {
+    const ns = {};
+    new Function("exports", fmFunc + "\n" + scanFunc + "\nexports.staticSkillScan = staticSkillScan;")(ns);
+    const result = ns.staticSkillScan({
+      "SKILL.md": "---\nname: risky-skill\nallowed-tools: Bash\n---\nRun stuff.",
+      "scripts/deploy.sh": "exec(command)\nspawn('rm -rf /')",
+    });
+    assert(result.verdict === "WARN" || result.verdict === "BLOCK", `Dangerous skill → WARN or BLOCK (got ${result.verdict})`);
+    assert(result.findings.length > 0, "Has findings for dangerous skill");
+    assert(result.findings.some(f => f.message.includes("exec")), "Detects exec() call");
+  } else {
+    skip("staticSkillScan not extracted");
+  }
+}
+
+section("UNIT: /review slash command registered");
+
+{
+  assert(source.includes('name: "review"'), "/review command registered");
+  assert(source.includes("Code Review") && source.includes("Security Review"), "/review displays both review sections");
+}
+
+section("UNIT: /skill slash command registered");
+
+{
+  assert(source.includes('name: "skill"'), "/skill command registered");
+  assert(source.includes('"import"'), "/skill handles import subcommand");
+}
+
+section("UNIT: skill import CLI subcommand parsed");
+
+{
+  assert(source.includes('argv[0] === "skill"') && source.includes('argv[1] === "import"'), "skill import parsed from argv prefix");
+  assert(source.includes('cfg._subcommand = "skill-import"'), "sets _subcommand");
+}
+
+section("UNIT: RESERVED_COMMANDS includes new commands");
+
+{
+  assert(source.includes('"/review"'), "/review in RESERVED_COMMANDS");
+  assert(source.includes('"/skill"'), "/skill in RESERVED_COMMANDS");
+  assert(source.includes('"/init"'), "/init in RESERVED_COMMANDS");
+  assert(source.includes('"/sessions"'), "/sessions in RESERVED_COMMANDS (audit fix)");
+  assert(source.includes('"/diff"'), "/diff in RESERVED_COMMANDS (audit fix)");
+  assert(source.includes('"/compact"'), "/compact in RESERVED_COMMANDS (audit fix)");
+}
+
+section("E2E: cloclo skill import nonexistent → error");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["skill", "import", "nonexistent-source-12345"], {}, 5000);
+    assert(exitCode === 2, `Invalid source exits with code 2 (got ${exitCode})`);
+    assert(stderr.includes("Invalid skill source") || stderr.includes("Error"), "Stderr mentions invalid source");
+  } catch (e) {
+    skip(`skill import E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: cloclo --help mentions skill import");
+
+{
+  try {
+    const { stderr } = await runCLI(["--help"], {}, 5000);
+    assert(stderr.includes("skill import"), "--help mentions skill import");
+  } catch (e) {
+    skip(`--help skill import E2E failed: ${e.message}`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // STABILIZATION — Compaction, Hook, and Provider regression tests
 // ═══════════════════════════════════════════════════════════════════
 

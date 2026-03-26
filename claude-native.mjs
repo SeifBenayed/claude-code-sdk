@@ -51,6 +51,8 @@ async function parseArgs(argv = process.argv.slice(2)) {
     briefMode: false,           // brief mode: route user-facing output through SendUserMessage
     outputFormat: "text",       // "text" (default) or "json" for structured output
     timeout: 0,                 // global timeout in seconds (0 = no limit)
+    _subcommand: null,           // "skill-import" or null
+    _skillImportSource: null,    // source for skill import
     cwd: process.cwd(),
   };
 
@@ -82,6 +84,23 @@ async function parseArgs(argv = process.argv.slice(2)) {
   // Valid values for enum-style flags
   const VALID_PERMISSION_MODES = new Set(["auto", "default", "plan", "acceptEdits", "bypassPermissions", "dontAsk"]);
   const VALID_OUTPUT_FORMATS = new Set(["text", "json"]);
+
+  // Subcommand prefix check (before flag parsing)
+  if (argv[0] === "skill" && argv[1] === "import") {
+    cfg._subcommand = "skill-import";
+    cfg._skillImportSource = argv[2];
+    if (!cfg._skillImportSource) {
+      process.stderr.write("Error: skill import requires a source\n  cloclo skill import <folder|SKILL.md|URL|github:owner/repo>\n");
+      process.exit(EXIT.BAD_ARGS);
+    }
+    cfg.interactive = false;
+    // Parse remaining flags (--yes, --verbose, etc.)
+    for (let j = 3; j < argv.length; j++) {
+      if (argv[j] === "--yes" || argv[j] === "-y") cfg.permissionMode = "bypassPermissions";
+      else if (argv[j] === "--verbose") cfg.verbose = true;
+    }
+    return cfg;
+  }
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
@@ -750,9 +769,10 @@ function printHelp() {
   process.stderr.write(`cloclo — Multi-provider AI coding agent CLI
 
 Usage:
-  cloclo                         Interactive REPL
-  cloclo -p "prompt"             One-shot print mode
-  cloclo --ndjson                NDJSON bridge mode
+  cloclo                                Interactive REPL
+  cloclo -p "prompt"                    One-shot print mode
+  cloclo --ndjson                       NDJSON bridge mode
+  cloclo skill import <source>          Import a skill
 
 Examples:
   cloclo -p "explain this code"
@@ -762,6 +782,9 @@ Examples:
   cloclo -p "list files" --json
   cloclo -p "deploy" --yes --timeout 120
   echo '{"type":"message","content":"hi"}' | cloclo --ndjson
+  cloclo skill import ./my-skill/
+  cloclo skill import github:owner/repo
+  cloclo skill import https://example.com/SKILL.md
   cat error.log | cloclo -p "explain this error"
   ANTHROPIC_API_KEY=sk-ant-... cloclo -p "hello"
 
@@ -3201,6 +3224,122 @@ ${table}
 3. Synthesized result (merged, conflict-resolved, actionable)${customSection}`;
     },
   },
+
+  "code-reviewer": {
+    agentType: "code-reviewer",
+    description: "Read-only code reviewer — finds bugs, regressions, anti-patterns, and logic errors",
+    model: null,
+    readOnly: true,
+    disallowedTools: ["Agent", "Write", "Edit", "Bash"],
+    getSystemPrompt: () => `You are a senior code reviewer. Find real problems in code changes — bugs, logic errors, regressions, performance anti-patterns, missing error handling.
+
+Rules:
+- Read-only. Never modify files.
+- Focus on REAL problems. Ignore cosmetic style, missing comments, subjective preferences.
+- Every finding MUST reference file:line.
+- Be concrete: explain the bug and its impact, not just that something "could be better".
+
+Output format — for each finding:
+
+**SEVERITY** file:line — Short title
+Description and impact.
+
+Severities:
+- CRITICAL: Bug, data loss, crash, or regression that will break production
+- WARNING: Significant risk — likely to cause issues under real conditions
+- NOTE: Minor improvement worth mentioning
+
+You MUST end your response with exactly one of:
+VERDICT: PASS
+VERDICT: WARN
+VERDICT: BLOCK`,
+  },
+
+  "security-reviewer": {
+    agentType: "security-reviewer",
+    description: "Read-only security reviewer — finds injection, auth issues, secrets, unsafe operations",
+    model: null,
+    readOnly: true,
+    disallowedTools: ["Agent", "Write", "Edit", "Bash"],
+    getSystemPrompt: () => `You are a security reviewer. Find security vulnerabilities in code changes.
+
+What to look for:
+- Injection (SQL, command, XSS, template)
+- Auth/authz bypass or absence
+- Missing input validation at trust boundaries
+- Exposed secrets, tokens, credentials
+- Unsafe file operations (path traversal, symlink attacks)
+- Unsafe shell execution (unescaped user input in commands)
+- SSRF / unsafe URL fetching
+- Insecure permissions or access control
+- Data leaks (logging secrets, error messages exposing internals)
+
+Rules:
+- Read-only. Never modify files.
+- Only report concrete or plausible vulnerabilities. No hypothetical "what if" noise.
+- Every finding MUST reference file:line.
+- Explain the attack vector, not just the weakness.
+
+Output format — for each finding:
+
+**SEVERITY** file:line — Short title
+Attack vector and impact.
+
+Severities:
+- CRITICAL: Exploitable vulnerability with direct security impact
+- WARNING: Security weakness exploitable under specific conditions
+- NOTE: Hardening opportunity or defense-in-depth improvement
+
+You MUST end your response with exactly one of:
+VERDICT: PASS
+VERDICT: WARN
+VERDICT: BLOCK`,
+  },
+
+  "import-reviewer": {
+    agentType: "import-reviewer",
+    description: "Skill import security reviewer — inspects skill packages before installation",
+    model: "claude-haiku-4-5-20251001",
+    readOnly: true,
+    disallowedTools: ["Agent", "Write", "Edit", "Bash"],
+    getSystemPrompt: () => `You are a skill import security reviewer. Inspect skill packages before they are installed.
+
+What to inspect:
+- scripts/ directory: what commands do they run?
+- hooks: what lifecycle events do they intercept? What do they execute?
+- assets/references: any external URLs? Downloaded executables?
+- SKILL.md body: shell commands, network calls, file system operations?
+- allowed-tools: is the scope reasonable for the stated purpose?
+
+Red flags:
+- Shell commands that download/execute remote code
+- Hooks that exfiltrate data (curl to external URLs)
+- Scripts that modify files outside the skill directory
+- Overly broad tool permissions for a simple task
+- Obfuscated or minified code in scripts
+
+Output format:
+
+**Name**: <skill name>
+**Description**: <from frontmatter>
+**Source**: <origin>
+
+**Detected elements:**
+- Scripts: <list or "none">
+- Hooks: <list or "none">
+- Assets: <list or "none">
+- External URLs: <list or "none">
+- Permissions requested: <list or "none">
+
+**Findings:**
+<specific concerns with severity>
+
+You MUST end with exactly one of:
+VERDICT: SAFE
+VERDICT: WARN
+VERDICT: BLOCK
+Reason: <one-line explanation>`,
+  },
 };
 
 // ── Background Agent Manager ────────────────────────────────────
@@ -3934,6 +4073,7 @@ function registerMcpResourceTools(registry) {
 // Register the Agent tool on the main registry
 function registerAgentTool(registry, client, permissions, cfg) {
   const runner = new SubAgentRunner(client, registry, permissions, cfg);
+  cfg._subAgentRunner = runner;
 
   registry.register("Agent", {
     description: `Launch a new agent to handle complex, multi-step tasks autonomously.
@@ -4387,9 +4527,12 @@ function processImports(content, baseDir, projectRoot, depth, visited) {
 
 const RESERVED_COMMANDS = new Set([
   "/help", "/model", "/clear", "/exit", "/quit", "/q", "/resume",
-  "/cost", "/session", "/thinking", "/memory", "/mem", "/checkpoints",
-  "/ckpt", "/rewind", "/permissions", "/permission", "/mode",
+  "/cost", "/session", "/sessions", "/thinking", "/memory", "/mem",
+  "/checkpoints", "/ckpt", "/rewind", "/permissions", "/permission", "/mode",
   "/login", "/logout", "/openai-login", "/openai-logout",
+  "/review", "/skill", "/init", "/doctor", "/diff", "/compact", "/context",
+  "/tasks", "/skills", "/copy", "/brief", "/status", "/statusline",
+  "/webhook", "/plan", "/agents", "/agent-create", "/orchestrate",
 ]);
 
 class SkillLoader {
@@ -4537,6 +4680,359 @@ function ensureSkillDataDir(skillName) {
   const dir = path.join(os.homedir(), ".claude-native", "skill-data", skillName);
   fs.mkdirSync(dir, { recursive: true });
   return dir;
+}
+
+// ── Skill Import System ────────────────────────────────────────
+
+function parseSkillSource(source) {
+  if (!source) throw new Error("No source provided");
+  if (source.startsWith("github:")) {
+    const parts = source.slice(7).split("/");
+    if (parts.length < 2) throw new Error(`Invalid GitHub source: ${source}. Use github:owner/repo`);
+    return { type: "github", owner: parts[0], repo: parts[1], subpath: parts.slice(2).join("/") || null };
+  }
+  if (source.startsWith("https://") || source.startsWith("http://")) {
+    return { type: "url", url: source };
+  }
+  if (source.endsWith("SKILL.md") && fs.existsSync(source)) {
+    return { type: "file", path: path.resolve(source) };
+  }
+  if (fs.existsSync(source)) {
+    try {
+      if (fs.statSync(source).isDirectory()) return { type: "dir", path: path.resolve(source) };
+    } catch { /* not a dir */ }
+  }
+  throw new Error(`Invalid skill source: "${source}"\n  Supported: local folder, SKILL.md file, URL, github:owner/repo`);
+}
+
+function _httpGet(url) {
+  return new Promise((resolve, reject) => {
+    const mod = url.startsWith("https") ? require("node:https") : require("node:http");
+    mod.get(url, { headers: { "User-Agent": "cloclo/1.0" } }, (res) => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        return _httpGet(res.headers.location).then(resolve, reject);
+      }
+      if (res.statusCode >= 400) {
+        res.resume();
+        return reject(new Error(`HTTP ${res.statusCode} fetching ${url}`));
+      }
+      let data = "";
+      res.on("data", (c) => data += c);
+      res.on("end", () => resolve(data));
+      res.on("error", reject);
+    }).on("error", reject);
+  });
+}
+
+async function fetchSkillContents(parsed) {
+  const files = {};
+
+  if (parsed.type === "dir") {
+    const skillMdPath = path.join(parsed.path, "SKILL.md");
+    if (!fs.existsSync(skillMdPath)) throw new Error(`No SKILL.md found in ${parsed.path}`);
+    // Read all files recursively
+    function readDir(dir, base) {
+      for (const entry of fs.readdirSync(dir)) {
+        if (entry.startsWith(".")) continue;
+        const full = path.join(dir, entry);
+        const rel = path.relative(base, full);
+        try {
+          if (fs.statSync(full).isDirectory()) {
+            readDir(full, base);
+          } else {
+            files[rel] = fs.readFileSync(full, "utf-8");
+          }
+        } catch { /* skip unreadable */ }
+      }
+    }
+    readDir(parsed.path, parsed.path);
+    const fm = parseYamlFrontmatter(files["SKILL.md"] || "");
+    return { name: fm.name || path.basename(parsed.path), files };
+
+  } else if (parsed.type === "file") {
+    const content = fs.readFileSync(parsed.path, "utf-8");
+    files["SKILL.md"] = content;
+    const fm = parseYamlFrontmatter(content);
+    process.stderr.write(`\x1b[33mNote: Direct SKILL.md import only includes the skill file, not bundled resources (scripts/, hooks/, assets/)\x1b[0m\n`);
+    return { name: fm.name || path.basename(path.dirname(parsed.path)), files };
+
+  } else if (parsed.type === "url") {
+    const content = await _httpGet(parsed.url);
+    files["SKILL.md"] = content;
+    const fm = parseYamlFrontmatter(content);
+    if (!fm.name) throw new Error("SKILL.md from URL has no 'name' in frontmatter");
+    process.stderr.write(`\x1b[33mNote: Direct SKILL.md import only includes the skill file, not bundled resources (scripts/, hooks/, assets/)\x1b[0m\n`);
+    return { name: fm.name, files };
+
+  } else if (parsed.type === "github") {
+    const apiBase = `https://api.github.com/repos/${parsed.owner}/${parsed.repo}`;
+    // Autodiscovery: find SKILL.md locations
+    const searchPaths = [".claude/skills", "skills", ""];
+    let found = [];
+
+    for (const sp of searchPaths) {
+      try {
+        const listUrl = sp ? `${apiBase}/contents/${sp}` : `${apiBase}/contents`;
+        const listing = JSON.parse(await _httpGet(listUrl));
+        if (Array.isArray(listing)) {
+          // Check for SKILL.md directly
+          const skillMd = listing.find(f => f.name === "SKILL.md");
+          if (skillMd) found.push({ path: sp || ".", skillMdUrl: skillMd.download_url });
+          // Check subdirectories for SKILL.md
+          for (const item of listing.filter(f => f.type === "dir")) {
+            try {
+              const subListing = JSON.parse(await _httpGet(`${apiBase}/contents/${sp ? sp + "/" : ""}${item.name}`));
+              const sub = subListing.find(f => f.name === "SKILL.md");
+              if (sub) found.push({ path: `${sp ? sp + "/" : ""}${item.name}`, skillMdUrl: sub.download_url });
+            } catch { /* skip */ }
+          }
+        }
+      } catch { /* path doesn't exist */ }
+      if (found.length > 0) break; // use first matching search path level
+    }
+
+    if (found.length === 0) throw new Error(`No SKILL.md found in github:${parsed.owner}/${parsed.repo}`);
+    if (found.length > 1) {
+      const paths = found.map(f => f.path).join("\n  ");
+      throw new Error(`Multiple skills found in github:${parsed.owner}/${parsed.repo}:\n  ${paths}\nSpecify: github:${parsed.owner}/${parsed.repo}/<skill-path>`);
+    }
+
+    const skill = found[0];
+    const skillContent = await _httpGet(skill.skillMdUrl);
+    files["SKILL.md"] = skillContent;
+
+    // Fetch sibling files in the skill directory
+    try {
+      const dirUrl = `${apiBase}/contents/${skill.path}`;
+      const dirListing = JSON.parse(await _httpGet(dirUrl));
+      for (const item of dirListing) {
+        if (item.name === "SKILL.md") continue;
+        if (item.type === "file") {
+          try { files[item.name] = await _httpGet(item.download_url); } catch { /* skip */ }
+        } else if (item.type === "dir" && ["scripts", "hooks", "assets", "references"].includes(item.name)) {
+          try {
+            const subListing = JSON.parse(await _httpGet(`${apiBase}/contents/${skill.path}/${item.name}`));
+            for (const sub of subListing.filter(f => f.type === "file")) {
+              try { files[`${item.name}/${sub.name}`] = await _httpGet(sub.download_url); } catch { /* skip */ }
+            }
+          } catch { /* skip */ }
+        }
+      }
+    } catch { /* dir listing failed, just use SKILL.md */ }
+
+    const fm = parseYamlFrontmatter(skillContent);
+    return { name: fm.name || path.basename(skill.path), files };
+  }
+
+  throw new Error(`Unknown source type: ${parsed.type}`);
+}
+
+function staticSkillScan(files) {
+  const findings = [];
+  let hasBlock = false;
+
+  // Check for scripts/ presence
+  const scriptFiles = Object.keys(files).filter(f => f.startsWith("scripts/"));
+  if (scriptFiles.length > 0) {
+    findings.push({ severity: "WARNING", message: `Contains ${scriptFiles.length} script(s): ${scriptFiles.join(", ")}`, file: "scripts/" });
+  }
+
+  // Check frontmatter for hooks
+  const skillMd = files["SKILL.md"] || "";
+  const fm = parseYamlFrontmatter(skillMd);
+  if (fm.hooks) {
+    findings.push({ severity: "WARNING", message: `Declares hooks: ${JSON.stringify(fm.hooks)}`, file: "SKILL.md" });
+  }
+
+  // Check allowed-tools for Bash
+  if (fm["allowed-tools"] && (Array.isArray(fm["allowed-tools"]) ? fm["allowed-tools"] : [fm["allowed-tools"]]).some(t => t === "Bash" || t === "*")) {
+    findings.push({ severity: "WARNING", message: `Requests broad tool access: ${fm["allowed-tools"]}`, file: "SKILL.md" });
+  }
+
+  // Scan all file contents
+  const dangerousPatterns = [
+    { pattern: /\bexec\s*\(/, label: "exec() call" },
+    { pattern: /\bspawn\s*\(/, label: "spawn() call" },
+    { pattern: /child_process/, label: "child_process reference" },
+    { pattern: /\beval\s*\(/, label: "eval() call" },
+    { pattern: /\bFunction\s*\(/, label: "Function() constructor" },
+  ];
+
+  const urlPattern = /https?:\/\/[^\s"'`)\]>]+/g;
+
+  for (const [filePath, content] of Object.entries(files)) {
+    for (const { pattern, label } of dangerousPatterns) {
+      if (pattern.test(content)) {
+        findings.push({ severity: "WARNING", message: `${label} detected`, file: filePath });
+      }
+    }
+    const urls = content.match(urlPattern);
+    if (urls && urls.length > 0) {
+      // Filter out common benign URLs
+      const suspicious = urls.filter(u => !u.includes("github.com") && !u.includes("npmjs.com") && !u.includes("anthropic.com"));
+      if (suspicious.length > 0) {
+        findings.push({ severity: "NOTE", message: `External URLs: ${suspicious.slice(0, 3).join(", ")}${suspicious.length > 3 ? "..." : ""}`, file: filePath });
+      }
+    }
+  }
+
+  // Determine verdict
+  let verdict = "SAFE";
+  if (findings.some(f => f.severity === "WARNING")) verdict = "WARN";
+  // BLOCK: if scripts contain dangerous patterns (exec + spawn in same script = likely shell execution chain)
+  const scriptFindings = findings.filter(f => f.file.startsWith("scripts/") && f.severity === "WARNING");
+  if (scriptFindings.length >= 2) {
+    verdict = "BLOCK";
+    hasBlock = true;
+  }
+
+  return { findings, verdict, hasBlock };
+}
+
+function aggregateVerdicts(...verdicts) {
+  if (verdicts.includes("BLOCK")) return "BLOCK";
+  if (verdicts.includes("WARN")) return "WARN";
+  return "PASS";
+}
+
+async function skillImport(cfg, client, registry, permissions, source) {
+  // 1. Parse source
+  let parsed;
+  try {
+    parsed = parseSkillSource(source);
+  } catch (e) {
+    process.stderr.write(`Error: ${e.message}\n`);
+    process.exit(EXIT.BAD_ARGS);
+  }
+
+  // 2. Fetch contents
+  process.stderr.write(`\x1b[2mFetching skill from ${source}...\x1b[0m\n`);
+  let skill;
+  try {
+    skill = await fetchSkillContents(parsed);
+  } catch (e) {
+    process.stderr.write(`Error: ${e.message}\n`);
+    process.exit(EXIT.BAD_ARGS);
+  }
+
+  // 3. Validate SKILL.md
+  if (!skill.files["SKILL.md"]) {
+    process.stderr.write("Error: No SKILL.md found in source\n");
+    process.exit(EXIT.BAD_ARGS);
+  }
+  const fm = parseYamlFrontmatter(skill.files["SKILL.md"]);
+  if (!fm.name && !skill.name) {
+    process.stderr.write("Error: SKILL.md has no 'name' in frontmatter\n");
+    process.exit(EXIT.BAD_ARGS);
+  }
+  const skillName = fm.name || skill.name;
+
+  // 4. Static security scan
+  const scan = staticSkillScan(skill.files);
+
+  // 5. LLM review if WARN (and runner available)
+  let llmVerdict = null;
+  let llmReport = null;
+  if (scan.verdict === "WARN" && cfg._subAgentRunner) {
+    try {
+      process.stderr.write(`\x1b[2mRunning security review...\x1b[0m\n`);
+      const contents = Object.entries(skill.files).map(([f, c]) => `--- ${f} ---\n${c}`).join("\n\n");
+      const result = await cfg._subAgentRunner.run({
+        prompt: `Review this skill package for security before installation.\n\nSource: ${source}\n\nFiles:\n${contents}`,
+        subagentType: "import-reviewer",
+        description: "Skill import security review",
+      });
+      llmReport = result.content;
+      const m = result.content.match(/VERDICT:\s*(SAFE|WARN|BLOCK)/i);
+      if (m) llmVerdict = m[1].toUpperCase();
+    } catch { /* LLM review failed, proceed with static verdict */ }
+  }
+
+  // Final verdict: static BLOCK cannot be downgraded, LLM can only upgrade
+  let finalVerdict = scan.verdict;
+  if (llmVerdict && !scan.hasBlock) {
+    if (llmVerdict === "BLOCK") finalVerdict = "BLOCK";
+    else if (llmVerdict === "WARN" && finalVerdict === "SAFE") finalVerdict = "WARN";
+  }
+
+  // 6. Display security summary
+  process.stderr.write(`\n\x1b[1m  Skill Import Review\x1b[0m\n`);
+  process.stderr.write(`  Name: ${skillName}\n`);
+  process.stderr.write(`  Source: ${source}\n`);
+  process.stderr.write(`  Files: ${Object.keys(skill.files).length}\n`);
+  if (scan.findings.length > 0) {
+    process.stderr.write(`\n  Findings:\n`);
+    for (const f of scan.findings) {
+      const color = f.severity === "WARNING" ? "33" : f.severity === "NOTE" ? "2" : "31";
+      process.stderr.write(`    \x1b[${color}m${f.severity}\x1b[0m ${f.file}: ${f.message}\n`);
+    }
+  } else {
+    process.stderr.write(`\n  \x1b[32mNo security concerns detected.\x1b[0m\n`);
+  }
+  if (llmReport) {
+    process.stderr.write(`\n  \x1b[2mLLM review:\x1b[0m\n`);
+    for (const line of llmReport.split("\n").slice(0, 10)) {
+      process.stderr.write(`    \x1b[2m${line}\x1b[0m\n`);
+    }
+  }
+  const verdictColor = finalVerdict === "SAFE" || finalVerdict === "PASS" ? "32" : finalVerdict === "WARN" ? "33" : "31";
+  process.stderr.write(`\n  Verdict: \x1b[${verdictColor}m${finalVerdict}\x1b[0m\n\n`);
+
+  // 7. BLOCK → refuse
+  if (finalVerdict === "BLOCK") {
+    process.stderr.write(`\x1b[31mInstallation blocked due to security concerns.\x1b[0m\n`);
+    process.exit(EXIT.BAD_ARGS);
+  }
+
+  // 8. Confirmation
+  const skipConfirm = cfg.permissionMode === "bypassPermissions";
+  if (!skipConfirm) {
+    if (!process.stdin.isTTY) {
+      process.stderr.write("Error: Confirmation required for skill install. Use --yes to skip.\n");
+      process.exit(EXIT.BAD_ARGS);
+    }
+    const rl = (await import("node:readline")).createInterface({ input: process.stdin, output: process.stderr });
+    const answer = await new Promise((resolve) => {
+      rl.question(`Install ${skillName}? (y/n) `, resolve);
+    });
+    rl.close();
+    if (!answer.match(/^y(es)?$/i)) {
+      process.stderr.write("Installation cancelled.\n");
+      return;
+    }
+  }
+
+  // 9. Check existing
+  const targetDir = path.join(os.homedir(), ".claude", "skills", skillName);
+  if (fs.existsSync(targetDir)) {
+    if (!skipConfirm) {
+      if (!process.stdin.isTTY) {
+        process.stderr.write(`Error: Skill "${skillName}" already exists. Use --yes to overwrite.\n`);
+        process.exit(EXIT.BAD_ARGS);
+      }
+      const rl = (await import("node:readline")).createInterface({ input: process.stdin, output: process.stderr });
+      const answer = await new Promise((resolve) => {
+        rl.question(`Skill "${skillName}" already exists. Overwrite? (y/n) `, resolve);
+      });
+      rl.close();
+      if (!answer.match(/^y(es)?$/i)) {
+        process.stderr.write("Installation cancelled.\n");
+        return;
+      }
+    }
+    // Remove existing
+    fs.rmSync(targetDir, { recursive: true, force: true });
+  }
+
+  // 10. Install
+  fs.mkdirSync(targetDir, { recursive: true });
+  for (const [filePath, content] of Object.entries(skill.files)) {
+    const dest = path.join(targetDir, filePath);
+    fs.mkdirSync(path.dirname(dest), { recursive: true });
+    fs.writeFileSync(dest, content);
+  }
+
+  process.stderr.write(`\x1b[32mInstalled!\x1b[0m Use /${skillName} in the REPL.\n`);
 }
 
 // ── Agent Loader (public agent extensibility) ──────────────────
@@ -6667,6 +7163,98 @@ class InteractiveMode {
         process.stderr.write(`\x1b[2mEdit to customize. It will be loaded into context for all future conversations.\x1b[0m\n`);
       } });
 
+    // Review — code + security review of current changes
+    s.register({ name: "review", description: "Run code + security review on current changes", argumentHint: "[--staged]",
+      handler: async () => {
+        // Check git repo
+        try {
+          execSync("git rev-parse --is-inside-work-tree", { cwd: self.cfg.cwd, stdio: ["pipe", "pipe", "pipe"] });
+        } catch {
+          process.stderr.write("\x1b[31mNot a git repository.\x1b[0m\n");
+          return;
+        }
+
+        // Get diffs
+        let unstaged = "", staged = "";
+        try { unstaged = execSync("git diff", { cwd: self.cfg.cwd, encoding: "utf-8", timeout: 10000 }); } catch { /* no unstaged */ }
+        try { staged = execSync("git diff --staged", { cwd: self.cfg.cwd, encoding: "utf-8", timeout: 10000 }); } catch { /* no staged */ }
+
+        if (!unstaged.trim() && !staged.trim()) {
+          process.stderr.write("\x1b[2mNo changes to review.\x1b[0m\n");
+          return;
+        }
+
+        // Build diff with sections
+        let diff = "";
+        if (unstaged.trim()) diff += `=== Unstaged Changes ===\n${unstaged}\n`;
+        if (staged.trim()) diff += `=== Staged Changes ===\n${staged}\n`;
+
+        // Truncate if too large
+        const MAX_DIFF = 50000;
+        if (diff.length > MAX_DIFF) {
+          let fileList = "";
+          try { fileList = execSync("git diff --name-only && git diff --staged --name-only", { cwd: self.cfg.cwd, encoding: "utf-8", timeout: 5000 }); } catch { /* ignore */ }
+          diff = diff.substring(0, MAX_DIFF) + `\n\n... (diff truncated at ${MAX_DIFF} chars)\n\nAffected files:\n${fileList}`;
+        }
+
+        const runner = self.cfg._subAgentRunner;
+        if (!runner) {
+          process.stderr.write("\x1b[31mAgent runner not available.\x1b[0m\n");
+          return;
+        }
+
+        process.stderr.write("\x1b[2mReviewing...\x1b[0m\n");
+        const reviewPrompt = `Review the following git diff for issues.\n\n${diff}`;
+
+        try {
+          const [codeResult, secResult] = await Promise.all([
+            runner.run({ prompt: reviewPrompt, subagentType: "code-reviewer", description: "Code review" }),
+            runner.run({ prompt: reviewPrompt, subagentType: "security-reviewer", description: "Security review" }),
+          ]);
+
+          // Extract verdicts
+          const codeVerdict = (codeResult.content.match(/VERDICT:\s*(PASS|WARN|BLOCK)/i) || [])[1] || "PASS";
+          const secVerdict = (secResult.content.match(/VERDICT:\s*(PASS|WARN|BLOCK)/i) || [])[1] || "PASS";
+          const overall = aggregateVerdicts(codeVerdict, secVerdict);
+
+          // Display
+          process.stderr.write(`\n\x1b[1m${"═".repeat(50)}\x1b[0m\n`);
+          process.stderr.write(`\x1b[1m  Code Review\x1b[0m\n`);
+          process.stderr.write(`\x1b[1m${"─".repeat(50)}\x1b[0m\n`);
+          process.stderr.write(`${codeResult.content}\n\n`);
+
+          process.stderr.write(`\x1b[1m${"═".repeat(50)}\x1b[0m\n`);
+          process.stderr.write(`\x1b[1m  Security Review\x1b[0m\n`);
+          process.stderr.write(`\x1b[1m${"─".repeat(50)}\x1b[0m\n`);
+          process.stderr.write(`${secResult.content}\n\n`);
+
+          const vColor = overall === "PASS" ? "32" : overall === "WARN" ? "33" : "31";
+          process.stderr.write(`\x1b[1m${"═".repeat(50)}\x1b[0m\n`);
+          process.stderr.write(`\x1b[1m  Verdict: \x1b[${vColor}m${overall}\x1b[0m\n`);
+          process.stderr.write(`\x1b[1m${"═".repeat(50)}\x1b[0m\n\n`);
+        } catch (e) {
+          process.stderr.write(`\x1b[31mReview failed: ${e.message}\x1b[0m\n`);
+        }
+      } });
+
+    // Skill — import (and future: list, remove)
+    s.register({ name: "skill", description: "Skill management (import, list)", argumentHint: "import <source>",
+      handler: async (args) => {
+        const sub = args[0];
+        if (sub === "import") {
+          const source = args.slice(1).join(" ");
+          if (!source) {
+            process.stderr.write("Usage: /skill import <folder|SKILL.md|URL|github:owner/repo>\n");
+            return;
+          }
+          await skillImport(self.cfg, self.client, self.registry, self.permissions, source);
+          // Reload skills
+          self.cfg._skillLoader = new SkillLoader().scan(self.cfg.cwd);
+        } else {
+          process.stderr.write("Usage: /skill import <source>\n\x1b[2mFuture: /skill list, /skill remove\x1b[0m\n");
+        }
+      } });
+
     // Doctor — basic installation health check
     s.register({ name: "doctor", description: "Diagnose installation and connectivity", immediate: true,
       handler: async () => {
@@ -7840,6 +8428,13 @@ async function main() {
       mcpManager.shutdown();
       process.exit(EXIT.TIMEOUT);
     }, cfg.timeout * 1000);
+  }
+
+  // Subcommand dispatch
+  if (cfg._subcommand === "skill-import") {
+    await skillImport(cfg, client, registry, permissions, cfg._skillImportSource);
+    mcpManager.shutdown();
+    process.exit(0);
   }
 
   // Mode dispatch
