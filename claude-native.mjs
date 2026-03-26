@@ -830,6 +830,12 @@ Providers:
   Or use --provider to override:
     cloclo --provider openai -m my-fine-tune -p "hello"
 
+Convention files:
+  INIT.md is always loaded as base. Provider-specific files are also loaded:
+    Anthropic → CLAUDE.md    OpenAI/Mistral → AGENTS.md
+    Gemini → GEMINI.md       Others → INIT.md only
+  Use /init to auto-generate the convention file for the active provider.
+
 Extensibility:
   Settings:  ~/.claude/settings.json, .claude/settings.json, .claude/settings.local.json
   Rules:     .claude/rules/*.md (markdown with optional YAML frontmatter paths)
@@ -4224,39 +4230,107 @@ function parseYamlFrontmatter(content) {
   return { frontmatter, body };
 }
 
-// ── Enhanced CLAUDE.md Loading ──────────────────────────────────
+// ── Provider Convention File Mapping ────────────────────────────
 
-function loadClaudeMdFiles(cwd) {
+const PROVIDER_CONVENTION_FILES = {
+  "Anthropic": "CLAUDE.md",
+  "OpenAI": "AGENTS.md",
+  "OpenAI Responses": "AGENTS.md",
+  "Google Gemini": "GEMINI.md",
+  "DeepSeek": "INIT.md",
+  "Mistral": "AGENTS.md",
+  "Groq": "INIT.md",
+  "Ollama (local)": "INIT.md",
+  "LM Studio (local)": "INIT.md",
+  "vLLM": "INIT.md",
+  "Jan (local)": "INIT.md",
+  "llama.cpp": "INIT.md",
+  "OpenAI-compatible": "INIT.md",
+};
+
+// ── Project Structure Scanner (for /init) ──────────────────────
+
+function _scanProjectStructure(cwd, maxDepth = 3) {
+  const lines = [];
+  const important = ["package.json", "Cargo.toml", "pyproject.toml", "go.mod", "Makefile",
+    "README.md", "README", ".gitignore", "tsconfig.json", "docker-compose.yml", "Dockerfile"];
+  const skipDirs = new Set(["node_modules", "target", "__pycache__", "dist", "build", ".git", "vendor"]);
+
+  function walk(dir, depth, prefix) {
+    if (depth > maxDepth) return;
+    try {
+      const entries = fs.readdirSync(dir).filter(e => !e.startsWith(".") && !skipDirs.has(e));
+      entries.sort();
+      for (const entry of entries) {
+        const full = path.join(dir, entry);
+        try {
+          const stat = fs.statSync(full);
+          if (stat.isDirectory()) {
+            lines.push(`${prefix}${entry}/`);
+            walk(full, depth + 1, prefix + "  ");
+          } else if (depth <= 1 || important.includes(entry)) {
+            lines.push(`${prefix}${entry}`);
+          }
+        } catch { /* skip unreadable */ }
+      }
+    } catch { /* unreadable dir */ }
+  }
+
+  walk(cwd, 0, "");
+
+  // Also read key files for context
+  let extra = "";
+  for (const f of important) {
+    const fp = path.join(cwd, f);
+    try {
+      const content = fs.readFileSync(fp, "utf-8");
+      if (content.length < 2000) {
+        extra += `\n\n--- ${f} ---\n${content}`;
+      }
+    } catch { /* doesn't exist */ }
+  }
+
+  return lines.join("\n") + extra;
+}
+
+// ── Enhanced Convention File Loading ───────────────────────────
+
+function loadClaudeMdFiles(cwd, providerName) {
+  const providerFile = PROVIDER_CONVENTION_FILES[providerName] || "INIT.md";
+  const filenames = ["INIT.md"];
+  if (providerFile !== "INIT.md") filenames.push(providerFile);
+
   const contents = [];
   const projectRoot = findProjectRoot(cwd);
 
-  // Walk up directory tree (child first, then parent)
-  let dir = cwd;
-  const visited = new Set();
-  while (dir && !visited.has(dir)) {
-    visited.add(dir);
+  for (const filename of filenames) {
+    let dir = cwd;
+    const visited = new Set();
+    const fileContents = [];
+    while (dir && !visited.has(dir)) {
+      visited.add(dir);
 
-    // Check both CLAUDE.md and .claude/CLAUDE.md
-    for (const candidate of [
-      path.join(dir, "CLAUDE.md"),
-      path.join(dir, ".claude", "CLAUDE.md"),
-    ]) {
-      try {
-        let content = fs.readFileSync(candidate, "utf-8");
-        // Process @import directives
-        content = processImports(content, path.dirname(candidate), projectRoot, 0, new Set([candidate]));
-        contents.push({ path: candidate, content });
-        log(`Loaded CLAUDE.md: ${candidate}`);
-      } catch { /* doesn't exist */ }
+      for (const candidate of [
+        path.join(dir, filename),
+        path.join(dir, ".claude", filename),
+      ]) {
+        try {
+          let content = fs.readFileSync(candidate, "utf-8");
+          content = processImports(content, path.dirname(candidate), projectRoot, 0, new Set([candidate]));
+          fileContents.push({ path: candidate, content });
+          log(`Loaded ${filename}: ${candidate}`);
+        } catch { /* doesn't exist */ }
+      }
+
+      const parent = path.dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
     }
-
-    const parent = path.dirname(dir);
-    if (parent === dir) break; // filesystem root
-    dir = parent;
+    // Reverse so parent comes first, child last (child overrides)
+    contents.push(...fileContents.reverse());
   }
 
-  // Reverse so parent comes first, child last (child overrides)
-  return contents.reverse();
+  return contents;
 }
 
 function findProjectRoot(cwd) {
@@ -4907,9 +4981,11 @@ function buildSystemPrompt(cfg) {
 - Model: ${cfg.model}
 ${cfg.appendSystemPrompt ? `\n${cfg.appendSystemPrompt}` : ""}`;
 
-  // Load CLAUDE.md files (enhanced: tree walk + @import)
-  const claudeMdFiles = loadClaudeMdFiles(cfg.cwd);
-  const claudeMd = claudeMdFiles.map((f) => f.content).join("\n\n---\n\n");
+  // Load convention files (provider-aware: CLAUDE.md, AGENTS.md, GEMINI.md, or INIT.md)
+  const providerName = (cfg._provider || {}).name || "Anthropic";
+  const conventionFile = PROVIDER_CONVENTION_FILES[providerName] || "INIT.md";
+  const conventionFiles = loadClaudeMdFiles(cfg.cwd, providerName);
+  const claudeMd = conventionFiles.map((f) => f.content).join("\n\n---\n\n");
 
   // Load rules
   const rules = cfg._rules || [];
@@ -4947,7 +5023,7 @@ Rules:
     {
       type: "text",
       text: dynamicPrompt
-        + (claudeMd ? `\n\n# Project Instructions (CLAUDE.md)\n${claudeMd}` : "")
+        + (claudeMd ? `\n\n# Project Instructions (${conventionFile})\n${claudeMd}` : "")
         + (globalRules ? `\n\n# Project Rules\n${globalRules}` : "")
         + (skillIndex ? `\n\n${skillIndex}` : "")
         + (memoryPrompt ? `\n\n${memoryPrompt}` : "")
@@ -6547,6 +6623,38 @@ class InteractiveMode {
         } catch {
           process.stderr.write(`\x1b[31mClipboard not available.\x1b[0m\n`);
         }
+      } });
+
+    // Init — generate provider-aware convention file
+    s.register({ name: "init", description: "Generate project convention file for the active provider",
+      handler: async () => {
+        const providerName = (self.cfg._provider || {}).name || "Anthropic";
+        const filename = PROVIDER_CONVENTION_FILES[providerName] || "INIT.md";
+        const targetPath = path.join(self.cfg.cwd, filename);
+
+        if (fs.existsSync(targetPath)) {
+          process.stderr.write(`\x1b[33m${filename} already exists at ${targetPath}\x1b[0m\n`);
+          process.stderr.write(`\x1b[2mUse your editor to modify it, or delete it and run /init again.\x1b[0m\n`);
+          return;
+        }
+
+        // Scan project structure
+        const structure = _scanProjectStructure(self.cfg.cwd);
+
+        const prompt = `Generate a ${filename} project convention file for this repository. Scan the following project structure and create concise, useful instructions for an AI coding agent working in this codebase.\n\nProject structure:\n${structure}\n\nThe file should include:\n- Brief project description\n- Key architecture patterns\n- Testing conventions\n- Build/run commands\n- Any important constraints\n\nKeep it under 100 lines. Output ONLY the markdown content, no code fences.`;
+
+        const systemBlocks = buildSystemPrompt(self.cfg);
+        const messages = [{ role: "user", content: prompt }];
+        const loop = new AgentLoop(self.client, self.registry, self.cfg, {
+          onText: () => {},
+        }, self.permissions);
+
+        process.stderr.write(`\x1b[2mGenerating ${filename}...\x1b[0m\n`);
+        const result = await loop.run(messages, systemBlocks);
+
+        fs.writeFileSync(targetPath, result.text);
+        process.stderr.write(`\x1b[32mCreated ${targetPath}\x1b[0m\n`);
+        process.stderr.write(`\x1b[2mEdit to customize. It will be loaded into context for all future conversations.\x1b[0m\n`);
       } });
 
     // Doctor — basic installation health check

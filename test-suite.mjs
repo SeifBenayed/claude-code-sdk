@@ -803,6 +803,9 @@ const parseYamlFrontmatterFunc = extractBlock(source, "function parseYamlFrontma
 const loadSettingsFunc = extractBlock(source, "function loadSettings(");
 const applySettingsFunc = extractBlock(source, "function applySettings(");
 const loadRulesFunc = extractBlock(source, "function loadRules(");
+const provConvStart = source.indexOf("const PROVIDER_CONVENTION_FILES = {");
+const provConvEnd = source.indexOf("};\n", provConvStart);
+const providerConventionFilesConst = source.slice(provConvStart, provConvEnd + 2);
 const loadClaudeMdFilesFunc = extractBlock(source, "function loadClaudeMdFiles(");
 const findProjectRootFunc = extractBlock(source, "function findProjectRoot(");
 const processImportsFunc = extractBlock(source, "function processImports(");
@@ -826,6 +829,7 @@ const extModule = [
   loadRulesFunc,
   findProjectRootFunc,
   processImportsFunc,
+  providerConventionFilesConst,
   loadClaudeMdFilesFunc,
   reservedCommandsConst,
   parseSkillHooksFunc,
@@ -1192,14 +1196,14 @@ section("UNIT: Enhanced CLAUDE.md Loading");
 
   if (ext.loadClaudeMdFiles) {
     // Loading from subdir should find subdir + root
-    const files = ext.loadClaudeMdFiles(subDir);
+    const files = ext.loadClaudeMdFiles(subDir, "Anthropic");
     assert(files.length >= 2, "Loads CLAUDE.md from multiple directories");
     const contents = files.map((f) => f.content).join("\n");
     assert(contents.includes("Root instructions"), "Root CLAUDE.md loaded");
     assert(contents.includes("API instructions"), "Subdir CLAUDE.md loaded");
 
     // Loading from root should find root + .claude/CLAUDE.md
-    const rootFiles = ext.loadClaudeMdFiles(tmpDir);
+    const rootFiles = ext.loadClaudeMdFiles(tmpDir, "Anthropic");
     const rootContents = rootFiles.map((f) => f.content).join("\n");
     assert(rootContents.includes("Root instructions"), "Root CLAUDE.md loaded from root");
     assert(rootContents.includes("Dot-claude instructions"), ".claude/CLAUDE.md loaded");
@@ -2202,7 +2206,7 @@ section("UNIT: Brief Mode — buildSystemPrompt with briefMode");
         "function log() {}",
         'const MEMORY_INDEX = "MEMORY.md"; const MEMORY_MAX_LINES = 200;',
         parseYamlFunc, findProjectRootFunc2, processImportsFunc2,
-        loadClaudeMdFunc, loadRulesFunc2,
+        providerConventionFilesConst, loadClaudeMdFunc, loadRulesFunc2,
         getMemoryDirFunc, ensureMemFunc, loadMemoryFunc, buildMemoryFunc,
         buildFunc,
       ].filter(Boolean).join("\n\n");
