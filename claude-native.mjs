@@ -96,10 +96,16 @@ async function parseArgs(argv = process.argv.slice(2)) {
       process.exit(EXIT.BAD_ARGS);
     }
     cfg.interactive = false;
-    // Parse remaining flags (--yes, --verbose, etc.)
+    cfg._skillImportList = false;
+    cfg._skillImportPick = null;
+    cfg._skillImportFormat = null;
+    // Parse remaining flags
     for (let j = 3; j < argv.length; j++) {
       if (argv[j] === "--yes" || argv[j] === "-y") cfg.permissionMode = "bypassPermissions";
       else if (argv[j] === "--verbose") cfg.verbose = true;
+      else if (argv[j] === "--list") cfg._skillImportList = true;
+      else if (argv[j] === "--pick" && j + 1 < argv.length) cfg._skillImportPick = argv[++j];
+      else if (argv[j] === "--format" && j + 1 < argv.length) cfg._skillImportFormat = argv[++j];
     }
     return cfg;
   }
@@ -786,7 +792,11 @@ Examples:
   echo '{"type":"message","content":"hi"}' | cloclo --ndjson
   cloclo skill import ./my-skill/
   cloclo skill import github:owner/repo
+  cloclo skill import https://github.com/owner/repo
   cloclo skill import https://example.com/SKILL.md
+  cloclo skill import https://myapp.com              (tries .well-known/claude-skills.json)
+  cloclo skill import github:owner/repo --list
+  cloclo skill import github:owner/repo --pick review --yes
   cat error.log | cloclo -p "explain this error"
   ANTHROPIC_API_KEY=sk-ant-... cloclo -p "hello"
 
@@ -4693,10 +4703,20 @@ function parseSkillSource(source) {
     if (parts.length < 2) throw new Error(`Invalid GitHub source: ${source}. Use github:owner/repo`);
     return { type: "github", owner: parts[0], repo: parts[1], subpath: parts.slice(2).join("/") || null };
   }
-  if (source.startsWith("https://") || source.startsWith("http://")) {
-    return { type: "url", url: source };
+  // GitHub URL (https://github.com/owner/repo)
+  const ghUrlMatch = source.match(/^https?:\/\/github\.com\/([^/]+)\/([^/\s?#]+)/);
+  if (ghUrlMatch) {
+    return { type: "github", owner: ghUrlMatch[1], repo: ghUrlMatch[2].replace(/\.git$/, ""), subpath: null };
   }
-  if (source.endsWith("SKILL.md") && fs.existsSync(source)) {
+  if (source.startsWith("https://") || source.startsWith("http://")) {
+    // If URL ends in a known skill file, treat as direct URL
+    if (source.endsWith("SKILL.md") || source.endsWith("AGENTS.md") || source.endsWith(".cursorrules") || source.endsWith(".windsurfrules")) {
+      return { type: "url", url: source };
+    }
+    // Otherwise, try .well-known/claude-skills.json discovery
+    return { type: "well-known", url: source.replace(/\/$/, "") };
+  }
+  if ((source.endsWith("SKILL.md") || source.endsWith("AGENTS.md")) && fs.existsSync(source)) {
     return { type: "file", path: path.resolve(source) };
   }
   if (fs.existsSync(source)) {
@@ -4726,16 +4746,60 @@ function _httpGet(url) {
   });
 }
 
+// ── Skill Format Detection & Conversion ────────────────────────
+
+const SKILL_FORMATS = [
+  { name: "skill.md", files: ["SKILL.md"], dirs: [".claude/skills", "skills"] },
+  { name: "agents.md", files: ["AGENTS.md"], dirs: [".agents", "agents"] },
+  { name: "cursorrules", files: [".cursorrules"] },
+  { name: "windsurfrules", files: [".windsurfrules"] },
+  { name: "claude.md", files: ["CLAUDE.md"] },
+];
+
+function detectSkillFormat(files) {
+  const filenames = Object.keys(files);
+  // Priority order: SKILL.md > AGENTS.md > .cursorrules > .windsurfrules > CLAUDE.md
+  if (filenames.some(f => f === "SKILL.md" || f.endsWith("/SKILL.md"))) return "skill.md";
+  if (filenames.some(f => f === "AGENTS.md" || f.endsWith("/AGENTS.md"))) return "agents.md";
+  if (filenames.some(f => f === ".cursorrules")) return "cursorrules";
+  if (filenames.some(f => f === ".windsurfrules")) return "windsurfrules";
+  if (filenames.some(f => f === "CLAUDE.md" || f.endsWith("/CLAUDE.md"))) return "claude.md";
+  return null;
+}
+
+function convertToSkillMd(format, content, sourceName) {
+  // If already SKILL.md format, return as-is
+  if (format === "skill.md") return content;
+
+  // Check if content already has frontmatter
+  const hasFrontmatter = content.trimStart().startsWith("---");
+
+  const formatLabels = {
+    "agents.md": "AGENTS.md (Codex/Vibe format)",
+    "cursorrules": ".cursorrules (Cursor format)",
+    "windsurfrules": ".windsurfrules (Windsurf format)",
+    "claude.md": "CLAUDE.md (Claude Code project instructions)",
+  };
+
+  const label = formatLabels[format] || format;
+  const name = sourceName || format.replace(/\./g, "-");
+
+  if (hasFrontmatter) {
+    // Already has frontmatter — just add description noting the import source
+    return content.replace(/^---\n/, `---\n# Imported from ${label}\n`);
+  }
+
+  return `---\nname: ${name}\ndescription: Imported from ${label}\n---\n\n${content}`;
+}
+
 async function fetchSkillContents(parsed) {
   const files = {};
 
   if (parsed.type === "dir") {
-    const skillMdPath = path.join(parsed.path, "SKILL.md");
-    if (!fs.existsSync(skillMdPath)) throw new Error(`No SKILL.md found in ${parsed.path}`);
-    // Read all files recursively
+    // Read all files recursively (including dotfiles like .cursorrules)
     function readDir(dir, base) {
       for (const entry of fs.readdirSync(dir)) {
-        if (entry.startsWith(".")) continue;
+        if (entry === ".git" || entry === "node_modules") continue;
         const full = path.join(dir, entry);
         const rel = path.relative(base, full);
         try {
@@ -4748,6 +4812,20 @@ async function fetchSkillContents(parsed) {
       }
     }
     readDir(parsed.path, parsed.path);
+
+    // Auto-detect format
+    const format = parsed.forceFormat || detectSkillFormat(files);
+    if (!format) throw new Error(`No recognized skill format found in ${parsed.path}\n  Supported: SKILL.md, AGENTS.md, .cursorrules, .windsurfrules, CLAUDE.md`);
+
+    if (format !== "skill.md") {
+      // Convert foreign format to SKILL.md
+      const formatFile = format === "agents.md" ? "AGENTS.md" : format === "cursorrules" ? ".cursorrules" : format === "windsurfrules" ? ".windsurfrules" : "CLAUDE.md";
+      const content = files[formatFile] || Object.values(files)[0] || "";
+      const converted = convertToSkillMd(format, content, path.basename(parsed.path));
+      files["SKILL.md"] = converted;
+      process.stderr.write(`\x1b[2mDetected ${format} format → converted to SKILL.md\x1b[0m\n`);
+    }
+
     const fm = parseYamlFrontmatter(files["SKILL.md"] || "");
     return { name: fm.name || path.basename(parsed.path), files };
 
@@ -4769,21 +4847,37 @@ async function fetchSkillContents(parsed) {
   } else if (parsed.type === "github") {
     const apiBase = `https://api.github.com/repos/${parsed.owner}/${parsed.repo}`;
     // Autodiscovery: find SKILL.md locations
-    const searchPaths = [".claude/skills", "skills", ""];
+    const searchPaths = [".claude/skills", "skills", ".agents", "agents", ""];
     let found = [];
+
+    // Skill file names to scan for (priority order)
+    const skillFileNames = ["SKILL.md", "AGENTS.md"];
 
     for (const sp of searchPaths) {
       try {
         const listUrl = sp ? `${apiBase}/contents/${sp}` : `${apiBase}/contents`;
         const listing = JSON.parse(await _httpGet(listUrl));
         if (Array.isArray(listing)) {
-          const skillMd = listing.find(f => f.name === "SKILL.md");
-          if (skillMd) found.push({ path: sp || ".", skillMdUrl: skillMd.download_url });
+          // Check for skill files at this level
+          for (const sfn of skillFileNames) {
+            const match = listing.find(f => f.name === sfn);
+            if (match) found.push({ path: sp || ".", skillMdUrl: match.download_url, format: sfn === "SKILL.md" ? "skill.md" : "agents.md" });
+          }
+          // Also check for .cursorrules / .windsurfrules at root
+          if (!sp) {
+            for (const rf of [".cursorrules", ".windsurfrules"]) {
+              const match = listing.find(f => f.name === rf);
+              if (match) found.push({ path: ".", skillMdUrl: match.download_url, format: rf.slice(1) });
+            }
+          }
+          // Check subdirectories (1 level deep)
           for (const item of listing.filter(f => f.type === "dir" && !f.name.startsWith("."))) {
             try {
               const subListing = JSON.parse(await _httpGet(`${apiBase}/contents/${sp ? sp + "/" : ""}${item.name}`));
-              const sub = subListing.find(f => f.name === "SKILL.md");
-              if (sub) found.push({ path: `${sp ? sp + "/" : ""}${item.name}`, skillMdUrl: sub.download_url });
+              for (const sfn of skillFileNames) {
+                const sub = subListing.find(f => f.name === sfn);
+                if (sub) found.push({ path: `${sp ? sp + "/" : ""}${item.name}`, skillMdUrl: sub.download_url, format: sfn === "SKILL.md" ? "skill.md" : "agents.md" });
+              }
             } catch { /* skip */ }
           }
         }
@@ -4791,13 +4885,20 @@ async function fetchSkillContents(parsed) {
       if (found.length > 0) break;
     }
 
-    if (found.length === 0) throw new Error(`No SKILL.md found in github:${parsed.owner}/${parsed.repo}`);
+    if (found.length === 0) throw new Error(`No skill files found in github:${parsed.owner}/${parsed.repo}\n  Searched for: SKILL.md, AGENTS.md, .cursorrules, .windsurfrules`);
 
     // Fetch all found skills (multiple = import all)
     async function _fetchOneGitHubSkill(skill) {
       const sf = {};
-      const skillContent = await _httpGet(skill.skillMdUrl);
-      sf["SKILL.md"] = skillContent;
+      const rawContent = await _httpGet(skill.skillMdUrl);
+      // Convert to SKILL.md if needed
+      if (skill.format && skill.format !== "skill.md") {
+        sf["SKILL.md"] = convertToSkillMd(skill.format, rawContent, path.basename(skill.path));
+        process.stderr.write(`\x1b[2m${path.basename(skill.path)}: detected ${skill.format} → converted to SKILL.md\x1b[0m\n`);
+      } else {
+        sf["SKILL.md"] = rawContent;
+      }
+      const skillContent = sf["SKILL.md"];
       try {
         const dirUrl = `${apiBase}/contents/${skill.path}`;
         const dirListing = JSON.parse(await _httpGet(dirUrl));
@@ -4834,6 +4935,37 @@ async function fetchSkillContents(parsed) {
       }
     }
     if (allSkills.length === 0) throw new Error("All skills failed to fetch");
+    return allSkills;
+  }
+
+  if (parsed.type === "well-known") {
+    // Try .well-known/claude-skills.json
+    const wellKnownUrl = `${parsed.url}/.well-known/claude-skills.json`;
+    process.stderr.write(`\x1b[2mTrying ${wellKnownUrl}...\x1b[0m\n`);
+    let manifest;
+    try {
+      manifest = JSON.parse(await _httpGet(wellKnownUrl));
+    } catch {
+      throw new Error(`No .well-known/claude-skills.json found at ${parsed.url}\n  Try a direct URL to a SKILL.md or AGENTS.md file instead.`);
+    }
+    if (!manifest.skills || !Array.isArray(manifest.skills) || manifest.skills.length === 0) {
+      throw new Error(`Empty or invalid claude-skills.json at ${wellKnownUrl}`);
+    }
+    // Fetch each skill
+    const allSkills = [];
+    for (const entry of manifest.skills) {
+      if (!entry.url) continue;
+      try {
+        const content = await _httpGet(entry.url);
+        const skillFiles = { "SKILL.md": content };
+        const fm = parseYamlFrontmatter(content);
+        allSkills.push({ name: entry.name || fm.name || "unnamed", files: skillFiles });
+      } catch (e) {
+        process.stderr.write(`\x1b[33mSkipping ${entry.name || entry.url}: ${e.message}\x1b[0m\n`);
+      }
+    }
+    if (allSkills.length === 0) throw new Error("All skills from manifest failed to fetch");
+    if (allSkills.length === 1) return allSkills[0];
     return allSkills;
   }
 
@@ -4929,7 +5061,31 @@ async function skillImport(cfg, client, registry, permissions, source) {
   }
 
   // Handle multiple skills (e.g. GitHub repo with several skills)
-  const skills = Array.isArray(fetched) ? fetched : [fetched];
+  let skills = Array.isArray(fetched) ? fetched : [fetched];
+
+  // --list: print skills and exit
+  if (cfg._skillImportList) {
+    process.stderr.write(`\n\x1b[1m  Skills found in ${source}\x1b[0m\n\n`);
+    for (const sk of skills) {
+      const fm = parseYamlFrontmatter(sk.files["SKILL.md"] || "");
+      const format = detectSkillFormat(sk.files) || "unknown";
+      const desc = fm.description || "";
+      process.stderr.write(`  \x1b[36m${sk.name}\x1b[0m  ${desc}  \x1b[2m[${format}]\x1b[0m\n`);
+    }
+    process.stderr.write(`\n  ${skills.length} skill(s) found.\n\n`);
+    return;
+  }
+
+  // --pick: filter to a single skill
+  if (cfg._skillImportPick) {
+    const match = skills.filter(s => s.name === cfg._skillImportPick || s.name.includes(cfg._skillImportPick));
+    if (match.length === 0) {
+      process.stderr.write(`Error: No skill matching "${cfg._skillImportPick}" found.\n  Available: ${skills.map(s => s.name).join(", ")}\n`);
+      process.exit(EXIT.BAD_ARGS);
+    }
+    skills = match;
+  }
+
   let installed = 0;
   for (const skill of skills) {
     try {

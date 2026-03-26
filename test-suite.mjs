@@ -3310,6 +3310,139 @@ section("E2E: cloclo --help mentions skill import");
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// UNIVERSAL SKILL IMPORT — Format detection, conversion, discovery
+// ═══════════════════════════════════════════════════════════════════
+
+section("UNIT: detectSkillFormat — identifies SKILL.md");
+
+{
+  const fn = extractBlock(source, "function detectSkillFormat(");
+  if (fn) {
+    const ns = {};
+    new Function("exports", fn + "\nexports.detectSkillFormat = detectSkillFormat;")(ns);
+    assert(ns.detectSkillFormat({"SKILL.md": "content"}) === "skill.md", "Detects SKILL.md");
+    assert(ns.detectSkillFormat({"AGENTS.md": "content"}) === "agents.md", "Detects AGENTS.md");
+    assert(ns.detectSkillFormat({".cursorrules": "content"}) === "cursorrules", "Detects .cursorrules");
+    assert(ns.detectSkillFormat({".windsurfrules": "content"}) === "windsurfrules", "Detects .windsurfrules");
+    assert(ns.detectSkillFormat({"CLAUDE.md": "content"}) === "claude.md", "Detects CLAUDE.md");
+    assert(ns.detectSkillFormat({"random.txt": "content"}) === null, "Returns null for unknown format");
+    // Priority: SKILL.md > AGENTS.md
+    assert(ns.detectSkillFormat({"SKILL.md": "a", "AGENTS.md": "b"}) === "skill.md", "SKILL.md takes priority over AGENTS.md");
+  } else {
+    skip("detectSkillFormat not extracted");
+  }
+}
+
+section("UNIT: convertToSkillMd — wraps foreign formats");
+
+{
+  const fn = extractBlock(source, "function convertToSkillMd(");
+  if (fn) {
+    const ns = {};
+    new Function("exports", fn + "\nexports.convertToSkillMd = convertToSkillMd;")(ns);
+    // AGENTS.md conversion
+    const agentsResult = ns.convertToSkillMd("agents.md", "# My Agent\nDo things.", "my-agent");
+    assert(agentsResult.includes("name: my-agent"), "AGENTS.md conversion includes name");
+    assert(agentsResult.includes("Imported from"), "AGENTS.md conversion includes import note");
+    assert(agentsResult.includes("# My Agent"), "AGENTS.md conversion preserves content");
+    // .cursorrules conversion
+    const cursorResult = ns.convertToSkillMd("cursorrules", "Use tabs.", "cursor-rules");
+    assert(cursorResult.includes("name: cursor-rules"), "cursorrules conversion includes name");
+    assert(cursorResult.includes("Use tabs."), "cursorrules conversion preserves content");
+    // skill.md passthrough
+    const passthrough = ns.convertToSkillMd("skill.md", "---\nname: test\n---\nContent", "test");
+    assert(passthrough === "---\nname: test\n---\nContent", "skill.md format passes through unchanged");
+  } else {
+    skip("convertToSkillMd not extracted");
+  }
+}
+
+section("UNIT: parseSkillSource — GitHub URL");
+
+{
+  const fn = extractBlock(source, "function parseSkillSource(");
+  if (fn) {
+    const ns = {};
+    new Function("exports", "fs", "path", fn + "\nexports.parseSkillSource = parseSkillSource;")(ns, fs, path);
+    // github: prefix
+    const gh = ns.parseSkillSource("github:foo/bar");
+    assert(gh.type === "github" && gh.owner === "foo" && gh.repo === "bar", "github: prefix parsed");
+    // GitHub URL
+    const ghUrl = ns.parseSkillSource("https://github.com/foo/bar");
+    assert(ghUrl.type === "github" && ghUrl.owner === "foo" && ghUrl.repo === "bar", "GitHub URL parsed");
+    // GitHub URL with .git
+    const ghGit = ns.parseSkillSource("https://github.com/foo/bar.git");
+    assert(ghGit.type === "github" && ghGit.repo === "bar", "GitHub .git URL cleaned");
+    // Bare URL → well-known
+    const wk = ns.parseSkillSource("https://myapp.com");
+    assert(wk.type === "well-known", "Bare URL → well-known type");
+    // Direct SKILL.md URL
+    const direct = ns.parseSkillSource("https://example.com/SKILL.md");
+    assert(direct.type === "url", "Direct SKILL.md URL → url type");
+  } else {
+    skip("parseSkillSource not extracted");
+  }
+}
+
+section("UNIT: skill import --list flag parsed");
+
+{
+  assert(source.includes('cfg._skillImportList = true'), "--list flag sets _skillImportList");
+  assert(source.includes('cfg._skillImportPick'), "--pick flag sets _skillImportPick");
+  assert(source.includes('cfg._skillImportFormat'), "--format flag sets _skillImportFormat");
+}
+
+section("UNIT: skillImport handles --list");
+
+{
+  assert(source.includes("_skillImportList") && source.includes("Skills found in"), "--list prints skill listing");
+}
+
+section("UNIT: skillImport handles --pick");
+
+{
+  assert(source.includes("_skillImportPick") && source.includes("No skill matching"), "--pick filters and errors on no match");
+}
+
+section("UNIT: well-known/claude-skills.json support");
+
+{
+  assert(source.includes(".well-known/claude-skills.json"), "well-known discovery implemented");
+  assert(source.includes('type: "well-known"'), "well-known source type exists");
+}
+
+section("UNIT: GitHub autodiscovery scans AGENTS.md");
+
+{
+  assert(source.includes('".agents"') && source.includes('"agents"'), "GitHub searches .agents/ and agents/ paths");
+  assert(source.includes('"AGENTS.md"') && source.includes("skillFileNames"), "GitHub scans for AGENTS.md files");
+}
+
+section("E2E: cloclo skill import --list flag");
+
+{
+  try {
+    // --list with an invalid source should still fail on source parsing, not list
+    const { exitCode, stderr } = await runCLI(["skill", "import", "nonexistent-12345", "--list"], {}, 5000);
+    assert(exitCode !== 0, "skill import --list with bad source exits with error");
+  } catch (e) {
+    skip(`--list E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: cloclo --help mentions --list and --pick");
+
+{
+  try {
+    const { stderr } = await runCLI(["--help"], {}, 5000);
+    assert(stderr.includes("--list"), "--help mentions --list");
+    assert(stderr.includes("--pick"), "--help mentions --pick");
+  } catch (e) {
+    skip(`--help flags E2E failed: ${e.message}`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // STABILIZATION — Compaction, Hook, and Provider regression tests
 // ═══════════════════════════════════════════════════════════════════
 
