@@ -14,6 +14,8 @@ import { spawn, execSync } from "node:child_process";
 import { createInterface } from "node:readline";
 import { randomUUID, createHash } from "node:crypto";
 import { createServer } from "node:http";
+import _http from "node:http";
+import _https from "node:https";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -4707,7 +4709,7 @@ function parseSkillSource(source) {
 
 function _httpGet(url) {
   return new Promise((resolve, reject) => {
-    const mod = url.startsWith("https") ? require("node:https") : require("node:http");
+    const mod = url.startsWith("https") ? _https : _http;
     mod.get(url, { headers: { "User-Agent": "cloclo/1.0" } }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
         return _httpGet(res.headers.location).then(resolve, reject);
@@ -4775,11 +4777,9 @@ async function fetchSkillContents(parsed) {
         const listUrl = sp ? `${apiBase}/contents/${sp}` : `${apiBase}/contents`;
         const listing = JSON.parse(await _httpGet(listUrl));
         if (Array.isArray(listing)) {
-          // Check for SKILL.md directly
           const skillMd = listing.find(f => f.name === "SKILL.md");
           if (skillMd) found.push({ path: sp || ".", skillMdUrl: skillMd.download_url });
-          // Check subdirectories for SKILL.md
-          for (const item of listing.filter(f => f.type === "dir")) {
+          for (const item of listing.filter(f => f.type === "dir" && !f.name.startsWith("."))) {
             try {
               const subListing = JSON.parse(await _httpGet(`${apiBase}/contents/${sp ? sp + "/" : ""}${item.name}`));
               const sub = subListing.find(f => f.name === "SKILL.md");
@@ -4788,40 +4788,53 @@ async function fetchSkillContents(parsed) {
           }
         }
       } catch { /* path doesn't exist */ }
-      if (found.length > 0) break; // use first matching search path level
+      if (found.length > 0) break;
     }
 
     if (found.length === 0) throw new Error(`No SKILL.md found in github:${parsed.owner}/${parsed.repo}`);
-    if (found.length > 1) {
-      const paths = found.map(f => f.path).join("\n  ");
-      throw new Error(`Multiple skills found in github:${parsed.owner}/${parsed.repo}:\n  ${paths}\nSpecify: github:${parsed.owner}/${parsed.repo}/<skill-path>`);
+
+    // Fetch all found skills (multiple = import all)
+    async function _fetchOneGitHubSkill(skill) {
+      const sf = {};
+      const skillContent = await _httpGet(skill.skillMdUrl);
+      sf["SKILL.md"] = skillContent;
+      try {
+        const dirUrl = `${apiBase}/contents/${skill.path}`;
+        const dirListing = JSON.parse(await _httpGet(dirUrl));
+        for (const item of dirListing) {
+          if (item.name === "SKILL.md") continue;
+          if (item.type === "file") {
+            try { sf[item.name] = await _httpGet(item.download_url); } catch { /* skip */ }
+          } else if (item.type === "dir" && ["scripts", "hooks", "assets", "references"].includes(item.name)) {
+            try {
+              const subListing = JSON.parse(await _httpGet(`${apiBase}/contents/${skill.path}/${item.name}`));
+              for (const sub of subListing.filter(f => f.type === "file")) {
+                try { sf[`${item.name}/${sub.name}`] = await _httpGet(sub.download_url); } catch { /* skip */ }
+              }
+            } catch { /* skip */ }
+          }
+        }
+      } catch { /* dir listing failed, just use SKILL.md */ }
+      const fm = parseYamlFrontmatter(skillContent);
+      return { name: fm.name || path.basename(skill.path), files: sf };
     }
 
-    const skill = found[0];
-    const skillContent = await _httpGet(skill.skillMdUrl);
-    files["SKILL.md"] = skillContent;
+    if (found.length === 1) {
+      return await _fetchOneGitHubSkill(found[0]);
+    }
 
-    // Fetch sibling files in the skill directory
-    try {
-      const dirUrl = `${apiBase}/contents/${skill.path}`;
-      const dirListing = JSON.parse(await _httpGet(dirUrl));
-      for (const item of dirListing) {
-        if (item.name === "SKILL.md") continue;
-        if (item.type === "file") {
-          try { files[item.name] = await _httpGet(item.download_url); } catch { /* skip */ }
-        } else if (item.type === "dir" && ["scripts", "hooks", "assets", "references"].includes(item.name)) {
-          try {
-            const subListing = JSON.parse(await _httpGet(`${apiBase}/contents/${skill.path}/${item.name}`));
-            for (const sub of subListing.filter(f => f.type === "file")) {
-              try { files[`${item.name}/${sub.name}`] = await _httpGet(sub.download_url); } catch { /* skip */ }
-            }
-          } catch { /* skip */ }
-        }
+    // Multiple skills — return all as array
+    process.stderr.write(`\x1b[2mFound ${found.length} skills: ${found.map(f => path.basename(f.path)).join(", ")}\x1b[0m\n`);
+    const allSkills = [];
+    for (const sk of found) {
+      try {
+        allSkills.push(await _fetchOneGitHubSkill(sk));
+      } catch (e) {
+        process.stderr.write(`\x1b[33mSkipping ${sk.path}: ${e.message}\x1b[0m\n`);
       }
-    } catch { /* dir listing failed, just use SKILL.md */ }
-
-    const fm = parseYamlFrontmatter(skillContent);
-    return { name: fm.name || path.basename(skill.path), files };
+    }
+    if (allSkills.length === 0) throw new Error("All skills failed to fetch");
+    return allSkills;
   }
 
   throw new Error(`Unknown source type: ${parsed.type}`);
@@ -4907,23 +4920,38 @@ async function skillImport(cfg, client, registry, permissions, source) {
 
   // 2. Fetch contents
   process.stderr.write(`\x1b[2mFetching skill from ${source}...\x1b[0m\n`);
-  let skill;
+  let fetched;
   try {
-    skill = await fetchSkillContents(parsed);
+    fetched = await fetchSkillContents(parsed);
   } catch (e) {
     process.stderr.write(`Error: ${e.message}\n`);
     process.exit(EXIT.BAD_ARGS);
   }
 
+  // Handle multiple skills (e.g. GitHub repo with several skills)
+  const skills = Array.isArray(fetched) ? fetched : [fetched];
+  let installed = 0;
+  for (const skill of skills) {
+    try {
+      await _installOneSkill(cfg, client, registry, permissions, source, skill);
+      installed++;
+    } catch (e) {
+      process.stderr.write(`\x1b[31m${skill.name}: ${e.message}\x1b[0m\n`);
+    }
+  }
+  if (skills.length > 1) {
+    process.stderr.write(`\n\x1b[32mInstalled ${installed}/${skills.length} skills.\x1b[0m\n`);
+  }
+}
+
+async function _installOneSkill(cfg, client, registry, permissions, source, skill) {
   // 3. Validate SKILL.md
   if (!skill.files["SKILL.md"]) {
-    process.stderr.write("Error: No SKILL.md found in source\n");
-    process.exit(EXIT.BAD_ARGS);
+    throw new Error("No SKILL.md found");
   }
   const fm = parseYamlFrontmatter(skill.files["SKILL.md"]);
   if (!fm.name && !skill.name) {
-    process.stderr.write("Error: SKILL.md has no 'name' in frontmatter\n");
-    process.exit(EXIT.BAD_ARGS);
+    throw new Error("SKILL.md has no 'name' in frontmatter");
   }
   const skillName = fm.name || skill.name;
 
@@ -4980,16 +5008,14 @@ async function skillImport(cfg, client, registry, permissions, source) {
 
   // 7. BLOCK → refuse
   if (finalVerdict === "BLOCK") {
-    process.stderr.write(`\x1b[31mInstallation blocked due to security concerns.\x1b[0m\n`);
-    process.exit(EXIT.BAD_ARGS);
+    throw new Error(`Installation blocked due to security concerns`);
   }
 
   // 8. Confirmation
   const skipConfirm = cfg.permissionMode === "bypassPermissions";
   if (!skipConfirm) {
     if (!process.stdin.isTTY) {
-      process.stderr.write("Error: Confirmation required for skill install. Use --yes to skip.\n");
-      process.exit(EXIT.BAD_ARGS);
+      throw new Error("Confirmation required for skill install. Use --yes to skip");
     }
     const rl = (await import("node:readline")).createInterface({ input: process.stdin, output: process.stderr });
     const answer = await new Promise((resolve) => {
@@ -5007,8 +5033,7 @@ async function skillImport(cfg, client, registry, permissions, source) {
   if (fs.existsSync(targetDir)) {
     if (!skipConfirm) {
       if (!process.stdin.isTTY) {
-        process.stderr.write(`Error: Skill "${skillName}" already exists. Use --yes to overwrite.\n`);
-        process.exit(EXIT.BAD_ARGS);
+        throw new Error(`Skill "${skillName}" already exists. Use --yes to overwrite`);
       }
       const rl = (await import("node:readline")).createInterface({ input: process.stdin, output: process.stderr });
       const answer = await new Promise((resolve) => {
