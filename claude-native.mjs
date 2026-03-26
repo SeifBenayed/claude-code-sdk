@@ -6649,14 +6649,13 @@ class InteractiveMode {
           prompt = `Generate a ${filename} project convention file for this repository. Scan the following project structure and create concise, useful instructions for an AI coding agent working in this codebase.\n\nProject structure:\n${structure}\n\nThe file should include:\n- Brief project description\n- Key architecture patterns\n- Testing conventions\n- Build/run commands\n- Any important constraints\n\nKeep it under 100 lines. Output ONLY the markdown content, no code fences.`;
         }
 
-        // Use minimal system prompt to avoid the model summarizing instead of producing content
-        const systemBlocks = [{
-          type: "text",
-          text: "You are a file generator. You output ONLY the requested file content. No commentary, no summaries, no changelogs, no code fences. Your entire response becomes the file contents verbatim.",
-        }];
-        const messages = [{ role: "user", content: prompt }];
+        // Prepend file-generator instruction to the user prompt to avoid summaries/changelogs
+        const fullPrompt = `IMPORTANT: Your entire response will be written directly to a file. Output ONLY the raw markdown content of the ${filename} file. No preamble, no summary, no changelog, no code fences, no "Here's what I changed". Start with the first line of the file (e.g. "# Project Name").\n\n${prompt}`;
+        const systemBlocks = buildSystemPrompt(self.cfg);
+        const messages = [{ role: "user", content: fullPrompt }];
         const initCfg = { ...self.cfg, maxTurns: 1, thinkingBudget: 0 };
-        const loop = new AgentLoop(self.client, self.registry, initCfg, {
+        const emptyRegistry = new ToolRegistry();
+        const loop = new AgentLoop(self.client, emptyRegistry, initCfg, {
           onText: () => {},
         }, self.permissions);
 
