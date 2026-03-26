@@ -6626,22 +6626,28 @@ class InteractiveMode {
       } });
 
     // Init — generate provider-aware convention file
-    s.register({ name: "init", description: "Generate project convention file for the active provider",
+    s.register({ name: "init", description: "Generate or update project convention file for the active provider",
       handler: async () => {
         const providerName = (self.cfg._provider || {}).name || "Anthropic";
         const filename = PROVIDER_CONVENTION_FILES[providerName] || "INIT.md";
         const targetPath = path.join(self.cfg.cwd, filename);
 
-        if (fs.existsSync(targetPath)) {
-          process.stderr.write(`\x1b[33m${filename} already exists at ${targetPath}\x1b[0m\n`);
-          process.stderr.write(`\x1b[2mUse your editor to modify it, or delete it and run /init again.\x1b[0m\n`);
-          return;
-        }
-
         // Scan project structure
         const structure = _scanProjectStructure(self.cfg.cwd);
 
-        const prompt = `Generate a ${filename} project convention file for this repository. Scan the following project structure and create concise, useful instructions for an AI coding agent working in this codebase.\n\nProject structure:\n${structure}\n\nThe file should include:\n- Brief project description\n- Key architecture patterns\n- Testing conventions\n- Build/run commands\n- Any important constraints\n\nKeep it under 100 lines. Output ONLY the markdown content, no code fences.`;
+        // Read existing file if present
+        let existing = "";
+        const isUpdate = fs.existsSync(targetPath);
+        if (isUpdate) {
+          try { existing = fs.readFileSync(targetPath, "utf-8"); } catch { /* unreadable */ }
+        }
+
+        let prompt;
+        if (isUpdate && existing) {
+          prompt = `Audit and update this ${filename} project convention file. Compare the existing content against the current project structure. Add missing conventions, remove outdated ones, and improve accuracy.\n\nCurrent ${filename}:\n${existing}\n\nProject structure:\n${structure}\n\nRules:\n- Keep everything that is still accurate\n- Add missing build/test commands, architecture patterns, or constraints you discover from the project files\n- Remove anything that no longer matches the project\n- Keep it under 100 lines\n- Output ONLY the updated markdown content, no code fences, no explanations`;
+        } else {
+          prompt = `Generate a ${filename} project convention file for this repository. Scan the following project structure and create concise, useful instructions for an AI coding agent working in this codebase.\n\nProject structure:\n${structure}\n\nThe file should include:\n- Brief project description\n- Key architecture patterns\n- Testing conventions\n- Build/run commands\n- Any important constraints\n\nKeep it under 100 lines. Output ONLY the markdown content, no code fences.`;
+        }
 
         const systemBlocks = buildSystemPrompt(self.cfg);
         const messages = [{ role: "user", content: prompt }];
@@ -6649,11 +6655,11 @@ class InteractiveMode {
           onText: () => {},
         }, self.permissions);
 
-        process.stderr.write(`\x1b[2mGenerating ${filename}...\x1b[0m\n`);
+        process.stderr.write(`\x1b[2m${isUpdate ? "Auditing" : "Generating"} ${filename}...\x1b[0m\n`);
         const result = await loop.run(messages, systemBlocks);
 
         fs.writeFileSync(targetPath, result.text);
-        process.stderr.write(`\x1b[32mCreated ${targetPath}\x1b[0m\n`);
+        process.stderr.write(`\x1b[32m${isUpdate ? "Updated" : "Created"} ${targetPath}\x1b[0m\n`);
         process.stderr.write(`\x1b[2mEdit to customize. It will be loaded into context for all future conversations.\x1b[0m\n`);
       } });
 
