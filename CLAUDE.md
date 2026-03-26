@@ -1,43 +1,45 @@
-# claude-native — Project Conventions
+# cloclo (claude-native) — Project Conventions
 
 ## Architecture
 
-Single-file CLI (`claude-native.mjs`, ~7800 lines). Zero npm dependencies — uses only Node.js built-ins. This is intentional: the entire tool ships as one file you can `node claude-native.mjs`.
+Single-file CLI (`claude-native.mjs`, ~7900 lines) with multi-language ports (`claude-native.py`, `claude-native.go`, `rust-sdk/`). The JS version is the primary implementation. Ink UI in `ink-ui.mjs` (optional, has runtime deps). NDJSON bridge in `claude-tool-loop.js`.
 
-Trade-offs: large file, but trivial deployment and no dependency supply-chain risk.
+npm package name: `cloclo`. Binary: `cloclo`. Runtime deps: `ink`, `react` (for TUI only).
 
 ## Provider Contract
 
 All providers live in the `PROVIDERS` object. Each entry must implement:
 
-- `name` — display name
-- `detect(model)` — returns true if model string belongs to this provider
-- `envKey` — environment variable name for the API key
-- `defaultUrl` — base URL for the API
-- `createClient(cfg)` — returns a client instance
-- `resolveAuth(cfg)` / `resolveBaseUrl(cfg)` — credential/URL resolution
-- `transformModel(model)` — model name normalization
-- `capabilities` — object with `apiStyle`, `toolCallStyle`, `instructionPlacement`, `supportsToolCalling`, `supportsThinking`, `supportsHostedWebSearch`, `summaryModel`
+- `name`, `detect(model)`, `envKey`, `defaultUrl`
+- `createClient(cfg)`, `resolveAuth(cfg)`, `resolveBaseUrl(cfg)`
+- `transformModel(model)`, `capabilities`
+- Optional: `oauthSupport` (Anthropic, OpenAI, OpenAI Responses only)
 
-Valid provider names: `anthropic`, `openai`, `openai-responses`, `google`, `deepseek`, `mistral`, `groq`, `ollama`, `lmstudio`, `vllm`, `jan`.
+`envKey` can be `null` for local providers (Ollama, LM Studio, vLLM, Jan, llama.cpp).
+
+Valid providers: `anthropic`, `openai`, `openai-responses`, `google`, `deepseek`, `mistral`, `groq`, `ollama`, `lmstudio`, `vllm`, `jan`, `llamacpp`.
+
+## Convention Files
+
+Provider-aware: Anthropic → `CLAUDE.md`, OpenAI/Mistral → `AGENTS.md`, Gemini → `GEMINI.md`, Others → `INIT.md`. `INIT.md` always loaded as base layer.
 
 ## Testing
 
-Run all tests:
-
 ```bash
-node test-suite.mjs
+npm test                    # Unit tests (760+, no API keys needed)
+node test-ink-smoke.mjs     # Ink UI smoke tests
+node test-e2e-deferred.mjs  # Deferred tool E2E
+node test-suite.mjs --e2e   # E2E tests (needs API keys)
+node test-suite.mjs --verbose  # Verbose output on failures
 ```
 
 ### Patterns
 
-- **Unit tests**: Extract functions/classes from source via `extractBlock()`, eval in isolated namespace.
-- **E2E tests**: Use `runCLI(args, envOverrides, timeout)` helper — spawns a child process and captures stdout/stderr/exitCode.
-- **Ink smoke tests**: Verify TUI rendering (separate section in test-suite).
+- **Unit tests**: Extract functions from source via `extractBlock()`, eval in isolated namespace.
+- **E2E tests**: `runCLI(args, envOverrides, timeout)` — spawns child process, captures stdout/stderr/exitCode.
+- **Ink smoke tests**: Separate file (`test-ink-smoke.mjs`).
 
-### Adding tests
-
-Add new test sections before the summary block (`process.stderr.write(\`\\n\\x1b[1m${"═"...`), after the existing E2E sections. Use `section("...")` + `assert(...)` / `skip(...)`.
+Add new test sections before the summary block (~line 3460) in `test-suite.mjs`.
 
 ## Exit Codes
 
@@ -52,12 +54,11 @@ Add new test sections before the summary block (`process.stderr.write(\`\\n\\x1b
 
 ## Error Message Conventions
 
-- `Error:` prefix — all user-facing errors that exit (bad args, auth, provider)
+- `Error:` prefix — all user-facing errors that exit
 - `Fatal:` prefix — only the top-level unhandled exception catch
-- No prefix for verbose `log()` or status messages
 
 ## Known Limitations
 
-- No Windows support (keychain uses macOS `security` command)
-- OAuth flows require a browser
-- Single-file means no tree-shaking; entire file is loaded even for `--help`
+- OAuth only for Anthropic and OpenAI (others use API keys)
+- macOS keychain for credential storage (no Linux/Windows yet)
+- Single-file means no tree-shaking; entire file loaded even for `--help`
