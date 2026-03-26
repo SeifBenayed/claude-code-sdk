@@ -73,7 +73,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
   // Helper: require next argv value or die
   function needValue(flag, i) {
     if (i >= argv.length || argv[i].startsWith("-")) {
-      process.stderr.write(`Error: ${flag} requires a value\n  claude-native ${flag} <value>\n`);
+      process.stderr.write(`Error: ${flag} requires a value\n  cloclo ${flag} <value>\n`);
       process.exit(EXIT.BAD_ARGS);
     }
     return argv[i];
@@ -164,7 +164,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "--help": case "-h": printHelp(); process.exit(0);
       default:
         if (a.startsWith("-")) {
-          process.stderr.write(`Error: Unknown flag "${a}"\n  Run claude-native --help for usage\n`);
+          process.stderr.write(`Error: Unknown flag "${a}"\n  Run cloclo --help for usage\n`);
           process.exit(EXIT.BAD_ARGS);
         }
         if (!cfg.prompt) cfg.prompt = a;
@@ -747,23 +747,23 @@ const EXIT = {
 };
 
 function printHelp() {
-  process.stderr.write(`claude-native — Multi-provider AI coding agent CLI
+  process.stderr.write(`cloclo — Multi-provider AI coding agent CLI
 
 Usage:
-  claude-native                         Interactive REPL
-  claude-native -p "prompt"             One-shot print mode
-  claude-native --ndjson                NDJSON bridge mode
+  cloclo                         Interactive REPL
+  cloclo -p "prompt"             One-shot print mode
+  cloclo --ndjson                NDJSON bridge mode
 
 Examples:
-  claude-native -p "explain this code"
-  claude-native -m codex -p "fix the bug" --yes
-  claude-native -m opus --thinking 8192 -p "review main.js"
-  claude-native -m ollama/llama3.2 -p "hello"
-  claude-native -p "list files" --json
-  claude-native -p "deploy" --yes --timeout 120
-  echo '{"type":"message","content":"hi"}' | claude-native --ndjson
-  cat error.log | claude-native -p "explain this error"
-  ANTHROPIC_API_KEY=sk-ant-... claude-native -p "hello"
+  cloclo -p "explain this code"
+  cloclo -m codex -p "fix the bug" --yes
+  cloclo -m opus --thinking 8192 -p "review main.js"
+  cloclo -m ollama/llama3.2 -p "hello"
+  cloclo -p "list files" --json
+  cloclo -p "deploy" --yes --timeout 120
+  echo '{"type":"message","content":"hi"}' | cloclo --ndjson
+  cat error.log | cloclo -p "explain this error"
+  ANTHROPIC_API_KEY=sk-ant-... cloclo -p "hello"
 
 Options:
   -m, --model <name>          Model (sonnet, opus, haiku, gpt-4o, o3, codex, or full ID)
@@ -824,11 +824,11 @@ Providers:
   llamacpp         llama.cpp server            (no auth — LLAMACPP_API_URL)
 
   Provider is auto-detected from model name prefix:
-    claude-native -m ollama/llama3.2 -p "hello"
-    claude-native -m lmstudio/qwen2.5-coder -p "hello"
-    claude-native -m vllm/mistral-7b -p "hello"
+    cloclo -m ollama/llama3.2 -p "hello"
+    cloclo -m lmstudio/qwen2.5-coder -p "hello"
+    cloclo -m vllm/mistral-7b -p "hello"
   Or use --provider to override:
-    claude-native --provider openai -m my-fine-tune -p "hello"
+    cloclo --provider openai -m my-fine-tune -p "hello"
 
 Extensibility:
   Settings:  ~/.claude/settings.json, .claude/settings.json, .claude/settings.local.json
@@ -6835,7 +6835,7 @@ class InteractiveMode {
       });
     }
 
-    process.stderr.write(`\x1b[1mclaude-native\x1b[0m\n`);
+    process.stderr.write(`\x1b[1mcloclo\x1b[0m\n`);
     this._renderStatusLine();
     process.stderr.write(`\x1b[2mType \x1b[0m/\x1b[2m for commands, \x1b[0mTab\x1b[2m to complete. \x1b[0m↑↓\x1b[2m for history.\x1b[0m\n\n`);
 
@@ -7534,7 +7534,7 @@ async function oauthLogin() {
   }
   process.stderr.write(`Scopes: ${scopes.join(", ")}\n`);
   process.stderr.write(`\nCredentials saved to macOS keychain.\n`);
-  process.stderr.write(`Run \x1b[1mnode claude-native.mjs\x1b[0m to start.\n`);
+  process.stderr.write(`Run \x1b[1mcloclo\x1b[0m to start.\n`);
 }
 
 function oauthLogout() {

@@ -3100,7 +3100,7 @@ section("UNIT: CLI — error prefix consistency");
   const parseArgsBlock = source.substring(source.indexOf("async function parseArgs"), source.indexOf("// ── Model Aliases"));
   const stderrWrites = parseArgsBlock.match(/process\.stderr\.write\(`[^`]*`\)/g) || [];
   for (const w of stderrWrites) {
-    if (w.includes("Error:") || w.includes("claude-native")) continue; // valid
+    if (w.includes("Error:") || w.includes("cloclo")) continue; // valid
     // Non-error writes in parseArgs are unexpected
   }
   // Top-level catch uses Fatal:
