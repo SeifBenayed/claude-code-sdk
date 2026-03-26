@@ -1,6 +1,6 @@
 {
   "name": "cloclo",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Open-source Claude Code alternative — multi-provider AI coding agent CLI. Single file, 13 providers, zero native deps.",
   "main": "claude-native.mjs",
   "bin": {
@@ -17,7 +17,16 @@
     "test:ink": "node test-ink-smoke.mjs",
     "test:e2e": "node test-e2e-deferred.mjs"
   },
-  "keywords": ["claude", "ai", "cli", "agent", "anthropic", "openai", "mcp", "coding-agent"],
+  "keywords": [
+    "claude",
+    "ai",
+    "cli",
+    "agent",
+    "anthropic",
+    "openai",
+    "mcp",
+    "coding-agent"
+  ],
   "author": "",
   "license": "ISC",
   "dependencies": {
