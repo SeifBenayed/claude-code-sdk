@@ -1,5 +1,9 @@
 # cloclo
 
+[![npm version](https://img.shields.io/npm/v/cloclo.svg)](https://www.npmjs.com/package/cloclo)
+[![npm downloads](https://img.shields.io/npm/dm/cloclo.svg)](https://www.npmjs.com/package/cloclo)
+[![license](https://img.shields.io/npm/l/cloclo.svg)](LICENSE)
+
 Open-source Claude Code alternative — multi-provider AI coding agent CLI. Single file, 13 providers, zero native deps.
 
 ## Install
