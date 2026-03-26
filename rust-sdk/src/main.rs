@@ -1,14 +1,14 @@
-// claude-native — Direct Anthropic API CLI in Rust
+// cloclo — Direct Anthropic API CLI in Rust
 //
 // Replaces the Node.js claude-native.mjs with a compiled Rust binary.
 // Talks directly to POST https://api.anthropic.com/v1/messages
 //
 // Usage:
-//   claude-native                          # Interactive REPL
-//   claude-native -p "explain this code"   # One-shot
-//   echo '{"type":"message","content":"hi"}' | claude-native --ndjson
-//   claude-native --login                  # OAuth login
-//   claude-native --logout                 # Remove credentials
+//   cloclo                                 # Interactive REPL
+//   cloclo -p "explain this code"          # One-shot
+//   echo '{"type":"message","content":"hi"}' | cloclo --ndjson
+//   cloclo --login                         # OAuth login
+//   cloclo --logout                        # Remove credentials
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
@@ -34,6 +34,14 @@ const OAUTH_TOKEN_URL: &str = "https://platform.claude.com/v1/oauth/token";
 const OAUTH_AUTHORIZE_URL: &str = "https://claude.ai/oauth/authorize";
 const OAUTH_SCOPES: &str = "user:inference user:profile user:sessions:claude_code user:mcp_servers";
 const KEYCHAIN_SERVICE: &str = "Claude Code-credentials";
+
+// ── Exit Codes ──────────────────────────────────────────────────
+const EXIT_OK: i32 = 0;
+const EXIT_RUNTIME_ERROR: i32 = 1;
+const EXIT_BAD_ARGS: i32 = 2;
+const EXIT_AUTH_FAILURE: i32 = 3;
+const EXIT_PROVIDER_ERROR: i32 = 4;
+const EXIT_TIMEOUT: i32 = 5;
 
 static VERBOSE: AtomicBool = AtomicBool::new(false);
 
@@ -76,6 +84,11 @@ struct Config {
     allowed_tools: Option<Vec<String>>,
     disallowed_tools: Option<Vec<String>>,
     explicit_provider: String,
+    permission_mode: String,
+    output_format: String,
+    timeout: u64,
+    mcp_config: Option<String>,
+    yes_mode: bool,
     cwd: String,
 }
 
@@ -106,6 +119,11 @@ impl Config {
             allowed_tools: None,
             disallowed_tools: None,
             explicit_provider: String::new(),
+            permission_mode: "default".to_string(),
+            output_format: "text".to_string(),
+            timeout: 0,
+            mcp_config: None,
+            yes_mode: false,
             cwd: env::current_dir()
                 .unwrap_or_else(|_| PathBuf::from("."))
                 .to_string_lossy()
@@ -272,6 +290,49 @@ fn create_client_for_provider(prov: &ProviderDef, cfg: &Config) -> Box<dyn Strea
 
 // ── Arg Parsing ─────────────────────────────────────────────────
 
+/// Helper: require the next argument as a value, or exit 2.
+fn need_value<'a>(args: &'a [String], i: usize, flag: &str) -> &'a str {
+    match args.get(i) {
+        Some(v) if !v.starts_with('-') || flag == "-p" || flag == "--print" => v.as_str(),
+        Some(v) if flag == "--system-prompt" || flag == "--append-system-prompt" => v.as_str(),
+        _ => {
+            eprintln!("Error: {} requires a value", flag);
+            std::process::exit(EXIT_BAD_ARGS);
+        }
+    }
+}
+
+/// Helper: parse a numeric value or exit 2.
+fn need_numeric<T: std::str::FromStr>(val: &str, flag: &str) -> T {
+    match val.parse::<T>() {
+        Ok(v) => v,
+        Err(_) => {
+            eprintln!("Error: {} requires a numeric value, got '{}'", flag, val);
+            std::process::exit(EXIT_BAD_ARGS);
+        }
+    }
+}
+
+/// Validate session-id: only alphanumeric, underscore, hyphen; max 128 chars.
+fn validate_session_id(id: &str) {
+    if id.len() > 128 {
+        eprintln!("Error: --session-id must be at most 128 characters");
+        std::process::exit(EXIT_BAD_ARGS);
+    }
+    if !id.chars().all(|c| c.is_ascii_alphanumeric() || c == '_' || c == '-') {
+        eprintln!("Error: --session-id must match ^[a-zA-Z0-9_-]+$");
+        std::process::exit(EXIT_BAD_ARGS);
+    }
+}
+
+/// Valid provider names for --provider validation.
+const VALID_PROVIDERS: &[&str] = &[
+    "anthropic", "openai", "openai-responses", "google", "google-gemini",
+    "deepseek", "mistral", "groq", "ollama", "ollama-(local)",
+    "lmstudio", "lm-studio-(local)", "vllm", "jan", "jan-(local)", "llamacpp", "llama.cpp",
+    "openai-compatible",
+];
+
 fn parse_args() -> Result<Config, String> {
     let args: Vec<String> = env::args().skip(1).collect();
     let mut cfg = Config::default();
@@ -282,30 +343,28 @@ fn parse_args() -> Result<Config, String> {
         match a.as_str() {
             "--model" | "-m" => {
                 i += 1;
-                cfg.model = resolve_model(args.get(i).ok_or("Missing model arg")?);
+                let v = need_value(&args, i, a);
+                cfg.model = resolve_model(v);
             }
             "--max-turns" => {
                 i += 1;
-                cfg.max_turns = args
-                    .get(i)
-                    .ok_or("Missing max-turns arg")?
-                    .parse()
-                    .map_err(|_| "Invalid max-turns")?;
+                let v = need_value(&args, i, "--max-turns");
+                cfg.max_turns = need_numeric(v, "--max-turns");
             }
             "--api-key" => {
                 i += 1;
-                cfg.api_key = args.get(i).ok_or("Missing api-key arg")?.clone();
+                cfg.api_key = need_value(&args, i, "--api-key").to_string();
             }
             "--auth-token" => {
                 i += 1;
-                cfg.auth_token = args.get(i).ok_or("Missing auth-token arg")?.clone();
+                cfg.auth_token = need_value(&args, i, "--auth-token").to_string();
             }
             "--oauth" => {
                 cfg.use_oauth = true;
             }
             "--api-url" => {
                 i += 1;
-                cfg.api_url = args.get(i).ok_or("Missing api-url arg")?.clone();
+                cfg.api_url = need_value(&args, i, "--api-url").to_string();
             }
             "--ndjson" => {
                 cfg.ndjson = true;
@@ -313,7 +372,7 @@ fn parse_args() -> Result<Config, String> {
             }
             "-p" | "--print" => {
                 i += 1;
-                cfg.prompt = Some(args.get(i).ok_or("Missing prompt arg")?.clone());
+                cfg.prompt = Some(need_value(&args, i, a).to_string());
                 cfg.interactive = false;
             }
             "--resume" => {
@@ -321,19 +380,20 @@ fn parse_args() -> Result<Config, String> {
             }
             "--session-id" => {
                 i += 1;
-                cfg.session_id = Some(args.get(i).ok_or("Missing session-id arg")?.clone());
+                let v = need_value(&args, i, "--session-id").to_string();
+                validate_session_id(&v);
+                cfg.session_id = Some(v);
             }
             "--verbose" => {
                 cfg.verbose = true;
             }
             "--system-prompt" => {
                 i += 1;
-                cfg.system_prompt = args.get(i).ok_or("Missing system-prompt arg")?.clone();
+                cfg.system_prompt = need_value(&args, i, "--system-prompt").to_string();
             }
             "--append-system-prompt" => {
                 i += 1;
-                cfg.append_system_prompt =
-                    args.get(i).ok_or("Missing append-system-prompt arg")?.clone();
+                cfg.append_system_prompt = need_value(&args, i, "--append-system-prompt").to_string();
             }
             "--thinking" => {
                 i += 1;
@@ -344,70 +404,128 @@ fn parse_args() -> Result<Config, String> {
             }
             "--max-tokens" => {
                 i += 1;
-                cfg.max_tokens = args
-                    .get(i)
-                    .ok_or("Missing max-tokens arg")?
-                    .parse()
-                    .map_err(|_| "Invalid max-tokens")?;
+                let v = need_value(&args, i, "--max-tokens");
+                cfg.max_tokens = need_numeric(v, "--max-tokens");
             }
             "--allowed-tools" => {
                 i += 1;
-                let tools: Vec<String> = args
-                    .get(i)
-                    .ok_or("Missing allowed-tools arg")?
-                    .split(',')
-                    .map(|s| s.to_string())
-                    .collect();
-                cfg.allowed_tools
-                    .get_or_insert_with(Vec::new)
-                    .extend(tools);
+                let v = need_value(&args, i, "--allowed-tools");
+                let tools: Vec<String> = v.split(',').map(|s| s.to_string()).collect();
+                cfg.allowed_tools.get_or_insert_with(Vec::new).extend(tools);
             }
             "--disallowed-tools" => {
                 i += 1;
-                let tools: Vec<String> = args
-                    .get(i)
-                    .ok_or("Missing disallowed-tools arg")?
-                    .split(',')
-                    .map(|s| s.to_string())
-                    .collect();
-                cfg.disallowed_tools
-                    .get_or_insert_with(Vec::new)
-                    .extend(tools);
+                let v = need_value(&args, i, "--disallowed-tools");
+                let tools: Vec<String> = v.split(',').map(|s| s.to_string()).collect();
+                cfg.disallowed_tools.get_or_insert_with(Vec::new).extend(tools);
             }
             "--openai-api-key" => {
                 i += 1;
-                cfg.openai_api_key = args.get(i).ok_or("Missing openai-api-key arg")?.clone();
+                cfg.openai_api_key = need_value(&args, i, "--openai-api-key").to_string();
             }
             "--openai-api-url" => {
                 i += 1;
-                cfg.openai_api_url = args.get(i).ok_or("Missing openai-api-url arg")?.clone();
+                cfg.openai_api_url = need_value(&args, i, "--openai-api-url").to_string();
             }
             "--provider" => {
                 i += 1;
-                cfg.explicit_provider = args.get(i).ok_or("Missing provider arg")?.clone();
+                let v = need_value(&args, i, "--provider").to_string();
+                cfg.explicit_provider = v;
             }
             "--openai" => {
                 cfg.use_openai_oauth = true;
             }
+            "--yes" | "-y" => {
+                cfg.yes_mode = true;
+            }
+            "--timeout" => {
+                i += 1;
+                let v = need_value(&args, i, "--timeout");
+                cfg.timeout = need_numeric(v, "--timeout");
+            }
+            "--json" => {
+                cfg.output_format = "json".to_string();
+            }
+            "--output" => {
+                i += 1;
+                let v = need_value(&args, i, "--output").to_string();
+                if v != "text" && v != "json" && v != "stream-json" {
+                    eprintln!("Error: --output must be one of: text, json, stream-json");
+                    std::process::exit(EXIT_BAD_ARGS);
+                }
+                cfg.output_format = v;
+            }
+            "--permission-mode" => {
+                i += 1;
+                let v = need_value(&args, i, "--permission-mode").to_string();
+                if v != "default" && v != "accept-edits" && v != "full-auto" {
+                    eprintln!("Error: --permission-mode must be one of: default, accept-edits, full-auto");
+                    std::process::exit(EXIT_BAD_ARGS);
+                }
+                cfg.permission_mode = v;
+            }
+            "--mcp-config" => {
+                i += 1;
+                let v = need_value(&args, i, "--mcp-config").to_string();
+                cfg.mcp_config = Some(v);
+            }
             "--login" => {
                 oauth_login()?;
-                std::process::exit(0);
+                std::process::exit(EXIT_OK);
             }
             "--logout" => {
                 oauth_logout();
-                std::process::exit(0);
+                std::process::exit(EXIT_OK);
             }
             "--help" | "-h" => {
                 print_help();
-                std::process::exit(0);
+                std::process::exit(EXIT_OK);
             }
             other => {
-                if !other.starts_with('-') && cfg.prompt.is_none() {
+                if other.starts_with('-') {
+                    eprintln!("Error: Unknown flag '{}'. Run with --help for usage.", other);
+                    std::process::exit(EXIT_BAD_ARGS);
+                }
+                if cfg.prompt.is_none() {
                     cfg.prompt = Some(other.to_string());
                 }
             }
         }
         i += 1;
+    }
+
+    // Validate --provider against known names
+    if !cfg.explicit_provider.is_empty() {
+        let norm = cfg.explicit_provider.to_lowercase();
+        let valid = VALID_PROVIDERS.iter().any(|p| *p == norm);
+        if !valid {
+            eprintln!(
+                "Error: Unknown provider '{}'. Valid providers: {}",
+                cfg.explicit_provider,
+                VALID_PROVIDERS.join(", ")
+            );
+            std::process::exit(EXIT_BAD_ARGS);
+        }
+    }
+
+    // Validate MCP config
+    if let Some(ref mcp_path) = cfg.mcp_config {
+        if !Path::new(mcp_path).exists() {
+            eprintln!("Error: MCP config file not found: {}", mcp_path);
+            std::process::exit(EXIT_BAD_ARGS);
+        }
+        match fs::read_to_string(mcp_path) {
+            Ok(content) => {
+                if serde_json::from_str::<serde_json::Value>(&content).is_err() {
+                    eprintln!("Error: MCP config file is not valid JSON: {}", mcp_path);
+                    std::process::exit(EXIT_BAD_ARGS);
+                }
+            }
+            Err(e) => {
+                eprintln!("Error: Cannot read MCP config file: {}", e);
+                std::process::exit(EXIT_BAD_ARGS);
+            }
+        }
     }
 
     if cfg.prompt.is_some() {
@@ -418,12 +536,19 @@ fn parse_args() -> Result<Config, String> {
 
 fn print_help() {
     eprint!(
-        r#"claude-native — Multi-provider AI coding agent CLI (Rust)
+        r#"
+       ___  _            _
+      / __|| | ___   ___| | ___
+     | |   | |/ _ \ / __| |/ _ \
+     | |__ | | (_) | (__| | (_) |
+      \___||_|\___/ \___|_|\___/
+
+cloclo — Multi-provider AI coding agent CLI (Rust)
 
 Usage:
-  claude-native                         Interactive REPL
-  claude-native -p "prompt"             One-shot print mode
-  claude-native --ndjson                NDJSON bridge mode
+  cloclo                               Interactive REPL
+  cloclo -p "prompt"                   One-shot print mode
+  cloclo --ndjson                      NDJSON bridge mode
 
 Options:
   -m, --model <name>          Model (sonnet, opus, haiku, codex, gpt-5.4, o3, or full ID)
@@ -432,6 +557,12 @@ Options:
   --ndjson                    NDJSON bridge protocol on stdin/stdout
   --max-turns <n>             Max agent loop turns (default: 25)
   --max-tokens <n>            Max output tokens (default: 16384)
+  --yes, -y                   Skip confirmation prompts (accept-edits mode)
+  --timeout <seconds>         Global timeout; exit code 5 on expiry
+  --json                      Output JSON (one-shot mode)
+  --output <format>           Output format: text, json, stream-json
+  --permission-mode <mode>    Permission mode: default, accept-edits, full-auto
+  --mcp-config <path>         Path to MCP server config JSON file
   --login                     Login to Anthropic via browser (OAuth)
   --logout                    Remove saved credentials
   --oauth                     Use Pro/Max subscription (reads macOS keychain)
@@ -443,7 +574,7 @@ Options:
   --thinking <budget>         Enable extended thinking with token budget
   --system-prompt <text>      Override system prompt
   --append-system-prompt <t>  Append to system prompt
-  --session-id <uuid>         Use specific session
+  --session-id <id>           Use specific session (alphanumeric/hyphen/underscore, max 128)
   --resume                    Resume most recent session
   --allowed-tools <list>      Comma-separated tool allowlist
   --disallowed-tools <list>   Comma-separated tool denylist
@@ -463,6 +594,14 @@ Providers:
   vllm             vLLM                        VLLM_API_URL (no auth)
   jan              Jan (local)                 JAN_API_URL (no auth)
   llamacpp         llama.cpp server            LLAMACPP_API_URL (no auth)
+
+Exit Codes:
+  0  Success
+  1  Runtime error
+  2  Invalid/missing CLI arguments
+  3  Authentication failure
+  4  Provider/model unavailable
+  5  Global timeout exceeded
 "#
     );
 }
@@ -907,7 +1046,7 @@ fn oauth_login() -> Result<(), String> {
     }
     eprintln!("Scopes: {}", scopes.join(", "));
     eprintln!("\nCredentials saved to macOS keychain.");
-    eprintln!("Run \x1b[1mclaude-native\x1b[0m to start.");
+    eprintln!("Run \x1b[1mcloclo\x1b[0m to start.");
 
     Ok(())
 }
@@ -1810,6 +1949,81 @@ fn register_builtin_tools(registry: &mut ToolRegistry) {
                         is_error: false,
                     }
                 }
+                Err(e) => ToolResult {
+                    content: format!("Error writing file: {}", e),
+                    is_error: true,
+                },
+            }
+        })),
+    );
+
+    // Edit
+    registry.register(
+        "Edit",
+        ToolDef {
+            description: "Performs exact string replacements in files. The old_string must be unique in the file.".to_string(),
+            input_schema: serde_json::json!({
+                "type": "object",
+                "properties": {
+                    "file_path": { "type": "string", "description": "Absolute path to the file to modify" },
+                    "old_string": { "type": "string", "description": "The exact text to find and replace" },
+                    "new_string": { "type": "string", "description": "The replacement text" },
+                    "replace_all": { "type": "boolean", "description": "Replace all occurrences (default: false)" }
+                },
+                "required": ["file_path", "old_string", "new_string"]
+            }),
+        },
+        Some(Box::new(|input| {
+            let file_path = json_str(input, "file_path");
+            let old_string = json_str(input, "old_string");
+            let new_string = json_str(input, "new_string");
+            let replace_all = input.get("replace_all").and_then(|v| v.as_bool()).unwrap_or(false);
+
+            if old_string == new_string {
+                return ToolResult {
+                    content: "Error: old_string and new_string are identical".to_string(),
+                    is_error: true,
+                };
+            }
+
+            let content = match fs::read_to_string(&file_path) {
+                Ok(c) => c,
+                Err(e) => {
+                    return ToolResult {
+                        content: format!("Error reading file: {}", e),
+                        is_error: true,
+                    };
+                }
+            };
+
+            if !content.contains(&old_string) {
+                return ToolResult {
+                    content: "Error: old_string not found in file".to_string(),
+                    is_error: true,
+                };
+            }
+
+            if !replace_all {
+                let count = content.matches(&old_string).count();
+                if count > 1 {
+                    return ToolResult {
+                        content: format!("Error: old_string is not unique in file ({} occurrences). Provide more context or use replace_all.", count),
+                        is_error: true,
+                    };
+                }
+            }
+
+            let new_content = if replace_all {
+                content.replace(&old_string, &new_string)
+            } else {
+                content.replacen(&old_string, &new_string, 1)
+            };
+
+            match fs::write(&file_path, &new_content) {
+                Ok(_) => ToolResult {
+                    content: format!("Edited {}", file_path),
+                    is_error: false,
+                },
                 Err(e) => ToolResult {
                     content: format!("Error writing file: {}", e),
                     is_error: true,
@@ -2961,7 +3175,7 @@ fn run_interactive(
     let session_id = session_id.unwrap();
 
     eprintln!(
-        "\x1b[1mclaude-native\x1b[0m \x1b[2m({})\x1b[0m",
+        "\x1b[1mcloclo\x1b[0m \x1b[2m({})\x1b[0m",
         cfg.model
     );
     eprintln!("\x1b[2mSession: {}\x1b[0m", session_id);
@@ -2971,7 +3185,7 @@ fn run_interactive(
     let mut current_session_id = session_id;
 
     loop {
-        eprint!("\x1b[36mclaude>\x1b[0m ");
+        eprint!("\x1b[36mcloclo>\x1b[0m ");
         io::stderr().flush().unwrap_or(());
 
         let mut line = String::new();
@@ -3163,12 +3377,18 @@ fn run_oneshot(
         "content": prompt
     })];
 
-    struct OneshotCallbacks;
+    let json_output = cfg.output_format == "json";
+
+    struct OneshotCallbacks {
+        json_mode: bool,
+    }
 
     impl AgentCallbacks for OneshotCallbacks {
         fn on_text(&mut self, delta: &str) {
-            print!("{}", delta);
-            let _ = io::stdout().flush();
+            if !self.json_mode {
+                print!("{}", delta);
+                let _ = io::stdout().flush();
+            }
         }
 
         fn on_tool_use(&mut self, _id: &str, name: &str, _input: &serde_json::Value) {
@@ -3178,11 +3398,28 @@ fn run_oneshot(
         }
     }
 
-    let mut cbs = OneshotCallbacks;
+    let mut cbs = OneshotCallbacks { json_mode: json_output };
 
     let result = run_agent_loop(client, registry, cfg, &mut messages, &system_blocks, &mut cbs)?;
 
-    println!();
+    if json_output {
+        let json_result = serde_json::json!({
+            "type": "result",
+            "result": result.text,
+            "model": cfg.model,
+            "turns": result.turns,
+            "stop_reason": result.stop_reason,
+            "usage": {
+                "input_tokens": result.usage.input_tokens,
+                "output_tokens": result.usage.output_tokens,
+                "cache_creation_input_tokens": result.usage.cache_creation_input_tokens,
+                "cache_read_input_tokens": result.usage.cache_read_input_tokens,
+            }
+        });
+        println!("{}", serde_json::to_string_pretty(&json_result).unwrap_or_default());
+    } else {
+        println!();
+    }
 
     if VERBOSE.load(Ordering::Relaxed) {
         eprintln!(
@@ -3201,11 +3438,21 @@ fn main() {
         Ok(c) => c,
         Err(e) => {
             eprintln!("Error: {}", e);
-            std::process::exit(1);
+            std::process::exit(EXIT_BAD_ARGS);
         }
     };
 
     VERBOSE.store(cfg.verbose, Ordering::Relaxed);
+
+    // Start global timeout thread if --timeout is set
+    if cfg.timeout > 0 {
+        let timeout_secs = cfg.timeout;
+        thread::spawn(move || {
+            thread::sleep(Duration::from_secs(timeout_secs));
+            eprintln!("Error: Global timeout of {}s exceeded", timeout_secs);
+            std::process::exit(EXIT_TIMEOUT);
+        });
+    }
 
     // Resolve auth: --oauth (keychain) > --auth-token > --api-key > ANTHROPIC_API_KEY
     if cfg.use_oauth || (cfg.api_key.is_empty() && cfg.auth_token.is_empty()) {
@@ -3217,7 +3464,7 @@ fn main() {
             Err(e) => {
                 if cfg.use_oauth {
                     eprintln!("Error: {}", e);
-                    std::process::exit(1);
+                    std::process::exit(EXIT_AUTH_FAILURE);
                 }
                 // Fall through to API key check
             }
@@ -3232,15 +3479,15 @@ fn main() {
     match provider.env_key {
         Some("ANTHROPIC_API_KEY") if cfg.api_key.is_empty() && cfg.auth_token.is_empty() => {
             eprintln!("Error: No Anthropic auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY");
-            std::process::exit(1);
+            std::process::exit(EXIT_AUTH_FAILURE);
         }
         Some("OPENAI_API_KEY") if cfg.openai_api_key.is_empty() => {
             eprintln!("Error: No OpenAI auth. Run --openai-login, use --openai-api-key, or set OPENAI_API_KEY");
-            std::process::exit(1);
+            std::process::exit(EXIT_AUTH_FAILURE);
         }
         Some(k) if k != "ANTHROPIC_API_KEY" && k != "OPENAI_API_KEY" && env::var(k).unwrap_or_default().is_empty() => {
             eprintln!("Error: No {} auth. Set {}", provider.name, k);
-            std::process::exit(1);
+            std::process::exit(EXIT_AUTH_FAILURE);
         }
         _ => {}
     }
@@ -3262,7 +3509,7 @@ fn main() {
     let r = running.clone();
     let _ = ctrlc_handler(move || {
         r.store(false, Ordering::Relaxed);
-        std::process::exit(0);
+        std::process::exit(EXIT_OK);
     });
 
     // Mode dispatch
@@ -3276,7 +3523,7 @@ fn main() {
 
     if let Err(e) = result {
         eprintln!("Fatal: {}", e);
-        std::process::exit(1);
+        std::process::exit(EXIT_RUNTIME_ERROR);
     }
 }
 

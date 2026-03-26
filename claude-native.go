@@ -21,10 +21,20 @@ import (
 	"regexp"
 	"runtime"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"syscall"
 	"time"
+)
+
+const (
+	ExitOK            = 0
+	ExitRuntimeError  = 1
+	ExitBadArgs       = 2
+	ExitAuthFailure   = 3
+	ExitProviderError = 4
+	ExitTimeout       = 5
 )
 
 // ── Types ──────────────────────────────────────────────────────
@@ -54,6 +64,10 @@ type Config struct {
 	ExplicitProvider   string
 	CWD                string
 	ProviderRef        *Provider // resolved provider (set in main)
+	PermissionMode     string
+	OutputFormat       string
+	Timeout            int
+	McpConfig          string
 }
 
 type ContentBlock struct {
@@ -361,6 +375,13 @@ func detectProvider(model, explicitProvider string) *Provider {
 				return &providers[i]
 			}
 		}
+		// Explicit provider given but not found — exit with valid list
+		var names []string
+		for _, p := range providers {
+			names = append(names, strings.ToLower(strings.ReplaceAll(p.Name, " ", "-")))
+		}
+		fmt.Fprintf(os.Stderr, "Error: unknown provider %q. Valid providers: %s\n", explicitProvider, strings.Join(names, ", "))
+		os.Exit(ExitBadArgs)
 	}
 	for i := range providers {
 		if providers[i].Detect(model) {
@@ -427,87 +448,124 @@ func parseArgs() *Config {
 	cfg.CWD = cwd
 
 	args := os.Args[1:]
+
+	needValue := func(flag string, i int) string {
+		if i+1 >= len(args) {
+			fmt.Fprintf(os.Stderr, "Error: %s requires a value\n", flag)
+			os.Exit(ExitBadArgs)
+		}
+		return args[i+1]
+	}
+
+	requireInt := func(flag, val string) int {
+		n, err := strconv.Atoi(val)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: %s requires an integer, got %q\n", flag, val)
+			os.Exit(ExitBadArgs)
+		}
+		return n
+	}
+
+	sessionIDRe := regexp.MustCompile(`^[A-Za-z0-9_-]{1,128}$`)
+
 	for i := 0; i < len(args); i++ {
 		a := args[i]
-		next := func() string {
-			i++
-			if i < len(args) {
-				return args[i]
-			}
-			return ""
-		}
 		switch a {
 		case "--model", "-m":
-			cfg.Model = resolveModel(next())
+			cfg.Model = resolveModel(needValue(a, i)); i++
 		case "--max-turns":
-			fmt.Sscanf(next(), "%d", &cfg.MaxTurns)
+			v := needValue(a, i); i++
+			cfg.MaxTurns = requireInt(a, v)
 		case "--api-key":
-			cfg.APIKey = next()
+			cfg.APIKey = needValue(a, i); i++
 		case "--auth-token":
-			cfg.AuthToken = next()
+			cfg.AuthToken = needValue(a, i); i++
 		case "--oauth":
 			cfg.UseOAuth = true
 		case "--api-url":
-			cfg.APIURL = next()
+			cfg.APIURL = needValue(a, i); i++
 		case "--ndjson":
 			cfg.NDJSON = true
 			cfg.Interactive = false
 		case "-p", "--print":
-			cfg.Prompt = next()
+			cfg.Prompt = needValue(a, i); i++
 			cfg.Interactive = false
 		case "--resume":
 			cfg.Resume = true
 		case "--session-id":
-			cfg.SessionID = next()
+			v := needValue(a, i); i++
+			if !sessionIDRe.MatchString(v) {
+				fmt.Fprintf(os.Stderr, "Error: --session-id must be alphanumeric/hyphens/underscores, max 128 chars, got %q\n", v)
+				os.Exit(ExitBadArgs)
+			}
+			cfg.SessionID = v
 		case "--verbose":
 			cfg.Verbose = true
 		case "--system-prompt":
-			cfg.SystemPrompt = next()
+			cfg.SystemPrompt = needValue(a, i); i++
 		case "--append-system-prompt":
-			cfg.AppendSystemPrompt = next()
+			cfg.AppendSystemPrompt = needValue(a, i); i++
 		case "--thinking":
-			v := next()
-			fmt.Sscanf(v, "%d", &cfg.ThinkingBudget)
+			v := needValue(a, i); i++
+			cfg.ThinkingBudget = requireInt(a, v)
 			if cfg.ThinkingBudget == 0 {
 				cfg.ThinkingBudget = 10000
 			}
 		case "--max-tokens":
-			fmt.Sscanf(next(), "%d", &cfg.MaxTokens)
+			v := needValue(a, i); i++
+			cfg.MaxTokens = requireInt(a, v)
+		case "--timeout":
+			v := needValue(a, i); i++
+			cfg.Timeout = requireInt(a, v)
 		case "--allowed-tools":
-			cfg.AllowedTools = append(cfg.AllowedTools, strings.Split(next(), ",")...)
+			cfg.AllowedTools = append(cfg.AllowedTools, strings.Split(needValue(a, i), ",")...); i++
 		case "--disallowed-tools":
-			cfg.DisallowedTools = append(cfg.DisallowedTools, strings.Split(next(), ",")...)
+			cfg.DisallowedTools = append(cfg.DisallowedTools, strings.Split(needValue(a, i), ",")...); i++
 		case "--openai-api-key":
-			cfg.OpenAIAPIKey = next()
+			cfg.OpenAIAPIKey = needValue(a, i); i++
 		case "--openai-api-url":
-			cfg.OpenAIAPIURL = next()
+			cfg.OpenAIAPIURL = needValue(a, i); i++
 		case "--openai":
 			cfg.UseOpenAIOAuth = true
 		case "--provider":
-			cfg.ExplicitProvider = next()
+			cfg.ExplicitProvider = needValue(a, i); i++
+		case "--yes", "-y":
+			cfg.PermissionMode = "yes"
+		case "--json":
+			cfg.OutputFormat = "json"
+		case "--output":
+			cfg.OutputFormat = needValue(a, i); i++
+		case "--permission-mode":
+			cfg.PermissionMode = needValue(a, i); i++
+		case "--mcp-config":
+			cfg.McpConfig = needValue(a, i); i++
 		case "--login":
 			if err := oauthLogin(); err != nil {
-				fmt.Fprintf(os.Stderr, "Login error: %v\n", err)
-				os.Exit(1)
+				fmt.Fprintf(os.Stderr, "Error: login failed: %v\n", err)
+				os.Exit(ExitRuntimeError)
 			}
-			os.Exit(0)
+			os.Exit(ExitOK)
 		case "--logout":
 			oauthLogout()
-			os.Exit(0)
+			os.Exit(ExitOK)
 		case "--openai-login":
 			if err := openaiOAuthLogin(); err != nil {
-				fmt.Fprintf(os.Stderr, "OpenAI login error: %v\n", err)
-				os.Exit(1)
+				fmt.Fprintf(os.Stderr, "Error: OpenAI login failed: %v\n", err)
+				os.Exit(ExitRuntimeError)
 			}
-			os.Exit(0)
+			os.Exit(ExitOK)
 		case "--openai-logout":
 			openaiOAuthLogout()
-			os.Exit(0)
+			os.Exit(ExitOK)
 		case "--help", "-h":
 			printHelp()
-			os.Exit(0)
+			os.Exit(ExitOK)
 		default:
-			if !strings.HasPrefix(a, "-") && cfg.Prompt == "" {
+			if strings.HasPrefix(a, "-") {
+				fmt.Fprintf(os.Stderr, "Error: unknown flag %q\nRun cloclo --help for usage.\n", a)
+				os.Exit(ExitBadArgs)
+			}
+			if cfg.Prompt == "" {
 				cfg.Prompt = a
 			}
 		}
@@ -520,12 +578,12 @@ func parseArgs() *Config {
 }
 
 func printHelp() {
-	fmt.Fprint(os.Stderr, `claude-native — Multi-provider AI coding agent CLI (Go)
+	fmt.Fprint(os.Stderr, `cloclo — Multi-provider AI coding agent CLI (Go)
 
 Usage:
-  claude-native                         Interactive REPL
-  claude-native -p "prompt"             One-shot print mode
-  claude-native --ndjson                NDJSON bridge mode
+  cloclo                                Interactive REPL
+  cloclo -p "prompt"                    One-shot print mode
+  cloclo --ndjson                       NDJSON bridge mode
 
 Options:
   -m, --model <name>          Model (sonnet, opus, haiku, gpt-4o, o3, codex, or full ID)
@@ -534,6 +592,12 @@ Options:
   --ndjson                    NDJSON bridge protocol on stdin/stdout
   --max-turns <n>             Max agent loop turns (default: 25)
   --max-tokens <n>            Max output tokens (default: 16384)
+  --timeout <seconds>         Global timeout (exit code 5 on expiry)
+  --json                      Output JSON in one-shot mode
+  --output <format>           Output format (text, json)
+  -y, --yes                   Auto-approve tool use (permission mode: yes)
+  --permission-mode <mode>    Permission mode for tool execution
+  --mcp-config <path>         Path to MCP config JSON file
   --login                     Login to Anthropic via browser (OAuth)
   --logout                    Remove Anthropic credentials
   --oauth                     Use Anthropic Pro/Max subscription (keychain)
@@ -548,7 +612,7 @@ Options:
   --thinking <budget>         Enable extended thinking with token budget
   --system-prompt <text>      Override system prompt
   --append-system-prompt <t>  Append to system prompt
-  --session-id <uuid>         Use specific session
+  --session-id <id>           Use specific session (alphanumeric/hyphens/underscores, max 128)
   --resume                    Resume most recent session
   --allowed-tools <list>      Comma-separated tool allowlist
   --disallowed-tools <list>   Comma-separated tool denylist
@@ -568,6 +632,14 @@ Providers:
   vllm             vLLM                        VLLM_API_URL (no auth)
   jan              Jan (local)                 JAN_API_URL (no auth)
   llamacpp         llama.cpp server            LLAMACPP_API_URL (no auth)
+
+Exit codes:
+  0  OK            Success
+  1  RUNTIME_ERROR Catch-all runtime failure
+  2  BAD_ARGS      Invalid or missing CLI arguments
+  3  AUTH_FAILURE   No credentials or rejected
+  4  PROVIDER_ERROR Provider/model unavailable
+  5  TIMEOUT       Global --timeout exceeded
 `)
 }
 
@@ -1307,6 +1379,61 @@ func registerBuiltinTools(registry *ToolRegistry) {
 		},
 	)
 
+	// Edit
+	registry.Register("Edit",
+		"Perform exact string replacements in a file. The old_string must be unique in the file unless replace_all is true.",
+		map[string]interface{}{
+			"type": "object",
+			"properties": map[string]interface{}{
+				"file_path":   map[string]interface{}{"type": "string", "description": "Absolute path to the file to modify"},
+				"old_string":  map[string]interface{}{"type": "string", "description": "The exact text to replace"},
+				"new_string":  map[string]interface{}{"type": "string", "description": "The replacement text"},
+				"replace_all": map[string]interface{}{"type": "boolean", "description": "Replace all occurrences (default: false)"},
+			},
+			"required": []string{"file_path", "old_string", "new_string"},
+		},
+		func(input map[string]interface{}) *ToolExecuteResult {
+			filePath, _ := input["file_path"].(string)
+			oldStr, _ := input["old_string"].(string)
+			newStr, _ := input["new_string"].(string)
+			replaceAll, _ := input["replace_all"].(bool)
+
+			data, err := os.ReadFile(filePath)
+			if err != nil {
+				return &ToolExecuteResult{Content: fmt.Sprintf("Error reading file: %v", err), IsError: true}
+			}
+			content := string(data)
+
+			if oldStr == newStr {
+				return &ToolExecuteResult{Content: "Error: old_string and new_string are identical", IsError: true}
+			}
+
+			count := strings.Count(content, oldStr)
+			if count == 0 {
+				return &ToolExecuteResult{Content: "Error: old_string not found in file", IsError: true}
+			}
+			if count > 1 && !replaceAll {
+				return &ToolExecuteResult{Content: fmt.Sprintf("Error: old_string found %d times; use replace_all or provide more context to make it unique", count), IsError: true}
+			}
+
+			var updated string
+			if replaceAll {
+				updated = strings.ReplaceAll(content, oldStr, newStr)
+			} else {
+				updated = strings.Replace(content, oldStr, newStr, 1)
+			}
+
+			if err := os.WriteFile(filePath, []byte(updated), 0644); err != nil {
+				return &ToolExecuteResult{Content: fmt.Sprintf("Error writing file: %v", err), IsError: true}
+			}
+			replacements := count
+			if !replaceAll {
+				replacements = 1
+			}
+			return &ToolExecuteResult{Content: fmt.Sprintf("Replaced %d occurrence(s) in %s", replacements, filePath), IsError: false}
+		},
+	)
+
 	// Glob
 	registry.Register("Glob",
 		"Find files matching a glob pattern. Returns paths sorted by modification time.",
@@ -1860,7 +1987,7 @@ type SessionManager struct {
 
 func NewSessionManager() *SessionManager {
 	home, _ := os.UserHomeDir()
-	dir := filepath.Join(home, ".claude-native", "sessions")
+	dir := filepath.Join(home, ".cloclo", "sessions")
 	os.MkdirAll(dir, 0755)
 	return &SessionManager{Dir: dir}
 }
@@ -2142,7 +2269,7 @@ func (m *InteractiveMode) Run() {
 		m.SessionID = m.Sessions.Create()
 	}
 
-	fmt.Fprintf(os.Stderr, "\033[1mclaude-native\033[0m \033[2m(%s)\033[0m\n", m.Cfg.Model)
+	fmt.Fprintf(os.Stderr, "\033[1mcloclo\033[0m \033[2m(%s)\033[0m\n", m.Cfg.Model)
 	fmt.Fprintf(os.Stderr, "\033[2mSession: %s\033[0m\n", m.SessionID)
 	fmt.Fprintf(os.Stderr, "\033[2mType /exit to quit, /model <name> to switch, /clear to reset, /cost for usage\033[0m\n\n")
 
@@ -2700,6 +2827,29 @@ func main() {
 	cfg := parseArgs()
 	verbose = cfg.Verbose
 
+	// Validate MCP config if provided
+	if cfg.McpConfig != "" {
+		data, err := os.ReadFile(cfg.McpConfig)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error: cannot read --mcp-config %q: %v\n", cfg.McpConfig, err)
+			os.Exit(ExitBadArgs)
+		}
+		var js interface{}
+		if json.Unmarshal(data, &js) != nil {
+			fmt.Fprintf(os.Stderr, "Error: --mcp-config %q is not valid JSON\n", cfg.McpConfig)
+			os.Exit(ExitBadArgs)
+		}
+	}
+
+	// Start timeout goroutine if configured
+	if cfg.Timeout > 0 {
+		go func() {
+			time.Sleep(time.Duration(cfg.Timeout) * time.Second)
+			fmt.Fprintf(os.Stderr, "Error: global timeout (%ds) exceeded\n", cfg.Timeout)
+			os.Exit(ExitTimeout)
+		}()
+	}
+
 	// Resolve Anthropic auth
 	if cfg.UseOAuth || (cfg.APIKey == "" && cfg.AuthToken == "") {
 		token, subType, err := getOAuthAccessToken(cfg.Verbose)
@@ -2708,7 +2858,7 @@ func main() {
 			fmt.Fprintf(os.Stderr, "\033[2mUsing %s subscription (OAuth)\033[0m\n", subType)
 		} else if cfg.UseOAuth {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			os.Exit(ExitAuthFailure)
 		}
 	}
 
@@ -2720,13 +2870,13 @@ func main() {
 	// Validate auth
 	if provider.EnvKey == "ANTHROPIC_API_KEY" && cfg.APIKey == "" && cfg.AuthToken == "" {
 		fmt.Fprintln(os.Stderr, "Error: No Anthropic auth. Run --login, use --api-key, or set ANTHROPIC_API_KEY")
-		os.Exit(1)
+		os.Exit(ExitAuthFailure)
 	} else if provider.EnvKey == "OPENAI_API_KEY" && cfg.OpenAIAPIKey == "" {
 		fmt.Fprintln(os.Stderr, "Error: No OpenAI auth. Run --openai-login, use --openai-api-key, or set OPENAI_API_KEY")
-		os.Exit(1)
+		os.Exit(ExitAuthFailure)
 	} else if provider.EnvKey != "" && provider.EnvKey != "ANTHROPIC_API_KEY" && provider.EnvKey != "OPENAI_API_KEY" && os.Getenv(provider.EnvKey) == "" {
 		fmt.Fprintf(os.Stderr, "Error: No %s auth. Set %s\n", provider.Name, provider.EnvKey)
-		os.Exit(1)
+		os.Exit(ExitAuthFailure)
 	}
 
 	if provider.Name != "Anthropic" {
@@ -2772,9 +2922,26 @@ func main() {
 		result, err := loop.Run(messages, systemBlocks)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
+			os.Exit(ExitProviderError)
 		}
-		fmt.Fprintln(os.Stdout)
+
+		if cfg.OutputFormat == "json" {
+			jsonOut := map[string]interface{}{
+				"version":    "1.0.0",
+				"message":    result.Text,
+				"model":      cfg.Model,
+				"provider":   provider.Name,
+				"usage":      result.Usage,
+				"stop_reason": result.StopReason,
+				"turns":      result.Turns,
+				"session_id": cfg.SessionID,
+			}
+			enc := json.NewEncoder(os.Stdout)
+			enc.SetIndent("", "  ")
+			enc.Encode(jsonOut)
+		} else {
+			fmt.Fprintln(os.Stdout)
+		}
 
 		if verbose {
 			fmt.Fprintf(os.Stderr, "\033[2m(%d in / %d out | %d turns)\033[0m\n",

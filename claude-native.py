@@ -267,8 +267,12 @@ PROVIDERS = {
 }
 
 def detect_provider(model: str, explicit_provider: str = None) -> dict:
-    if explicit_provider and explicit_provider in PROVIDERS:
-        return PROVIDERS[explicit_provider]
+    if explicit_provider:
+        if explicit_provider in PROVIDERS:
+            return PROVIDERS[explicit_provider]
+        valid = ", ".join(PROVIDERS.keys())
+        sys.stderr.write(f'Error: Unknown provider "{explicit_provider}"\n  Valid: {valid}\n')
+        sys.exit(EXIT_BAD_ARGS)
     for p in PROVIDERS.values():
         if p["detect"](model):
             return p
@@ -297,9 +301,19 @@ OAUTH_TOKEN_URL = "https://platform.claude.com/v1/oauth/token"
 OAUTH_AUTHORIZE_URL = "https://claude.ai/oauth/authorize"
 OAUTH_SCOPES = "user:inference user:profile user:sessions:claude_code user:mcp_servers"
 
+# ── Exit Codes ──────────────────────────────────────────────────
+
+EXIT_OK = 0
+EXIT_RUNTIME_ERROR = 1
+EXIT_BAD_ARGS = 2
+EXIT_AUTH_FAILURE = 3
+EXIT_PROVIDER_ERROR = 4
+EXIT_TIMEOUT = 5
+
 # ── ArgParser ────────────────────────────────────────────────────
 
 def parse_args(argv: object = None) -> dict:
+    import re as _re
     if argv is None:
         argv = sys.argv[1:]
 
@@ -325,57 +339,133 @@ def parse_args(argv: object = None) -> dict:
         "maxTokens": 16384,
         "allowedTools": None,
         "disallowedTools": None,
-        "provider": None,  # explicit provider override
+        "provider": None,
+        "permissionMode": "auto",
+        "outputFormat": "text",
+        "timeout": 0,
+        "mcpConfig": None,
         "cwd": os.getcwd(),
     }
+
+    FLAGS_WITH_VALUE = {
+        "--model", "-m", "--max-turns", "--api-key", "--auth-token", "--api-url",
+        "--openai-api-key", "--openai-api-url", "--provider", "-p", "--print",
+        "--session-id", "--system-prompt", "--append-system-prompt", "--thinking",
+        "--max-tokens", "--mcp-config", "--allowed-tools", "--disallowed-tools",
+        "--permission-mode", "--output", "--timeout",
+    }
+    FLAGS_BOOLEAN = {
+        "--oauth", "--ndjson", "--resume", "--verbose",
+        "--json", "--yes", "-y", "--openai", "--login", "--logout",
+        "--openai-login", "--openai-logout", "--help", "-h",
+    }
+
+    VALID_PERMISSION_MODES = {"auto", "default", "plan", "acceptEdits", "bypassPermissions", "dontAsk"}
+    VALID_OUTPUT_FORMATS = {"text", "json"}
+
+    def need_value(flag, idx):
+        if idx >= len(argv) or argv[idx].startswith("-"):
+            sys.stderr.write(f"Error: {flag} requires a value\n  cloclo {flag} <value>\n")
+            sys.exit(EXIT_BAD_ARGS)
+        return argv[idx]
 
     i = 0
     while i < len(argv):
         a = argv[i]
         if a in ("--model", "-m"):
-            i += 1; cfg["model"] = resolve_model(argv[i])
+            i += 1; cfg["model"] = resolve_model(need_value(a, i))
         elif a == "--max-turns":
-            i += 1; cfg["maxTurns"] = int(argv[i])
+            i += 1; v = need_value(a, i)
+            try:
+                n = int(v)
+                if n < 1: raise ValueError
+            except ValueError:
+                sys.stderr.write(f'Error: --max-turns must be a positive integer, got "{v}"\n')
+                sys.exit(EXIT_BAD_ARGS)
+            cfg["maxTurns"] = n
         elif a == "--api-key":
-            i += 1; cfg["apiKey"] = argv[i]
+            i += 1; cfg["apiKey"] = need_value(a, i)
         elif a == "--auth-token":
-            i += 1; cfg["authToken"] = argv[i]
+            i += 1; cfg["authToken"] = need_value(a, i)
         elif a == "--oauth":
             cfg["useOAuth"] = True
         elif a == "--api-url":
-            i += 1; cfg["apiUrl"] = argv[i]
+            i += 1; cfg["apiUrl"] = need_value(a, i)
         elif a == "--ndjson":
             cfg["ndjson"] = True; cfg["interactive"] = False
         elif a in ("-p", "--print"):
-            i += 1; cfg["prompt"] = argv[i]; cfg["interactive"] = False
+            i += 1; cfg["prompt"] = need_value(a, i); cfg["interactive"] = False
         elif a == "--resume":
             cfg["resume"] = True
         elif a == "--session-id":
-            i += 1; cfg["sessionId"] = argv[i]
+            i += 1; v = need_value(a, i)
+            if not _re.match(r'^[a-zA-Z0-9_-]+$', v) or len(v) > 128:
+                sys.stderr.write(f'Error: --session-id must be alphanumeric/hyphens/underscores, max 128 chars\n  Got: "{v[:40]}{"..." if len(v) > 40 else ""}"\n')
+                sys.exit(EXIT_BAD_ARGS)
+            cfg["sessionId"] = v
         elif a == "--verbose":
             cfg["verbose"] = True
         elif a == "--system-prompt":
-            i += 1; cfg["systemPrompt"] = argv[i]
+            i += 1; cfg["systemPrompt"] = need_value(a, i)
         elif a == "--append-system-prompt":
-            i += 1; cfg["appendSystemPrompt"] = argv[i]
+            i += 1; cfg["appendSystemPrompt"] = need_value(a, i)
         elif a == "--thinking":
-            i += 1; cfg["thinkingBudget"] = int(argv[i]) if argv[i].isdigit() else 10000
+            i += 1; v = need_value(a, i)
+            try:
+                n = int(v)
+                if n < 1: raise ValueError
+            except ValueError:
+                sys.stderr.write(f'Error: --thinking must be a positive integer (token budget), got "{v}"\n')
+                sys.exit(EXIT_BAD_ARGS)
+            cfg["thinkingBudget"] = n
         elif a == "--max-tokens":
-            i += 1; cfg["maxTokens"] = int(argv[i])
+            i += 1; v = need_value(a, i)
+            try:
+                n = int(v)
+                if n < 1: raise ValueError
+            except ValueError:
+                sys.stderr.write(f'Error: --max-tokens must be a positive integer, got "{v}"\n')
+                sys.exit(EXIT_BAD_ARGS)
+            cfg["maxTokens"] = n
         elif a == "--allowed-tools":
-            i += 1
-            cfg["allowedTools"] = (cfg["allowedTools"] or []) + argv[i].split(",")
+            i += 1; cfg["allowedTools"] = (cfg["allowedTools"] or []) + need_value(a, i).split(",")
         elif a == "--disallowed-tools":
-            i += 1
-            cfg["disallowedTools"] = (cfg["disallowedTools"] or []) + argv[i].split(",")
+            i += 1; cfg["disallowedTools"] = (cfg["disallowedTools"] or []) + need_value(a, i).split(",")
         elif a == "--openai-api-key":
-            i += 1; cfg["openaiApiKey"] = argv[i]
+            i += 1; cfg["openaiApiKey"] = need_value(a, i)
         elif a == "--openai-api-url":
-            i += 1; cfg["openaiApiUrl"] = argv[i]
+            i += 1; cfg["openaiApiUrl"] = need_value(a, i)
         elif a == "--openai":
             cfg["useOpenAIOAuth"] = True
         elif a == "--provider":
-            i += 1; cfg["provider"] = argv[i]
+            i += 1; cfg["provider"] = need_value(a, i)
+        elif a == "--permission-mode":
+            i += 1; v = need_value(a, i)
+            if v not in VALID_PERMISSION_MODES:
+                sys.stderr.write(f'Error: --permission-mode must be one of: {", ".join(VALID_PERMISSION_MODES)}\n  Got: "{v}"\n')
+                sys.exit(EXIT_BAD_ARGS)
+            cfg["permissionMode"] = v
+        elif a == "--output":
+            i += 1; v = need_value(a, i)
+            if v not in VALID_OUTPUT_FORMATS:
+                sys.stderr.write(f'Error: --output must be one of: {", ".join(VALID_OUTPUT_FORMATS)}\n  Got: "{v}"\n')
+                sys.exit(EXIT_BAD_ARGS)
+            cfg["outputFormat"] = v
+        elif a == "--json":
+            cfg["outputFormat"] = "json"
+        elif a in ("--yes", "-y"):
+            cfg["permissionMode"] = "bypassPermissions"
+        elif a == "--timeout":
+            i += 1; v = need_value(a, i)
+            try:
+                n = int(v)
+                if n < 0: raise ValueError
+            except ValueError:
+                sys.stderr.write(f'Error: --timeout must be a non-negative integer (seconds), got "{v}"\n')
+                sys.exit(EXIT_BAD_ARGS)
+            cfg["timeout"] = n
+        elif a == "--mcp-config":
+            i += 1; cfg["mcpConfig"] = need_value(a, i)
         elif a == "--login":
             oauth_login(); sys.exit(0)
         elif a == "--logout":
@@ -387,8 +477,14 @@ def parse_args(argv: object = None) -> dict:
         elif a in ("--help", "-h"):
             print_help(); sys.exit(0)
         else:
-            if not a.startswith("-") and cfg["prompt"] is None:
+            if a.startswith("-"):
+                sys.stderr.write(f'Error: Unknown flag "{a}"\n  Run cloclo --help for usage\n')
+                sys.exit(EXIT_BAD_ARGS)
+            if cfg["prompt"] is None:
                 cfg["prompt"] = a
+            else:
+                sys.stderr.write(f'Error: Unexpected argument "{a}" (prompt already set)\n  Use -p to pass a prompt explicitly\n')
+                sys.exit(EXIT_BAD_ARGS)
         i += 1
 
     if cfg["prompt"]:
@@ -396,18 +492,22 @@ def parse_args(argv: object = None) -> dict:
     return cfg
 
 def print_help() -> None:
-    sys.stderr.write("""claude-native — Multi-provider AI coding agent CLI (Python)
+    sys.stderr.write("""cloclo — Multi-provider AI coding agent CLI (Python)
 
 Usage:
-  claude-native.py                         Interactive REPL
-  claude-native.py -p "prompt"             One-shot print mode
-  claude-native.py --ndjson                NDJSON bridge mode
+  cloclo                         Interactive REPL
+  cloclo -p "prompt"             One-shot print mode
+  cloclo --ndjson                NDJSON bridge mode
 
 Options:
   -m, --model <name>          Model (sonnet, opus, haiku, codex, gpt-5.4, o3, or full ID)
   --provider <name>           Explicit provider override (see Providers below)
   -p, --print <prompt>        One-shot mode, print response and exit
   --ndjson                    NDJSON bridge protocol on stdin/stdout
+  --output <format>           Output format: text (default) or json
+  --json                      Shorthand for --output json
+  -y, --yes                   Skip all permission prompts
+  --timeout <seconds>         Global timeout — exit with code 5 if exceeded
   --max-turns <n>             Max agent loop turns (default: 25)
   --max-tokens <n>            Max output tokens (default: 16384)
   --login                     Login to Anthropic via browser (OAuth)
@@ -424,12 +524,22 @@ Options:
   --thinking <budget>         Enable extended thinking with token budget
   --system-prompt <text>      Override system prompt
   --append-system-prompt <t>  Append to system prompt
-  --session-id <uuid>         Use specific session
+  --mcp-config <path>         MCP servers config JSON file
+  --session-id <id>           Use specific session
   --resume                    Resume most recent session
   --allowed-tools <list>      Comma-separated tool allowlist
   --disallowed-tools <list>   Comma-separated tool denylist
+  --permission-mode <mode>    auto|default|plan|acceptEdits|bypassPermissions|dontAsk
   --verbose                   Debug logging to stderr
   -h, --help                  Show this help
+
+Exit codes:
+  0  Success
+  1  Runtime error
+  2  Bad arguments
+  3  Authentication failure
+  4  Provider/model error
+  5  Timeout
 
 Providers:
   anthropic        Anthropic (Claude)          ANTHROPIC_API_KEY or --login
@@ -1059,6 +1169,41 @@ def register_builtin_tools(registry: ToolRegistry):
             "required": ["pattern"],
         },
     }, _exec_grep)
+
+    # Edit
+    registry.register("Edit", {
+        "description": "Performs exact string replacements in files.",
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "file_path": {"type": "string", "description": "Absolute path to the file"},
+                "old_string": {"type": "string", "description": "The text to replace"},
+                "new_string": {"type": "string", "description": "The replacement text"},
+                "replace_all": {"type": "boolean", "description": "Replace all occurrences (default: false)"},
+            },
+            "required": ["file_path", "old_string", "new_string"],
+        },
+    }, _exec_edit)
+
+
+def _exec_edit(inp: dict):
+    fp = inp["file_path"]
+    with open(fp, "r") as f:
+        content = f.read()
+    old = inp["old_string"]
+    new = inp["new_string"]
+    if old not in content:
+        return {"content": f"Error: old_string not found in {fp}", "is_error": True}
+    if inp.get("replace_all"):
+        updated = content.replace(old, new)
+    else:
+        count = content.count(old)
+        if count > 1:
+            return {"content": f"Error: old_string appears {count} times in {fp}. Provide more context to make it unique, or use replace_all.", "is_error": True}
+        updated = content.replace(old, new, 1)
+    with open(fp, "w") as f:
+        f.write(updated)
+    return f"Edited {fp}"
 
 
 def _exec_bash(inp: dict) -> dict:
@@ -2026,7 +2171,7 @@ def oauth_login():
         sys.stderr.write(f"Org: {org_name}\n")
     sys.stderr.write(f"Scopes: {', '.join(scopes)}\n")
     sys.stderr.write(f"\nCredentials saved to macOS keychain.\n")
-    sys.stderr.write(f"Run \033[1mpython claude-native.py\033[0m to start.\n")
+    sys.stderr.write(f"Run \033[1mcloclo\033[0m to start.\n")
     sys.stderr.flush()
 
 
@@ -2061,7 +2206,7 @@ def main():
         except Exception as e:
             if cfg["useOAuth"]:
                 sys.stderr.write(f"Error: {e}\n")
-                sys.exit(1)
+                sys.exit(EXIT_AUTH_FAILURE)
 
     # Resolve OpenAI auth
     early_provider = detect_provider(cfg["model"], cfg.get("provider"))
@@ -2073,7 +2218,7 @@ def main():
         except Exception as e:
             if cfg["useOpenAIOAuth"]:
                 sys.stderr.write(f"Error: {e}\n")
-                sys.exit(1)
+                sys.exit(EXIT_AUTH_FAILURE)
 
     # Detect provider and create client
     provider = detect_provider(cfg["model"], cfg.get("provider"))
@@ -2096,7 +2241,7 @@ def main():
     if not provider_key and provider["env_key"]:
         hint = "Run --login, use --api-key, or set ANTHROPIC_API_KEY" if provider["name"] == "Anthropic" else f"Set {provider['env_key']}"
         sys.stderr.write(f"Error: No {provider['name']} auth. {hint}\n")
-        sys.exit(1)
+        sys.exit(EXIT_AUTH_FAILURE)
 
     if provider["name"] != "Anthropic":
         sys.stderr.write(f"\033[2mUsing {provider['name']} backend ({cfg['model']})\033[0m\n")
@@ -2109,11 +2254,32 @@ def main():
     if cfg["allowedTools"] or cfg["disallowedTools"]:
         registry.set_filter(cfg["allowedTools"], cfg["disallowedTools"])
 
+    # MCP config validation
+    if cfg.get("mcpConfig"):
+        if not os.path.exists(cfg["mcpConfig"]):
+            sys.stderr.write(f"Error: MCP config file not found: {cfg['mcpConfig']}\n")
+            sys.exit(EXIT_BAD_ARGS)
+        try:
+            with open(cfg["mcpConfig"]) as f:
+                json.loads(f.read())
+        except (json.JSONDecodeError, ValueError) as e:
+            sys.stderr.write(f"Error: Invalid JSON in MCP config: {cfg['mcpConfig']}\n  {e}\n")
+            sys.exit(EXIT_BAD_ARGS)
+
     # Handle shutdown
     def cleanup(signum=None, frame=None):
         sys.exit(0)
     signal.signal(signal.SIGINT, cleanup)
     signal.signal(signal.SIGTERM, cleanup)
+
+    # Global timeout
+    if cfg["timeout"] > 0:
+        def _timeout_handler():
+            time.sleep(cfg["timeout"])
+            sys.stderr.write(f"Error: Global timeout ({cfg['timeout']}s) exceeded\n")
+            os._exit(EXIT_TIMEOUT)
+        timeout_thread = threading.Thread(target=_timeout_handler, daemon=True)
+        timeout_thread.start()
 
     # Mode dispatch
     if cfg["ndjson"]:
@@ -2121,11 +2287,12 @@ def main():
         bridge.run()
     elif cfg["prompt"]:
         # One-shot mode
+        is_json_output = cfg["outputFormat"] == "json"
         system_blocks = build_system_prompt(cfg)
         messages = [{"role": "user", "content": cfg["prompt"]}]
 
         loop = AgentLoop(client, registry, cfg, {
-            "on_text": lambda delta: (sys.stdout.write(delta), sys.stdout.flush()),
+            "on_text": (lambda delta: None) if is_json_output else lambda delta: (sys.stdout.write(delta), sys.stdout.flush()),
             "on_tool_use": lambda block: (
                 sys.stderr.write(f"\033[2m[{block['name']}]\033[0m\n") if _verbose else None,
                 sys.stderr.flush(),
@@ -2133,10 +2300,24 @@ def main():
         })
 
         result = loop.run(messages, system_blocks)
-        sys.stdout.write("\n")
+
+        if is_json_output:
+            json_output = {
+                "version": "1",
+                "message": result["text"],
+                "model": cfg["model"],
+                "provider": provider["name"],
+                "usage": result["usage"],
+                "stop_reason": result["stopReason"],
+                "turns": result["turns"],
+                "session_id": cfg.get("sessionId") or str(uuid.uuid4()),
+            }
+            sys.stdout.write(json.dumps(json_output) + "\n")
+        else:
+            sys.stdout.write("\n")
         sys.stdout.flush()
 
-        if _verbose:
+        if _verbose and not is_json_output:
             sys.stderr.write(
                 f"\033[2m({result['usage']['input_tokens']} in / "
                 f"{result['usage']['output_tokens']} out | {result['turns']} turns)\033[0m\n"
@@ -2151,8 +2332,15 @@ def main():
 if __name__ == "__main__":
     try:
         main()
+    except SystemExit:
+        raise  # let sys.exit() through
     except Exception as err:
         sys.stderr.write(f"Fatal: {err}\n")
         import traceback
         traceback.print_exc(file=sys.stderr)
-        sys.exit(1)
+        msg = str(err)
+        if "auth" in msg.lower() or "credentials" in msg.lower() or "api key" in msg.lower():
+            sys.exit(EXIT_AUTH_FAILURE)
+        elif "provider" in msg.lower() or "ECONNREFUSED" in msg:
+            sys.exit(EXIT_PROVIDER_ERROR)
+        sys.exit(EXIT_RUNTIME_ERROR)
