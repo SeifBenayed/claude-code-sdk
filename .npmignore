@@ -1,0 +1,22 @@
+# Tests
+test-*.mjs
+test-*.js
+
+# Legacy bridge
+claude-tool-loop.js
+
+# Extracted source (dev only)
+claude-code-extracted/
+
+# Node modules (npm handles this, but be explicit)
+node_modules/
+
+# SDK implementations in other languages (not needed for npm)
+claude-native.py
+claude-native.go
+rust-sdk/
+
+# Dev files
+.gitignore
+.github/
+.claude/

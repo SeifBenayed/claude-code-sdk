@@ -48,35 +48,114 @@ async function parseArgs(argv = process.argv.slice(2)) {
     permissionMode: "auto",  // auto|default|plan|acceptEdits|bypassPermissions|dontAsk
     permissionRules: [],        // [{tool, pattern, behavior: "allow"|"deny"}]
     permissionCallbacks: false, // forward permission requests to NDJSON agent
+    briefMode: false,           // brief mode: route user-facing output through SendUserMessage
+    outputFormat: "text",       // "text" (default) or "json" for structured output
+    timeout: 0,                 // global timeout in seconds (0 = no limit)
     cwd: process.cwd(),
   };
+
+  // Flags that consume the next argv element as a value
+  const FLAGS_WITH_VALUE = new Set([
+    "--model", "-m", "--max-turns", "--api-key", "--auth-token", "--api-url",
+    "--openai-api-key", "--openai-api-url", "--provider", "-p", "--print",
+    "--session-id", "--system-prompt", "--append-system-prompt", "--thinking",
+    "--max-tokens", "--mcp-config", "--allowed-tools", "--disallowed-tools",
+    "--permission-mode", "--output", "--output-version", "--timeout",
+  ]);
+
+  // Flags that are boolean (no value)
+  const FLAGS_BOOLEAN = new Set([
+    "--oauth", "--ndjson", "--resume", "--verbose", "--permission-callbacks",
+    "--brief", "--json", "--yes", "-y", "--openai", "--login", "--logout",
+    "--openai-login", "--openai-logout", "--help", "-h",
+  ]);
+
+  // Helper: require next argv value or die
+  function needValue(flag, i) {
+    if (i >= argv.length || argv[i].startsWith("-")) {
+      process.stderr.write(`Error: ${flag} requires a value\n  claude-native ${flag} <value>\n`);
+      process.exit(EXIT.BAD_ARGS);
+    }
+    return argv[i];
+  }
+
+  // Valid values for enum-style flags
+  const VALID_PERMISSION_MODES = new Set(["auto", "default", "plan", "acceptEdits", "bypassPermissions", "dontAsk"]);
+  const VALID_OUTPUT_FORMATS = new Set(["text", "json"]);
 
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     switch (a) {
-      case "--model": case "-m": cfg.model = resolveModel(argv[++i]); break;
-      case "--max-turns": cfg.maxTurns = parseInt(argv[++i], 10); break;
-      case "--api-key": cfg.apiKey = argv[++i]; break;
-      case "--auth-token": cfg.authToken = argv[++i]; break;
+      case "--model": case "-m": cfg.model = resolveModel(needValue(a, ++i)); break;
+      case "--max-turns": {
+        const v = needValue(a, ++i);
+        const n = parseInt(v, 10);
+        if (isNaN(n) || n < 1) { process.stderr.write(`Error: --max-turns must be a positive integer, got "${v}"\n`); process.exit(EXIT.BAD_ARGS); }
+        cfg.maxTurns = n; break;
+      }
+      case "--api-key": cfg.apiKey = needValue(a, ++i); break;
+      case "--auth-token": cfg.authToken = needValue(a, ++i); break;
       case "--oauth": cfg.useOAuth = true; break;
-      case "--api-url": cfg.apiUrl = argv[++i]; break;
-      case "--openai-api-key": cfg.openaiApiKey = argv[++i]; break;
-      case "--openai-api-url": cfg.openaiApiUrl = argv[++i]; break;
-      case "--provider": cfg.provider = argv[++i]; break;
+      case "--api-url": cfg.apiUrl = needValue(a, ++i); break;
+      case "--openai-api-key": cfg.openaiApiKey = needValue(a, ++i); break;
+      case "--openai-api-url": cfg.openaiApiUrl = needValue(a, ++i); break;
+      case "--provider": cfg.provider = needValue(a, ++i); break;
       case "--ndjson": cfg.ndjson = true; cfg.interactive = false; break;
-      case "-p": case "--print": cfg.prompt = argv[++i]; cfg.interactive = false; break;
+      case "-p": case "--print": cfg.prompt = needValue(a, ++i); cfg.interactive = false; break;
       case "--resume": cfg.resume = true; break;
-      case "--session-id": cfg.sessionId = argv[++i]; break;
+      case "--session-id": {
+        const v = needValue(a, ++i);
+        if (!/^[a-zA-Z0-9_-]+$/.test(v) || v.length > 128) {
+          process.stderr.write(`Error: --session-id must be alphanumeric/hyphens/underscores, max 128 chars\n  Got: "${v.substring(0, 40)}${v.length > 40 ? "..." : ""}"\n`);
+          process.exit(EXIT.BAD_ARGS);
+        }
+        cfg.sessionId = v; break;
+      }
       case "--verbose": cfg.verbose = true; break;
-      case "--system-prompt": cfg.systemPrompt = argv[++i]; break;
-      case "--append-system-prompt": cfg.appendSystemPrompt = argv[++i]; break;
-      case "--thinking": cfg.thinkingBudget = parseInt(argv[++i], 10) || 10000; break;
-      case "--max-tokens": cfg.maxTokens = parseInt(argv[++i], 10); break;
-      case "--mcp-config": cfg.mcpConfig = argv[++i]; break;
-      case "--allowed-tools": cfg.allowedTools = (cfg.allowedTools || []).concat(argv[++i].split(",")); break;
-      case "--disallowed-tools": cfg.disallowedTools = (cfg.disallowedTools || []).concat(argv[++i].split(",")); break;
-      case "--permission-mode": cfg.permissionMode = argv[++i]; break;
+      case "--system-prompt": cfg.systemPrompt = needValue(a, ++i); break;
+      case "--append-system-prompt": cfg.appendSystemPrompt = needValue(a, ++i); break;
+      case "--thinking": {
+        const v = needValue(a, ++i);
+        const n = parseInt(v, 10);
+        if (isNaN(n) || n < 1) { process.stderr.write(`Error: --thinking must be a positive integer (token budget), got "${v}"\n`); process.exit(EXIT.BAD_ARGS); }
+        cfg.thinkingBudget = n; break;
+      }
+      case "--max-tokens": {
+        const v = needValue(a, ++i);
+        const n = parseInt(v, 10);
+        if (isNaN(n) || n < 1) { process.stderr.write(`Error: --max-tokens must be a positive integer, got "${v}"\n`); process.exit(EXIT.BAD_ARGS); }
+        cfg.maxTokens = n; break;
+      }
+      case "--mcp-config": cfg.mcpConfig = needValue(a, ++i); break;
+      case "--allowed-tools": cfg.allowedTools = (cfg.allowedTools || []).concat(needValue(a, ++i).split(",")); break;
+      case "--disallowed-tools": cfg.disallowedTools = (cfg.disallowedTools || []).concat(needValue(a, ++i).split(",")); break;
+      case "--permission-mode": {
+        const v = needValue(a, ++i);
+        if (!VALID_PERMISSION_MODES.has(v)) {
+          process.stderr.write(`Error: --permission-mode must be one of: ${[...VALID_PERMISSION_MODES].join(", ")}\n  Got: "${v}"\n`);
+          process.exit(EXIT.BAD_ARGS);
+        }
+        cfg.permissionMode = v; break;
+      }
       case "--permission-callbacks": cfg.permissionCallbacks = true; break;
+      case "--brief": cfg.briefMode = true; break;
+      case "--output": {
+        const v = needValue(a, ++i);
+        if (!VALID_OUTPUT_FORMATS.has(v)) {
+          process.stderr.write(`Error: --output must be one of: ${[...VALID_OUTPUT_FORMATS].join(", ")}\n  Got: "${v}"\n`);
+          process.exit(EXIT.BAD_ARGS);
+        }
+        cfg.outputFormat = v; break;
+      }
+      case "--output-version": cfg.outputVersion = needValue(a, ++i); break;
+      case "--json": cfg.outputFormat = "json"; break;
+      case "--timeout": {
+        const v = needValue(a, ++i);
+        const n = parseInt(v, 10);
+        if (isNaN(n) || n < 0) { process.stderr.write(`Error: --timeout must be a non-negative integer (seconds), got "${v}"\n`); process.exit(EXIT.BAD_ARGS); }
+        cfg.timeout = n; break;
+      }
+      case "--yes": case "-y": cfg.permissionMode = "bypassPermissions"; break;
       case "--login": await oauthLogin(); process.exit(0);
       case "--logout": oauthLogout(); process.exit(0);
       case "--openai-login": await openaiOAuthLogin(); process.exit(0);
@@ -84,7 +163,15 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "--openai": cfg.useOpenAIOAuth = true; break;
       case "--help": case "-h": printHelp(); process.exit(0);
       default:
-        if (!a.startsWith("-") && !cfg.prompt) cfg.prompt = a;
+        if (a.startsWith("-")) {
+          process.stderr.write(`Error: Unknown flag "${a}"\n  Run claude-native --help for usage\n`);
+          process.exit(EXIT.BAD_ARGS);
+        }
+        if (!cfg.prompt) cfg.prompt = a;
+        else {
+          process.stderr.write(`Error: Unexpected argument "${a}" (prompt already set)\n  Use -p to pass a prompt explicitly\n`);
+          process.exit(EXIT.BAD_ARGS);
+        }
     }
   }
 
@@ -124,7 +211,87 @@ const MODEL_ALIASES = {
 };
 
 function resolveModel(name) {
-  return MODEL_ALIASES[name] || name;
+  // Strip context window suffix like [1m], [200k] that some launchers append
+  const clean = name.replace(/\[\d+[km]?\]$/i, "");
+  return MODEL_ALIASES[clean] || clean;
+}
+
+// ── Model Capability Profiles (workload → optimal model) ─────
+
+// Agnostic routing: "preferred" and "fallback" are capability tiers, not provider picks.
+// resolveModelForWorkload() tries preferred first, then fallback, then inherits parent model.
+// Users override via ~/.claude/model-profiles.json for their provider mix.
+const MODEL_PROFILES = {
+  exploration:    { preferred: "_tier:fast",    fallback: "_tier:fast",    traits: ["fast", "cheap", "tool-use"] },
+  planning:       { preferred: "_tier:mid",     fallback: "_tier:mid",     traits: ["reasoning", "structured-output"] },
+  implementation: { preferred: "_tier:mid",     fallback: "_tier:mid",     traits: ["tool-use", "code-gen", "multi-step"] },
+  verification:   { preferred: "_tier:strong",  fallback: "_tier:mid",     traits: ["skeptical", "high-depth", "adversarial"] },
+  documentation:  { preferred: "_tier:fast",    fallback: "_tier:fast",    traits: ["retrieval", "summarization"] },
+  summarization:  { preferred: "_tier:fast",    fallback: "_tier:fast",    traits: ["cheap", "fast"] },
+  "tool-heavy":   { preferred: "_tier:mid",     fallback: "_tier:mid",     traits: ["tool-use", "multi-step", "reliable"] },
+  reasoning:      { preferred: "_tier:strong",  fallback: "_tier:mid",     traits: ["deep-reasoning", "complex-logic"] },
+};
+
+// Tier → concrete model resolution based on what's available
+// Checks auth for each candidate, returns first available
+const MODEL_TIERS = {
+  fast:   ["claude-haiku-4-5-20251001", "gpt-4o-mini", "gpt-4.1-nano", "gemini-2.5-flash", "mistral-small-latest"],
+  mid:    ["claude-sonnet-4-6", "gpt-5.4", "gpt-4o", "gemini-2.5-pro", "mistral-large-latest", "deepseek-chat"],
+  strong: ["claude-opus-4-6", "gpt-5.4", "o3", "gemini-2.5-pro"],
+};
+
+function _hasProviderAuth(provider, cfg) {
+  if (!provider.envKey) return true; // local providers (Ollama, LM Studio, etc.)
+  if (provider.envKey === "ANTHROPIC_API_KEY") return !!(cfg.apiKey || cfg.authToken);
+  if (provider.envKey === "OPENAI_API_KEY") return !!cfg.openaiApiKey;
+  return !!process.env[provider.envKey];
+}
+
+function _resolveTier(tierSpec, cfg) {
+  // If it's a concrete model (no _tier: prefix), try it directly
+  if (!tierSpec.startsWith("_tier:")) {
+    const provider = detectProvider(tierSpec);
+    if (_hasProviderAuth(provider, cfg)) return tierSpec;
+    return null;
+  }
+  // Resolve tier to first available model
+  const tierName = tierSpec.slice(6); // strip "_tier:"
+  const candidates = MODEL_TIERS[tierName] || MODEL_TIERS.mid;
+  for (const model of candidates) {
+    const provider = detectProvider(model);
+    if (_hasProviderAuth(provider, cfg)) return model;
+  }
+  return null;
+}
+
+function resolveModelForWorkload(workload, cfg) {
+  // User overrides take priority (these are concrete models, not tiers)
+  const userProfiles = cfg._modelProfiles || {};
+  if (userProfiles[workload]) {
+    const up = userProfiles[workload];
+    const preferredProvider = detectProvider(up.preferred);
+    if (_hasProviderAuth(preferredProvider, cfg)) {
+      return { model: up.preferred, reason: `${workload} → user preferred` };
+    }
+    if (up.fallback) {
+      const fallbackProvider = detectProvider(up.fallback);
+      if (_hasProviderAuth(fallbackProvider, cfg)) {
+        return { model: up.fallback, reason: `${workload} → user fallback` };
+      }
+    }
+  }
+
+  // Default profiles use tiers
+  const profile = MODEL_PROFILES[workload] || MODEL_PROFILES.implementation;
+
+  const preferred = _resolveTier(profile.preferred, cfg);
+  if (preferred) return { model: preferred, reason: `${workload} → ${preferred}` };
+
+  const fallback = _resolveTier(profile.fallback, cfg);
+  if (fallback) return { model: fallback, reason: `${workload} → fallback ${fallback}` };
+
+  // Inherit parent's model
+  return { model: cfg.model, reason: `${workload} → inherit` };
 }
 
 // ── Provider Registry ──────────────────────────────────────────
@@ -378,7 +545,12 @@ function getInstructionPlacement(provider, model) {
 }
 
 function detectProvider(model, explicitProvider) {
-  if (explicitProvider && PROVIDERS[explicitProvider]) return PROVIDERS[explicitProvider];
+  if (explicitProvider) {
+    if (PROVIDERS[explicitProvider]) return PROVIDERS[explicitProvider];
+    const valid = Object.keys(PROVIDERS).join(", ");
+    process.stderr.write(`Error: Unknown provider "${explicitProvider}"\n  Valid: ${valid}\n`);
+    process.exit(EXIT.BAD_ARGS);
+  }
   for (const p of Object.values(PROVIDERS)) {
     if (p.detect(model)) return p;
   }
@@ -547,7 +719,7 @@ async function getOpenAIAccessToken(verbose = false) {
     creds.expires_at = Date.now() + (tokens.expires_in || 3600) * 1000;
 
     const payload = JSON.stringify(creds);
-    try { execSync(`security delete-generic-password -a "${user}" -s "${service}"`, { stdio: ["pipe", "pipe", "pipe"] }); } catch {}
+    try { execSync(`security delete-generic-password -a "${user}" -s "${service}"`, { stdio: ["pipe", "pipe", "pipe"] }); } catch { /* ignore: old entry may not exist */ }
     execSync(`security add-generic-password -a "${user}" -s "${service}" -w '${payload.replace(/'/g, "'\\''")}'`, { stdio: ["pipe", "pipe", "pipe"] });
   }
 
@@ -564,6 +736,16 @@ function openaiOAuthLogout() {
   }
 }
 
+// Exit codes — structured for programmatic consumers
+const EXIT = {
+  OK:             0,
+  BAD_ARGS:       2,  // Invalid/missing CLI arguments
+  AUTH_FAILURE:    3,  // No credentials or credentials rejected
+  PROVIDER_ERROR:  4,  // Provider/model not found or unavailable
+  TIMEOUT:         5,  // Global --timeout exceeded
+  RUNTIME_ERROR:   1,  // Catch-all runtime failure
+};
+
 function printHelp() {
   process.stderr.write(`claude-native — Multi-provider AI coding agent CLI
 
@@ -572,11 +754,27 @@ Usage:
   claude-native -p "prompt"             One-shot print mode
   claude-native --ndjson                NDJSON bridge mode
 
+Examples:
+  claude-native -p "explain this code"
+  claude-native -m codex -p "fix the bug" --yes
+  claude-native -m opus --thinking 8192 -p "review main.js"
+  claude-native -m ollama/llama3.2 -p "hello"
+  claude-native -p "list files" --json
+  claude-native -p "deploy" --yes --timeout 120
+  echo '{"type":"message","content":"hi"}' | claude-native --ndjson
+  cat error.log | claude-native -p "explain this error"
+  ANTHROPIC_API_KEY=sk-ant-... claude-native -p "hello"
+
 Options:
   -m, --model <name>          Model (sonnet, opus, haiku, gpt-4o, o3, codex, or full ID)
   --provider <name>           Explicit provider override (see Providers below)
   -p, --print <prompt>        One-shot mode, print response and exit
   --ndjson                    NDJSON bridge protocol on stdin/stdout
+  --output <format>           Output format: text (default) or json
+  --json                      Shorthand for --output json
+  --output-version <v>        Lock JSON output schema version (default: 1)
+  -y, --yes                   Skip all permission prompts (same as --permission-mode bypassPermissions)
+  --timeout <seconds>         Global timeout — exit with code 5 if exceeded
   --max-turns <n>             Max agent loop turns (default: 25)
   --max-tokens <n>            Max output tokens (default: 16384)
   --login                     Login to Anthropic via browser (OAuth)
@@ -599,8 +797,17 @@ Options:
   --allowed-tools <list>      Comma-separated tool allowlist
   --disallowed-tools <list>   Comma-separated tool denylist
   --permission-mode <mode>    auto|default|plan|acceptEdits|bypassPermissions|dontAsk
+  --brief                     Enable brief mode (output via SendUserMessage tool)
   --verbose                   Debug logging to stderr
   -h, --help                  Show this help
+
+Exit codes:
+  0  Success
+  1  Runtime error
+  2  Bad arguments
+  3  Authentication failure
+  4  Provider/model error
+  5  Timeout
 
 Providers:
   anthropic        Anthropic (Claude)          ANTHROPIC_API_KEY or --login
@@ -622,7 +829,24 @@ Providers:
     claude-native -m vllm/mistral-7b -p "hello"
   Or use --provider to override:
     claude-native --provider openai -m my-fine-tune -p "hello"
+
+Extensibility:
+  Settings:  ~/.claude/settings.json, .claude/settings.json, .claude/settings.local.json
+  Rules:     .claude/rules/*.md (markdown with optional YAML frontmatter paths)
+  Skills:    ~/.claude/skills/<name>/SKILL.md, .claude/skills/<name>/SKILL.md
+  Hooks:     Defined in settings.json (PreToolUse, PostToolUse, Stop)
 `);
+
+  // Show available skills
+  const skillLoader = new SkillLoader().scan(process.cwd());
+  const skills = skillLoader.list();
+  if (skills.length > 0) {
+    process.stderr.write(`\nAvailable Skills:\n`);
+    for (const s of skills) {
+      process.stderr.write(`  /${s.name.padEnd(18)} ${s.description}\n`);
+    }
+    process.stderr.write(`\n`);
+  }
 }
 
 // ── AnthropicClient ─────────────────────────────────────────────
@@ -1309,24 +1533,110 @@ class OpenAIResponsesClient {
 
 class ToolRegistry {
   constructor() {
-    this._tools = new Map(); // name → { definition, executor }
+    this._tools = new Map(); // name → { definition, executor, deferred }
     this._allowed = null;
     this._disallowed = null;
     this._cwd = process.cwd();
+    this._announcedDeferred = new Set(); // Track deferred tools announced to model
   }
 
-  register(name, definition, executor) {
-    this._tools.set(name, { definition, executor });
+  register(name, definition, executor, { deferred = false } = {}) {
+    this._tools.set(name, { definition, executor, deferred });
   }
 
+  _isVisible(name) {
+    if (this._disallowed?.includes(name)) return false;
+    if (this._allowed && !this._allowed.includes(name)) return false;
+    return true;
+  }
+
+  // Returns only eager (non-deferred) tool definitions — sent to API every turn
   getDefinitions() {
     const defs = [];
-    for (const [name, { definition }] of this._tools) {
-      if (this._disallowed?.includes(name)) continue;
-      if (this._allowed && !this._allowed.includes(name)) continue;
+    for (const [name, { definition, deferred }] of this._tools) {
+      if (!this._isVisible(name)) continue;
+      if (deferred) continue;
       defs.push({ name, description: definition.description, input_schema: definition.input_schema });
     }
     return defs;
+  }
+
+  // Returns ALL tool definitions (eager + deferred) — for sub-agents that need everything
+  getAllDefinitions() {
+    const defs = [];
+    for (const [name, { definition }] of this._tools) {
+      if (!this._isVisible(name)) continue;
+      defs.push({ name, description: definition.description, input_schema: definition.input_schema });
+    }
+    return defs;
+  }
+
+  // Returns names of deferred tools (for system-reminder announcement)
+  getDeferredNames() {
+    const names = [];
+    for (const [name, { deferred }] of this._tools) {
+      if (!this._isVisible(name)) continue;
+      if (deferred) names.push(name);
+    }
+    return names;
+  }
+
+  // Returns deferred tools delta: added/removed since last announcement
+  getDeferredDelta() {
+    const current = new Set(this.getDeferredNames());
+    const added = [...current].filter((n) => !this._announcedDeferred.has(n));
+    const removed = [...this._announcedDeferred].filter((n) => !current.has(n));
+    this._announcedDeferred = current;
+    return { added, removed, all: [...current] };
+  }
+
+  // Search deferred tools by query — used by ToolSearch tool
+  searchDeferred(query) {
+    const results = [];
+    // "select:Name1,Name2" — exact match by name
+    if (query.startsWith("select:")) {
+      const names = query.slice(7).split(",").map((n) => n.trim());
+      for (const name of names) {
+        const tool = this._tools.get(name);
+        if (tool && this._isVisible(name)) {
+          results.push({ name, description: tool.definition.description, input_schema: tool.definition.input_schema });
+        }
+      }
+      return results;
+    }
+
+    // "+keyword terms" — require keyword in name, rank by remaining terms
+    let requiredInName = null;
+    let terms = query.toLowerCase().split(/\s+/).filter(Boolean);
+    if (terms[0]?.startsWith("+")) {
+      requiredInName = terms[0].slice(1);
+      terms = terms.slice(1);
+    }
+
+    const scored = [];
+    for (const [name, { definition, deferred }] of this._tools) {
+      if (!this._isVisible(name)) continue;
+      if (!deferred) continue;
+      const lowerName = name.toLowerCase();
+      const lowerDesc = (definition.description || "").toLowerCase();
+      if (requiredInName && !lowerName.includes(requiredInName)) continue;
+      let score = 0;
+      for (const t of terms) {
+        if (lowerName.includes(t)) score += 2;
+        if (lowerDesc.includes(t)) score += 1;
+      }
+      // If no search terms (just "+keyword"), give a base score
+      if (terms.length === 0 && requiredInName) score = 1;
+      if (score > 0 || (terms.length === 0 && !requiredInName)) {
+        scored.push({ name, definition, score: score || 0 });
+      }
+    }
+
+    scored.sort((a, b) => b.score - a.score);
+    for (const { name, definition } of scored) {
+      results.push({ name, description: definition.description, input_schema: definition.input_schema });
+    }
+    return results;
   }
 
   async execute(name, input) {
@@ -1344,6 +1654,20 @@ class ToolRegistry {
   }
 
   has(name) { return this._tools.has(name); }
+  isDeferred(name) { const t = this._tools.get(name); return t?.deferred || false; }
+
+  // Promote a deferred tool to eager — makes it appear in getDefinitions() so the API
+  // includes it in the tools array. Called by ToolSearch after fetching a schema.
+  promote(name) {
+    const tool = this._tools.get(name);
+    if (tool) {
+      tool.deferred = false;
+      // Silently remove from announced set so getDeferredDelta doesn't report it as "removed"
+      this._announcedDeferred.delete(name);
+    }
+  }
+
+  unregister(name) { this._tools.delete(name); /* Keep _announcedDeferred so getDeferredDelta detects removal */ }
   isExternal(name) { const t = this._tools.get(name); return t && !t.executor; }
 
   setFilter(allowed, disallowed) {
@@ -1879,7 +2203,7 @@ function _checkFilePath(filePath, cwd, op) {
 // - dontAsk:           deny anything that would normally ask
 // - auto:              allow safe ops, block dangerous, ask for ambiguous
 
-const READ_ONLY_TOOLS = new Set(["Read", "Glob", "Grep", "WebFetch", "WebSearch"]);
+const READ_ONLY_TOOLS = new Set(["Read", "Glob", "Grep", "WebFetch", "WebSearch", "SendUserMessage", "ToolSearch", "TaskCreate", "TaskUpdate", "TaskGet", "TaskList", "EnterPlanMode", "ExitPlanMode", "ListMcpResources", "ReadMcpResource", "AskUserQuestion"]);
 const WRITE_TOOLS = new Set(["Write", "Edit", "NotebookEdit"]);
 
 // Generate a permission suggestion for a blocked action
@@ -1934,6 +2258,16 @@ class PermissionManager {
       if (!READ_ONLY_TOOLS.has(toolName)) {
         return { behavior: "deny", message: `Too many denied actions (${this.denials.stats.consecutive} consecutive). Switching to restrictive mode.`, rule: "circuit_breaker" };
       }
+    }
+
+    // 0.5. Skill-scoped tool restriction — if a skill is active, only its allowed tools may run
+    const skillContext = opts.skillContext || null;
+    if (skillContext && !skillContext.isToolAllowed(toolName)) {
+      return {
+        behavior: "deny",
+        message: `${toolName} is not in skill "${skillContext.name}" allowed-tools [${(skillContext.allowedTools || []).join(", ")}].`,
+        rule: "skill_tool_restriction",
+      };
     }
 
     // 1. Check explicit deny rules (always first — overrides everything)
@@ -2043,6 +2377,20 @@ class PermissionManager {
     const valid = ["default", "plan", "acceptEdits", "bypassPermissions", "dontAsk", "auto"];
     if (valid.includes(mode)) this.mode = mode;
   }
+}
+
+// ── Path Glob Matcher (for path-scoped rules) ──────────────────
+
+function _pathMatchesGlob(filePath, pattern) {
+  if (!filePath || !pattern) return false;
+  // Convert glob pattern to regex: **/ matches zero or more path segments, * matches within a segment
+  const re = pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*\*\//g, "(.+/)?")  // **/ = zero or more path segments
+    .replace(/\*\*/g, ".*")        // standalone ** = match everything
+    .replace(/\*/g, "[^/]*");      // * = match within a segment
+  const regex = new RegExp(`(^|/)${re}$`);
+  return regex.test(filePath);
 }
 
 // ── Built-in Tools ──────────────────────────────────────────────
@@ -2623,8 +2971,8 @@ class McpManager {
             return content.map((c) => c.text || JSON.stringify(c)).join("\n");
           }
           return typeof content === "string" ? content : JSON.stringify(content || callResult);
-        });
-        log(`Registered MCP tool: ${toolName}`);
+        }, { deferred: true }); // MCP tools are always deferred
+        log(`Registered MCP tool: ${toolName} (deferred)`);
       }
     } catch (e) {
       log(`MCP[${name}] init failed: ${e.message}`);
@@ -2650,7 +2998,7 @@ class McpManager {
 
   shutdown() {
     for (const [name, server] of this._servers) {
-      try { server.proc.kill("SIGTERM"); } catch {}
+      try { server.proc.kill("SIGTERM"); } catch { /* ignore: process may have already exited */ }
       log(`MCP[${name}] terminated`);
     }
     this._servers.clear();
@@ -2798,6 +3146,55 @@ Output Format: Every check must include:
 
 You MUST end with exactly one of: VERDICT: PASS, VERDICT: FAIL, or VERDICT: PARTIAL`,
   },
+
+  "orchestrator": {
+    agentType: "orchestrator",
+    description: "Smart task router — decomposes work, picks optimal model per sub-task, runs in parallel",
+    model: null,
+    readOnly: false,
+    disallowedTools: [],
+    getSystemPrompt: (cfg) => {
+      const profiles = MODEL_PROFILES;
+      const table = Object.entries(profiles).map(([k, v]) => {
+        const resolved = cfg ? resolveModelForWorkload(k, cfg) : { model: "inherit", reason: "" };
+        return `  ${k}: ${resolved.model} [${v.traits.join(", ")}]`;
+      }).join("\n");
+
+      // List custom agents if any
+      const customAgents = cfg?._agentLoader?.list() || [];
+      const customSection = customAgents.length > 0
+        ? `\n\n## Custom Agents Available\n${customAgents.map(a => `  ${a.name}: ${a.description}${a.workload ? ` [workload: ${a.workload}]` : ""}`).join("\n")}`
+        : "";
+
+      return `You are a smart orchestrator. Your job is to decompose complex tasks into sub-tasks and route each to the optimal agent and model.
+
+## Task Routing Table
+${table}
+
+## Process
+1. ANALYZE: Break the task into 2-6 independent sub-tasks
+2. CLASSIFY: Assign each sub-task a workload category from the table above
+3. ROUTE: For each sub-task, choose:
+   - Agent type: Explore (search), Plan (design), general-purpose (implement), verification (test), or any custom agent by name
+   - Model: Use the model from the routing table for that workload category
+   - Background: Launch independent sub-tasks with run_in_background: true
+4. COLLECT: Wait for all agents to complete
+5. MERGE: Synthesize results — resolve conflicts, fill gaps, produce final output
+6. VERIFY: If implementation was involved, always end with a verification agent
+
+## Rules
+- Never do work yourself that a sub-agent could do better
+- Prefer parallel execution — launch independent tasks simultaneously
+- Use the cheapest model that can handle each sub-task
+- If a sub-agent fails, retry with fallback model before reporting failure
+- Always explain your routing decisions (which model, why)
+
+## Output
+1. Task decomposition (sub-tasks with workload categories)
+2. Routing decisions (agent + model per sub-task, with reasoning)
+3. Synthesized result (merged, conflict-resolved, actionable)${customSection}`;
+    },
+  },
 };
 
 // ── Background Agent Manager ────────────────────────────────────
@@ -2933,7 +3330,7 @@ class SubAgentRunner {
     this.cfg = cfg;
   }
 
-  async run({ prompt, subagentType, model, description, depth = 0, parentAgentId = null, runInBackground = false, isolation = null }) {
+  async run({ prompt, subagentType, model, description, depth = 0, parentAgentId = null, runInBackground = false, isolation = null, provider = null }) {
     const agentId = randomUUID();
 
     // Depth check
@@ -2950,27 +3347,65 @@ class SubAgentRunner {
       };
     }
 
-    // Resolve agent definition
-    const agentDef = AGENT_DEFINITIONS[subagentType || "general-purpose"];
+    // Resolve agent definition — builtins first, then custom agents from disk
+    const agentDef = AGENT_DEFINITIONS[subagentType || "general-purpose"]
+      || this.cfg._agentLoader?.resolve(subagentType);
     if (!agentDef) {
+      const builtinTypes = Object.keys(AGENT_DEFINITIONS).join(", ");
+      const customTypes = this.cfg._agentLoader?.list().map(a => a.name).join(", ") || "none";
       return {
         agent_id: agentId,
         agent_type: subagentType,
-        content: `Error: Unknown agent type '${subagentType}'. Available: ${Object.keys(AGENT_DEFINITIONS).join(", ")}`,
+        content: `Error: Unknown agent type '${subagentType}'. Builtin: ${builtinTypes}. Custom: ${customTypes}`,
         model: null, turns: 0, stop_reason: "error",
         usage: { input_tokens: 0, output_tokens: 0 },
         parent_agent_id: parentAgentId,
       };
     }
 
-    // Resolve model
+    // Resolve model and provider — create dedicated client if cross-provider
     const resolvedModel = model
       ? resolveModel(model)
       : (agentDef.model || this.cfg.model);
 
+    const parentProvider = this.cfg._provider || detectProvider(this.cfg.model);
+    const effectiveProvider = provider || agentDef.provider || null;
+    const subProvider = detectProvider(resolvedModel, effectiveProvider);
+    let subClient = this.client;
+    let effectiveSubModel = resolvedModel;
+
+    if (subProvider.name !== parentProvider.name) {
+      // Cross-provider: resolve credentials and create a new client
+      const providerKey = subProvider.envKey === "ANTHROPIC_API_KEY" ? (this.cfg.apiKey || this.cfg.authToken)
+        : subProvider.envKey === "OPENAI_API_KEY" ? this.cfg.openaiApiKey
+        : subProvider.envKey ? (process.env[subProvider.envKey] || "")
+        : "no-auth";
+
+      if (!providerKey && subProvider.envKey) {
+        return {
+          agent_id: agentId, agent_type: agentDef.agentType,
+          content: `Error: No ${subProvider.name} credentials for model ${resolvedModel}. Set ${subProvider.envKey}.`,
+          model: resolvedModel, turns: 0, stop_reason: "error",
+          usage: { input_tokens: 0, output_tokens: 0 }, parent_agent_id: parentAgentId,
+        };
+      }
+
+      const providerUrl = subProvider.resolveBaseUrl ? subProvider.resolveBaseUrl(this.cfg) : subProvider.defaultUrl;
+      effectiveSubModel = subProvider.transformModel ? subProvider.transformModel(resolvedModel) : resolvedModel;
+      subClient = subProvider.createClient({
+        apiKey: this.cfg.apiKey, authToken: this.cfg.authToken,
+        providerKey, providerUrl, model: effectiveSubModel,
+        openaiApiKey: this.cfg.openaiApiKey, openaiApiUrl: this.cfg.openaiApiUrl,
+      });
+      log(`[sub-agent] Cross-provider: ${parentProvider.name} → ${subProvider.name} (${effectiveSubModel})`);
+    }
+
     // Build sub-agent tool registry (filtered)
     const subRegistry = new ToolRegistry();
-    for (const toolDef of this.parentRegistry.getDefinitions()) {
+    for (const toolDef of this.parentRegistry.getAllDefinitions()) {
+      // Brief-mode output is a top-level UX concern; sub-agents should return plain text.
+      if (toolDef.name === "SendUserMessage") continue;
+
       // Skip disallowed tools for this agent type
       if (agentDef.disallowedTools.includes(toolDef.name)) continue;
 
@@ -2986,8 +3421,10 @@ class SubAgentRunner {
       this._registerAgentTool(subRegistry, depth, agentId);
     }
 
-    // Copy checkpoint/message state from parent
-    subRegistry._client = this.parentRegistry._client;
+    // Wire sub-agent's own client/provider/model into registry
+    subRegistry._client = subClient;
+    subRegistry._provider = subProvider;
+    subRegistry._currentModel = effectiveSubModel;
     subRegistry._checkpoints = this.parentRegistry._checkpoints;
     subRegistry._messageId = this.parentRegistry._messageId;
 
@@ -3023,11 +3460,11 @@ class SubAgentRunner {
     subRegistry._cwd = effectiveCwd;
 
     // Build system prompt after cwd/isolation is resolved
-    const subCfg = { ...this.cfg, model: resolvedModel, cwd: effectiveCwd };
+    const subCfg = { ...this.cfg, model: resolvedModel, cwd: effectiveCwd, briefMode: false };
     const systemBlocks = buildSystemPrompt(subCfg);
     const agentPromptBlock = {
       type: "text",
-      text: agentDef.getSystemPrompt(),
+      text: agentDef.getSystemPrompt(this.cfg),
       cache_control: { type: "ephemeral" },
     };
     systemBlocks.splice(systemBlocks.length > 1 ? 1 : 0, 0, agentPromptBlock);
@@ -3036,12 +3473,25 @@ class SubAgentRunner {
     const messages = [{ role: "user", content: prompt }];
 
     // Run sub-agent loop
-    const subCfgWithModel = { ...this.cfg, model: resolvedModel, maxTurns: Math.min(this.cfg.maxTurns, 15), cwd: effectiveCwd };
+    const subCfgWithModel = { ...this.cfg, model: effectiveSubModel, _provider: subProvider, maxTurns: Math.min(this.cfg.maxTurns, 15), cwd: effectiveCwd, briefMode: false };
 
     const runAgent = async (signal) => {
       log(`[sub-agent] Starting ${agentDef.agentType} (depth=${depth}, model=${resolvedModel}, id=${agentId.slice(0,8)}${isolation === "worktree" ? `, worktree=${effectiveCwd}` : ""})`);
 
-      const loop = new AgentLoop(this.client, subRegistry, { ...subCfgWithModel, abortSignal: signal }, {
+      // Reset verification counter when verification agent is spawned
+      if (agentDef.agentType === "verification") {
+        this.cfg._completedWithoutVerification = 0;
+      }
+
+      // SubagentStart hook
+      if (this.cfg._hookRunner?.hasHooksFor("SubagentStart")) {
+        await this.cfg._hookRunner.fire("SubagentStart", {
+          session_id: this.cfg.sessionId || "", cwd: effectiveCwd, hook_event_name: "SubagentStart",
+          agent_id: agentId, agent_type: agentDef.agentType, model: resolvedModel, depth,
+        });
+      }
+
+      const loop = new AgentLoop(subClient, subRegistry, { ...subCfgWithModel, model: effectiveSubModel, _provider: subProvider, abortSignal: signal }, {
         onToolUse: (block) => {
           log(`[sub-agent:${agentId.slice(0,8)}] Tool: ${block.name}`);
         },
@@ -3052,6 +3502,16 @@ class SubAgentRunner {
       try {
         result = await loop.run(messages, systemBlocks);
         log(`[sub-agent] Finished ${agentDef.agentType}: ${result.turns} turns, ${result.usage.input_tokens} in / ${result.usage.output_tokens} out`);
+
+        // SubagentStop hook
+        if (this.cfg._hookRunner?.hasHooksFor("SubagentStop")) {
+          await this.cfg._hookRunner.fire("SubagentStop", {
+            session_id: this.cfg.sessionId || "", cwd: effectiveCwd, hook_event_name: "SubagentStop",
+            agent_id: agentId, agent_type: agentDef.agentType, model: resolvedModel,
+            turns: result.turns, stop_reason: result.stopReason,
+          });
+        }
+
         return {
           agent_id: agentId,
           agent_type: agentDef.agentType,
@@ -3110,8 +3570,8 @@ class SubAgentRunner {
         properties: {
           description: { type: "string", description: "A short (3-5 word) description of the task" },
           prompt: { type: "string", description: "The task for the agent to perform" },
-          subagent_type: { type: "string", enum: ["general-purpose", "Explore", "Plan"], description: "Agent type" },
-          model: { type: "string", enum: ["sonnet", "opus", "haiku"], description: "Optional model override" },
+          subagent_type: { type: "string", description: "Agent type (builtin or custom)" },
+          model: { type: "string", description: "Optional model override" },
         },
         required: ["description", "prompt"],
       },
@@ -3129,6 +3589,340 @@ class SubAgentRunner {
       return { content: result.content, is_error: false, usage: result.usage, agent_result: result };
     });
   }
+}
+
+// ── AskUserQuestion Tool ─────────────────────────────────────
+
+function registerAskUserQuestion(registry) {
+  registry.register("AskUserQuestion", {
+    description: "Ask the user a question and wait for their answer. Use when you need clarification, a decision between options, or confirmation before proceeding. The user will see the question and options in an interactive prompt.",
+    input_schema: {
+      type: "object",
+      properties: {
+        question: { type: "string", description: "The question to ask the user" },
+        options: {
+          type: "array",
+          items: {
+            type: "object",
+            properties: {
+              label: { type: "string", description: "Short label for this option (1-5 words)" },
+              description: { type: "string", description: "Explanation of what this option means" },
+            },
+            required: ["label"],
+          },
+          description: "2-6 options for the user to choose from. An 'Other' option is always added automatically.",
+        },
+      },
+      required: ["question"],
+    },
+  }, async (input) => {
+    // This executor is replaced at runtime by InteractiveMode / NdjsonBridge
+    // with a proper stdin prompt. Default: return a message asking to re-run interactively.
+    return { content: "AskUserQuestion requires interactive mode.", is_error: true };
+  });
+}
+
+// ── Brief Mode Tools ─────────────────────────────────────────
+
+function registerBriefTools(registry, cfg) {
+  registry.register("SendUserMessage", {
+    description: "Send a message the user will read. Text outside this tool is visible in the detail view, but most won't open it — the answer lives here.",
+    input_schema: {
+      type: "object",
+      properties: {
+        message: { type: "string", description: "Message for the user. Supports markdown." },
+        attachments: {
+          type: "array", items: { type: "string" },
+          description: "Optional file paths to attach (images, diffs, logs).",
+        },
+        status: {
+          type: "string", enum: ["normal", "proactive"],
+          description: "'normal' when replying to what they asked. 'proactive' when initiating (task finished, blocker hit, unsolicited update).",
+        },
+      },
+      required: ["message"],
+    },
+  }, async (input) => {
+    const message = input.message;
+    const status = input.status || "normal";
+    const attachments = [];
+
+    if (input.attachments) {
+      for (const filePath of input.attachments) {
+        try {
+          const stat = fs.statSync(filePath);
+          const ext = path.extname(filePath).toLowerCase();
+          const isImage = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"].includes(ext);
+          attachments.push({ path: filePath, size: stat.size, isImage });
+        } catch {
+          return { content: `Attachment not found: ${filePath}`, is_error: true };
+        }
+      }
+    }
+
+    const result = { message, attachments, status, sentAt: new Date().toISOString() };
+    return { content: JSON.stringify(result), is_error: false };
+  });
+}
+
+// ── ToolSearch (deferred tool loader) ────────────────────────
+
+function registerToolSearch(registry) {
+  // Only register if there are deferred tools to search
+  const deferredNames = registry.getDeferredNames();
+  if (deferredNames.length === 0) {
+    registry.unregister("ToolSearch"); // Clean up if previously registered
+    return;
+  }
+
+  registry.register("ToolSearch", {
+    description: "Fetches full schema definitions for deferred tools so they can be called.\n\nDeferred tools appear by name in <system-reminder> messages. Until fetched, only the name is known — there is no parameter schema, so the tool cannot be invoked. This tool takes a query, matches it against the deferred tool list, and returns the matched tools' complete JSONSchema definitions inside a <functions> block. Once a tool's schema appears in that result, it is callable exactly like any tool defined at the top of the prompt.\n\nQuery forms:\n- \"select:Read,Edit,Grep\" — fetch these exact tools by name\n- \"notebook jupyter\" — keyword search, up to max_results best matches\n- \"+slack send\" — require \"slack\" in the name, rank by remaining terms",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: {
+          type: "string",
+          description: "Query to find deferred tools. Use \"select:<tool_name>\" for direct selection, or keywords to search.",
+        },
+        max_results: {
+          type: "number",
+          default: 5,
+          description: "Maximum number of results to return (default: 5)",
+        },
+      },
+      required: ["query"],
+    },
+  }, async (input) => {
+    const results = registry.searchDeferred(input.query);
+    const limited = results.slice(0, input.max_results || 5);
+
+    if (limited.length === 0) {
+      return { content: "No matching deferred tools found.", is_error: false };
+    }
+
+    // Promote fetched tools to eager so they appear in the API tools array next turn
+    for (const tool of limited) {
+      registry.promote(tool.name);
+    }
+
+    // Format as <functions> block matching the original Claude Code format
+    const lines = limited.map((tool) => {
+      return `<function>${JSON.stringify({ description: tool.description, name: tool.name, parameters: tool.input_schema })}</function>`;
+    });
+
+    return {
+      content: `<functions>\n${lines.join("\n")}\n</functions>`,
+      is_error: false,
+    };
+  });
+}
+
+// ── Deferred Built-in Tools (Task, Plan) ─────────────────────
+
+function registerDeferredBuiltinTools(registry, cfg) {
+  // ── Task Management Tools ──────────────────────────────────
+  // In-memory task store scoped to the session
+  const _tasks = new Map();
+  let _taskSeq = 0;
+  cfg._completedWithoutVerification = cfg._completedWithoutVerification || 0;
+
+  registry.register("TaskCreate", {
+    description: "Create a task to track a unit of work. Use when breaking work into discrete steps or tracking progress through a multi-step plan.",
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Short title for the task" },
+        description: { type: "string", description: "Detailed description of what needs to be done" },
+        status: { type: "string", enum: ["pending", "in_progress", "completed", "blocked"], default: "pending" },
+        priority: { type: "string", enum: ["low", "medium", "high"], default: "medium" },
+      },
+      required: ["title"],
+    },
+  }, async (input) => {
+    const id = `task_${++_taskSeq}`;
+    const task = {
+      id,
+      title: input.title,
+      description: input.description || "",
+      status: input.status || "pending",
+      priority: input.priority || "medium",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    _tasks.set(id, task);
+    return { content: JSON.stringify(task), is_error: false };
+  }, { deferred: true });
+
+  registry.register("TaskUpdate", {
+    description: "Update a task's status or details. Use to mark tasks as in_progress, completed, or blocked.",
+    input_schema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Task ID (e.g. task_1)" },
+        status: { type: "string", enum: ["pending", "in_progress", "completed", "blocked"] },
+        title: { type: "string" },
+        description: { type: "string" },
+        priority: { type: "string", enum: ["low", "medium", "high"] },
+      },
+      required: ["id"],
+    },
+  }, async (input) => {
+    const task = _tasks.get(input.id);
+    if (!task) return { content: `Task not found: ${input.id}`, is_error: true };
+    const prevStatus = task.status;
+    if (input.status) task.status = input.status;
+    if (input.title) task.title = input.title;
+    if (input.description !== undefined) task.description = input.description;
+    if (input.priority) task.priority = input.priority;
+    task.updatedAt = new Date().toISOString();
+
+    // Track completions for verification auto-trigger
+    let nudge = "";
+    if (input.status === "completed" && prevStatus !== "completed") {
+      cfg._completedWithoutVerification++;
+      if (cfg._completedWithoutVerification >= 3) {
+        nudge = `\n\n<system-reminder>NOTE: You just closed out ${cfg._completedWithoutVerification}+ tasks and none of them was a verification step. Before writing your final summary, spawn the verification agent (subagent_type="verification"). You cannot self-assign PARTIAL by listing caveats in your summary — only the verifier issues a verdict.</system-reminder>`;
+      }
+    }
+
+    return { content: JSON.stringify(task) + nudge, is_error: false };
+  }, { deferred: true });
+
+  registry.register("TaskGet", {
+    description: "Get details of a specific task by ID.",
+    input_schema: {
+      type: "object",
+      properties: {
+        id: { type: "string", description: "Task ID (e.g. task_1)" },
+      },
+      required: ["id"],
+    },
+  }, async (input) => {
+    const task = _tasks.get(input.id);
+    if (!task) return { content: `Task not found: ${input.id}`, is_error: true };
+    return { content: JSON.stringify(task), is_error: false };
+  }, { deferred: true });
+
+  registry.register("TaskList", {
+    description: "List all tasks, optionally filtered by status.",
+    input_schema: {
+      type: "object",
+      properties: {
+        status: { type: "string", enum: ["pending", "in_progress", "completed", "blocked"], description: "Filter by status" },
+      },
+    },
+  }, async (input) => {
+    let tasks = [..._tasks.values()];
+    if (input.status) tasks = tasks.filter((t) => t.status === input.status);
+    return { content: JSON.stringify(tasks), is_error: false };
+  }, { deferred: true });
+
+  // ── Plan Mode Tools ────────────────────────────────────────
+
+  registry.register("EnterPlanMode", {
+    description: "Enter plan mode to design an implementation strategy before writing code. In plan mode, you can only use read-only tools (Read, Glob, Grep, WebFetch, WebSearch) and must produce a plan. Use when the task is complex and benefits from upfront design.",
+    input_schema: {
+      type: "object",
+      properties: {
+        reason: { type: "string", description: "Why you're entering plan mode" },
+      },
+      required: ["reason"],
+    },
+  }, async (input) => {
+    cfg._planMode = true;
+    return { content: `Entered plan mode: ${input.reason}\n\nYou are now in plan mode. Use read-only tools to research, then produce a plan. Call ExitPlanMode when done.`, is_error: false };
+  }, { deferred: true });
+
+  registry.register("ExitPlanMode", {
+    description: "Exit plan mode and return to normal execution. Call this after you've finished designing your plan.",
+    input_schema: {
+      type: "object",
+      properties: {
+        plan: { type: "string", description: "The implementation plan (markdown)" },
+      },
+      required: ["plan"],
+    },
+  }, async (input) => {
+    cfg._planMode = false;
+    const planFile = path.join(os.tmpdir(), `claude-plan-${Date.now()}.md`);
+    fs.writeFileSync(planFile, input.plan);
+    return { content: `Exited plan mode. Plan saved to ${planFile}\n\nYou can now implement the plan.`, is_error: false };
+  }, { deferred: true });
+
+}
+
+// ── MCP Resource Tools ──────────────────────────────────────
+
+function registerMcpResourceTools(registry) {
+  registry.register("ListMcpResources", {
+    description: "List available resources from MCP servers. Returns resource URIs, names, and descriptions.",
+    input_schema: {
+      type: "object",
+      properties: {
+        server: { type: "string", description: "Filter by MCP server name (optional)" },
+      },
+    },
+  }, async (input) => {
+    const mcpManager = registry._mcpManager;
+    if (!mcpManager) return { content: "No MCP servers configured.", is_error: false };
+
+    const resources = [];
+    for (const [name, server] of mcpManager._servers) {
+      if (input.server && name !== input.server) continue;
+      try {
+        const result = await mcpManager._rpc(server, "resources/list", {});
+        const serverResources = result?.resources || [];
+        for (const r of serverResources) {
+          resources.push({ uri: r.uri, name: r.name || r.uri, mimeType: r.mimeType || "", description: r.description || "", server: name });
+        }
+      } catch (e) {
+        log(`MCP[${name}] resources/list failed: ${e.message}`);
+      }
+    }
+
+    if (resources.length === 0) return { content: "No MCP resources available.", is_error: false };
+    return { content: JSON.stringify(resources, null, 2), is_error: false };
+  }, { deferred: true });
+
+  registry.register("ReadMcpResource", {
+    description: "Read a specific MCP resource by URI. Returns the resource content.",
+    input_schema: {
+      type: "object",
+      properties: {
+        server: { type: "string", description: "MCP server name" },
+        uri: { type: "string", description: "Resource URI to read" },
+      },
+      required: ["server", "uri"],
+    },
+  }, async (input) => {
+    const mcpManager = registry._mcpManager;
+    if (!mcpManager) return { content: "No MCP servers configured.", is_error: true };
+
+    const server = mcpManager._servers.get(input.server);
+    if (!server) return { content: `MCP server not found: ${input.server}`, is_error: true };
+
+    try {
+      const result = await mcpManager._rpc(server, "resources/read", { uri: input.uri });
+      const contents = result?.contents || [];
+      if (contents.length === 0) return { content: `Resource empty: ${input.uri}`, is_error: false };
+
+      const parts = [];
+      for (const c of contents) {
+        if (c.text) {
+          parts.push(c.text);
+        } else if (c.blob) {
+          const tmpFile = path.join(os.tmpdir(), `mcp-resource-${Date.now()}-${path.basename(input.uri)}`);
+          fs.writeFileSync(tmpFile, Buffer.from(c.blob, "base64"));
+          parts.push(`[Binary content saved to ${tmpFile}]`);
+        } else {
+          parts.push(JSON.stringify(c));
+        }
+      }
+      return { content: parts.join("\n"), is_error: false };
+    } catch (e) {
+      return { content: `Error reading resource: ${e.message}`, is_error: true };
+    }
+  }, { deferred: true });
 }
 
 // Register the Agent tool on the main registry
@@ -3157,8 +3951,9 @@ Guidelines:
       properties: {
         description: { type: "string", description: "A short (3-5 word) description of the task" },
         prompt: { type: "string", description: "The task for the agent to perform" },
-        subagent_type: { type: "string", enum: ["general-purpose", "Explore", "Plan", "claude-code-guide", "verification"], description: "The type of agent to use" },
-        model: { type: "string", enum: ["sonnet", "opus", "haiku"], description: "Optional model override" },
+        subagent_type: { type: "string", description: "Agent type: general-purpose, Explore, Plan, claude-code-guide, verification, orchestrator, or any custom agent name" },
+        model: { type: "string", description: "Optional model override (e.g. sonnet, opus, haiku, gpt-4o, gpt-5, or full model ID)" },
+        provider: { type: "string", description: "Optional provider override (anthropic, openai, google, deepseek, ollama, etc.)" },
         run_in_background: { type: "boolean", description: "Run agent in background. Returns immediately with agent ID." },
         isolation: { type: "string", enum: ["worktree"], description: "Isolation mode. 'worktree' creates a git worktree." },
       },
@@ -3169,6 +3964,7 @@ Guidelines:
       prompt: input.prompt,
       subagentType: input.subagent_type,
       model: input.model,
+      provider: input.provider,
       description: input.description,
       depth: 0,
       parentAgentId: null,
@@ -3283,6 +4079,796 @@ Memory records are point-in-time observations, not live state. Before asserting 
 ${memContent ? `\n## Current Memory Index (${MEMORY_INDEX})\n\n${memContent}` : ""}`;
 }
 
+// ── Settings Loader (.claude/settings.json) ─────────────────────
+
+function loadSettings(cwd) {
+  const locations = [
+    path.join(os.homedir(), ".claude", "settings.json"),       // user-level
+    path.join(cwd, ".claude", "settings.json"),                // project-level (shared)
+    path.join(cwd, ".claude", "settings.local.json"),          // project-level (gitignored)
+  ];
+
+  let merged = {};
+  for (const loc of locations) {
+    try {
+      const raw = fs.readFileSync(loc, "utf-8");
+      const settings = JSON.parse(raw);
+      // Deep merge: later wins for scalars, arrays concat for permissions
+      for (const [key, value] of Object.entries(settings)) {
+        if (key === "permissions" && merged.permissions) {
+          // Merge permission arrays
+          if (value.allow) merged.permissions.allow = [...(merged.permissions.allow || []), ...value.allow];
+          if (value.deny) merged.permissions.deny = [...(merged.permissions.deny || []), ...value.deny];
+        } else if (key === "hooks" && merged.hooks) {
+          // Merge hooks by event type
+          for (const [event, hookList] of Object.entries(value)) {
+            merged.hooks[event] = [...(merged.hooks[event] || []), ...hookList];
+          }
+        } else if (key === "mcpServers" && merged.mcpServers) {
+          merged.mcpServers = { ...merged.mcpServers, ...value };
+        } else {
+          merged[key] = value;
+        }
+      }
+      log(`Loaded settings from ${loc}`);
+    } catch { /* file doesn't exist or parse error — skip */ }
+  }
+  return merged;
+}
+
+function applySettings(cfg, settings) {
+  // Model override (CLI flags still win)
+  if (settings.model && !process.argv.includes("--model") && !process.argv.includes("-m")) {
+    cfg.model = resolveModel(settings.model);
+  }
+
+  // Permission rules from settings
+  if (settings.permissions) {
+    if (settings.permissions.allow) {
+      for (const t of settings.permissions.allow) {
+        const [tool, pattern] = t.includes("(") ? [t.split("(")[0], t.split("(")[1]?.replace(")", "")] : [t, null];
+        cfg.permissionRules.push({ tool, pattern, behavior: "allow" });
+      }
+    }
+    if (settings.permissions.deny) {
+      for (const t of settings.permissions.deny) {
+        const [tool, pattern] = t.includes("(") ? [t.split("(")[0], t.split("(")[1]?.replace(")", "")] : [t, null];
+        cfg.permissionRules.push({ tool, pattern, behavior: "deny" });
+      }
+    }
+  }
+
+  // Store hooks config for HookRunner
+  if (settings.hooks) {
+    cfg._hooksConfig = settings.hooks;
+  }
+
+  // Store MCP servers config for loading
+  if (settings.mcpServers) {
+    cfg._settingsMcpServers = settings.mcpServers;
+  }
+
+  return cfg;
+}
+
+// ── Rules Engine (.claude/rules/*.md) ───────────────────────────
+
+function loadRules(cwd) {
+  const rulesDir = path.join(cwd, ".claude", "rules");
+  const rules = [];
+
+  try {
+    const files = fs.readdirSync(rulesDir).filter((f) => f.endsWith(".md")).sort();
+    for (const file of files) {
+      try {
+        const content = fs.readFileSync(path.join(rulesDir, file), "utf-8");
+        const { frontmatter, body } = parseYamlFrontmatter(content);
+        rules.push({
+          file,
+          paths: frontmatter.paths || null, // null = global (always loaded)
+          content: body.trim(),
+        });
+        log(`Loaded rule: ${file}${frontmatter.paths ? ` (scoped to ${frontmatter.paths.join(", ")})` : ""}`);
+      } catch (e) {
+        log(`Warning: failed to load rule ${file}: ${e.message}`);
+      }
+    }
+  } catch { /* .claude/rules/ doesn't exist */ }
+
+  return rules;
+}
+
+function parseYamlFrontmatter(content) {
+  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
+  if (!match) return { frontmatter: {}, body: content };
+
+  const yamlStr = match[1];
+  const body = match[2];
+
+  // Simple YAML parser for frontmatter (handles: key: value, key: [array], key:\n  - item)
+  const frontmatter = {};
+  const lines = yamlStr.split("\n");
+  let currentKey = null;
+  let currentArray = null;
+
+  for (const line of lines) {
+    const kvMatch = line.match(/^(\w[\w-]*):\s*(.*)$/);
+    if (kvMatch) {
+      if (currentKey && currentArray) {
+        frontmatter[currentKey] = currentArray;
+        currentArray = null;
+      }
+      const [, key, value] = kvMatch;
+      currentKey = key;
+      if (value === "" || value === "[]") {
+        currentArray = [];
+      } else if (value.startsWith("[") && value.endsWith("]")) {
+        // Inline array: [a, b, c]
+        frontmatter[key] = value.slice(1, -1).split(",").map((s) => s.trim().replace(/^["']|["']$/g, ""));
+        currentKey = null;
+      } else if (value === "true") {
+        frontmatter[key] = true; currentKey = null;
+      } else if (value === "false") {
+        frontmatter[key] = false; currentKey = null;
+      } else {
+        frontmatter[key] = value.replace(/^["']|["']$/g, "");
+        currentKey = null;
+      }
+    } else if (currentArray !== null) {
+      const itemMatch = line.match(/^\s+-\s+"?([^"]*)"?\s*$/);
+      if (itemMatch) currentArray.push(itemMatch[1]);
+    }
+  }
+  if (currentKey && currentArray) frontmatter[currentKey] = currentArray;
+
+  return { frontmatter, body };
+}
+
+// ── Enhanced CLAUDE.md Loading ──────────────────────────────────
+
+function loadClaudeMdFiles(cwd) {
+  const contents = [];
+  const projectRoot = findProjectRoot(cwd);
+
+  // Walk up directory tree (child first, then parent)
+  let dir = cwd;
+  const visited = new Set();
+  while (dir && !visited.has(dir)) {
+    visited.add(dir);
+
+    // Check both CLAUDE.md and .claude/CLAUDE.md
+    for (const candidate of [
+      path.join(dir, "CLAUDE.md"),
+      path.join(dir, ".claude", "CLAUDE.md"),
+    ]) {
+      try {
+        let content = fs.readFileSync(candidate, "utf-8");
+        // Process @import directives
+        content = processImports(content, path.dirname(candidate), projectRoot, 0, new Set([candidate]));
+        contents.push({ path: candidate, content });
+        log(`Loaded CLAUDE.md: ${candidate}`);
+      } catch { /* doesn't exist */ }
+    }
+
+    const parent = path.dirname(dir);
+    if (parent === dir) break; // filesystem root
+    dir = parent;
+  }
+
+  // Reverse so parent comes first, child last (child overrides)
+  return contents.reverse();
+}
+
+function findProjectRoot(cwd) {
+  let dir = cwd;
+  while (dir !== path.dirname(dir)) {
+    if (fs.existsSync(path.join(dir, ".git")) || fs.existsSync(path.join(dir, "package.json"))) {
+      return dir;
+    }
+    dir = path.dirname(dir);
+  }
+  return cwd; // fallback to cwd
+}
+
+function processImports(content, baseDir, projectRoot, depth, visited) {
+  if (depth >= 3) return content; // Max import depth
+
+  return content.replace(/^@(\.\/[^\s]+|~\/\.claude\/[^\s]+)$/gm, (match, importPath) => {
+    let resolvedPath;
+    if (importPath.startsWith("~/")) {
+      // Only allow ~/.claude/ prefix
+      if (!importPath.startsWith("~/.claude/")) {
+        log(`Skipping import outside ~/.claude/: ${importPath}`);
+        return `<!-- import skipped: ${importPath} (outside allowed prefix) -->`;
+      }
+      resolvedPath = path.join(os.homedir(), importPath.slice(2));
+    } else {
+      // Relative path — resolve within project root
+      resolvedPath = path.resolve(baseDir, importPath);
+      if (!resolvedPath.startsWith(projectRoot)) {
+        log(`Skipping import outside project root: ${importPath}`);
+        return `<!-- import skipped: ${importPath} (outside project root) -->`;
+      }
+    }
+
+    // Cycle detection
+    const absPath = path.resolve(resolvedPath);
+    if (visited.has(absPath)) {
+      log(`Skipping circular import: ${importPath}`);
+      return `<!-- import skipped: ${importPath} (circular) -->`;
+    }
+
+    try {
+      visited.add(absPath);
+      const imported = fs.readFileSync(absPath, "utf-8");
+      return processImports(imported, path.dirname(absPath), projectRoot, depth + 1, visited);
+    } catch {
+      log(`Import not found (skipping): ${importPath}`);
+      return ""; // Silent skip
+    }
+  });
+}
+
+// ── Skills System ───────────────────────────────────────────────
+
+const RESERVED_COMMANDS = new Set([
+  "/help", "/model", "/clear", "/exit", "/quit", "/q", "/resume",
+  "/cost", "/session", "/thinking", "/memory", "/mem", "/checkpoints",
+  "/ckpt", "/rewind", "/permissions", "/permission", "/mode",
+  "/login", "/logout", "/openai-login", "/openai-logout",
+]);
+
+class SkillLoader {
+  constructor() {
+    this._skills = new Map(); // name → { name, description, allowedTools, hooks, filePath, skillRoot, body (lazy) }
+  }
+
+  scan(cwd) {
+    const locations = [
+      { dir: path.join(os.homedir(), ".claude", "skills"), source: "personal" },
+      { dir: path.join(cwd, ".claude", "skills"), source: "project" },
+    ];
+
+    for (const { dir, source } of locations) {
+      try {
+        const entries = fs.readdirSync(dir, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          const skillPath = path.join(dir, entry.name, "SKILL.md");
+          try {
+            const content = fs.readFileSync(skillPath, "utf-8");
+            const { frontmatter } = parseYamlFrontmatter(content);
+            const name = frontmatter.name || entry.name;
+            const slashName = `/${name}`;
+
+            // Check for reserved command collision
+            if (RESERVED_COMMANDS.has(slashName)) {
+              log(`Warning: Skill "${name}" shadows reserved command ${slashName}, skipping.`);
+              continue;
+            }
+
+            // Parse allowed-tools
+            const allowedTools = frontmatter["allowed-tools"]
+              ? frontmatter["allowed-tools"].split(",").map((s) => s.trim())
+              : null;
+
+            // Parse skill-scoped hooks from frontmatter
+            const hooks = _parseSkillHooks(frontmatter.hooks);
+
+            // Project skills override personal skills with same name
+            this._skills.set(name, {
+              name,
+              description: frontmatter.description || `Skill: ${name}`,
+              allowedTools,
+              hooks,
+              filePath: skillPath,
+              skillRoot: path.dirname(skillPath),
+              source,
+            });
+            log(`Loaded skill: /${name} (${source}: ${skillPath})`);
+          } catch { /* SKILL.md doesn't exist or parse error */ }
+        }
+      } catch { /* skills dir doesn't exist */ }
+    }
+
+    return this;
+  }
+
+  getIndex() {
+    if (this._skills.size === 0) return "";
+    const lines = ["# Available Skills"];
+    for (const [name, skill] of this._skills) {
+      lines.push(`- /${name}: ${skill.description} [${skill.filePath}]`);
+    }
+    return lines.join("\n");
+  }
+
+  has(name) {
+    return this._skills.has(name);
+  }
+
+  get(name) {
+    return this._skills.get(name);
+  }
+
+  invoke(name, args) {
+    const skill = this._skills.get(name);
+    if (!skill) return null;
+
+    // On-demand load: read full SKILL.md body
+    const content = fs.readFileSync(skill.filePath, "utf-8");
+    const { frontmatter, body } = parseYamlFrontmatter(content);
+
+    // Re-parse hooks on invocation (may have changed on disk)
+    const hooks = _parseSkillHooks(frontmatter.hooks);
+
+    // Substitute $ARGUMENTS and $SKILL_DATA
+    const dataDir = ensureSkillDataDir(name);
+    let processedBody = body.replace(/\$ARGUMENTS/g, args || "");
+    processedBody = processedBody.replace(/\$SKILL_DATA/g, dataDir);
+
+    return {
+      ...skill,
+      hooks,
+      dataDir,
+      body: processedBody.trim(),
+    };
+  }
+
+  list() {
+    return Array.from(this._skills.values());
+  }
+}
+
+// Parse hooks from skill frontmatter (string or structured)
+function _parseSkillHooks(hooksValue) {
+  if (!hooksValue) return null;
+  // Support structured hooks: { PreToolUse: [{ matcher: "Bash", hooks: [{ type: "command", command: "..." }] }] }
+  if (typeof hooksValue === "object") return hooksValue;
+  return null;
+}
+
+// ── Skill Execution Context ─────────────────────────────────────
+
+class SkillExecutionContext {
+  constructor({ name, skillRoot, allowedTools, hooks, dataDir, trackingId }) {
+    this.name = name;
+    this.skillRoot = skillRoot;
+    this.allowedTools = allowedTools;   // string[] or null (null = unrestricted)
+    this.hooks = hooks;                 // { PreToolUse: [...], ... } or null
+    this.dataDir = dataDir;             // persistent scratch dir
+    this.trackingId = trackingId;       // unique id for this invocation
+    this.touchedPaths = new Set();      // files touched during this execution
+  }
+
+  // Check if a tool is allowed in this skill's scope
+  isToolAllowed(toolName) {
+    if (!this.allowedTools) return true; // null = no restriction
+    // Parse tool specs like "Bash(git:*)" → bare name "Bash"
+    return this.allowedTools.some((spec) => {
+      const bareName = spec.includes("(") ? spec.split("(")[0] : spec;
+      return bareName === toolName || bareName === "*";
+    });
+  }
+
+  // Record a file path touched during skill execution
+  recordPath(filePath) {
+    if (filePath) this.touchedPaths.add(filePath);
+  }
+}
+
+// ── Skill Data Directory ────────────────────────────────────────
+
+function ensureSkillDataDir(skillName) {
+  const dir = path.join(os.homedir(), ".claude-native", "skill-data", skillName);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+// ── Agent Loader (public agent extensibility) ──────────────────
+
+class AgentLoader {
+  constructor() { this._agents = new Map(); }
+
+  scan(cwd) {
+    const locations = [
+      { dir: path.join(os.homedir(), ".claude", "agents"), source: "personal" },
+      { dir: path.join(cwd || process.cwd(), ".claude", "agents"), source: "project" },
+    ];
+
+    for (const { dir, source } of locations) {
+      if (!fs.existsSync(dir)) continue;
+      try {
+        for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+          if (!entry.isDirectory()) continue;
+          const agentFile = path.join(dir, entry.name, "AGENT.md");
+          if (!fs.existsSync(agentFile)) continue;
+          try {
+            const raw = fs.readFileSync(agentFile, "utf-8");
+            const { frontmatter } = parseYamlFrontmatter(raw);
+            const name = frontmatter.name || entry.name;
+            // Project agents override personal ones
+            // Parse disallowed_tools — handle both CSV string and YAML array
+            let disallowedTools = [];
+            if (Array.isArray(frontmatter.disallowed_tools)) {
+              disallowedTools = frontmatter.disallowed_tools.map(s => String(s).trim()).filter(Boolean);
+            } else if (typeof frontmatter.disallowed_tools === "string") {
+              disallowedTools = frontmatter.disallowed_tools.split(",").map(s => s.trim()).filter(Boolean);
+            }
+
+            this._agents.set(name, {
+              name,
+              description: frontmatter.description || `Custom agent: ${name}`,
+              model: frontmatter.model || null,
+              provider: frontmatter.provider || null,
+              workload: frontmatter.workload || null,
+              readOnly: frontmatter.read_only === true || frontmatter.read_only === "true",
+              disallowedTools,
+              filePath: agentFile,
+              source,
+            });
+          } catch (e) {
+            log(`AgentLoader: failed to parse ${agentFile}: ${e.message}`);
+          }
+        }
+      } catch { /* ignore: directory may not exist or be unreadable */ }
+    }
+    return this;
+  }
+
+  has(name) { return this._agents.has(name); }
+  get(name) { return this._agents.get(name); }
+  list() { return Array.from(this._agents.values()); }
+
+  resolve(name) {
+    const agent = this._agents.get(name);
+    if (!agent) return null;
+
+    // Lazy-load body on resolve
+    const raw = fs.readFileSync(agent.filePath, "utf-8");
+    const { body } = parseYamlFrontmatter(raw);
+
+    return {
+      agentType: agent.name,
+      description: agent.description,
+      model: agent.model ? resolveModel(agent.model) : null,
+      provider: agent.provider || null,
+      readOnly: agent.readOnly,
+      disallowedTools: agent.disallowedTools,
+      workload: agent.workload,
+      source: "custom",
+      getSystemPrompt: (_cfg) => body.trim(),
+    };
+  }
+}
+
+// ── Hooks System ────────────────────────────────────────────────
+
+class HookRunner {
+  constructor(hooksConfig = {}) {
+    this._config = hooksConfig;
+    this._client = null;      // Set by main() for LLM hooks
+    this._cfg = null;          // Set by main() for LLM hooks
+    this._inHookExecution = false; // Recursion guard — prevents hooks during hook agent execution
+  }
+
+  // Merge global hooks with skill-scoped hooks for a given event
+  _getHooksForEvent(event, skillContext) {
+    const globalHooks = this._config[event] || [];
+    if (!skillContext?.hooks?.[event]) return globalHooks;
+    // Merge: global hooks first, then skill-scoped hooks
+    return [...globalHooks, ...skillContext.hooks[event]];
+  }
+
+  async fire(event, context, opts = {}) {
+    // Recursion guard: don't fire hooks while inside a hook agent execution
+    if (this._inHookExecution) return { blocked: false };
+
+    const skillContext = opts.skillContext || null;
+    const eventHooks = this._getHooksForEvent(event, skillContext);
+    if (eventHooks.length === 0) return { blocked: false };
+
+    // Enrich context with skill info if active
+    if (skillContext) {
+      context.skill_name = skillContext.name;
+      context.skill_root = skillContext.skillRoot;
+      context.skill_data = skillContext.dataDir;
+    }
+
+    const results = [];
+
+    for (const hookGroup of eventHooks) {
+      // Check matcher against tool name
+      if (hookGroup.matcher && context.tool_name) {
+        const regex = new RegExp(hookGroup.matcher);
+        if (!regex.test(context.tool_name)) continue;
+      }
+
+      for (const hook of hookGroup.hooks || []) {
+        try {
+          if (hook.type === "command") {
+            const result = await this._runCommand(hook.command, context, hook.timeout || 10);
+            results.push(result);
+            // Exit code 2 = block
+            if (result.exitCode === 2) {
+              return { blocked: true, feedback: result.stderr || `Hook blocked ${event} for ${context.tool_name || "unknown"}` };
+            }
+          } else if (hook.type === "webhook") {
+            const result = await this._sendWebhook(hook.url, context, {
+              method: hook.method || "POST",
+              headers: hook.headers || {},
+              template: hook.template || null,
+              timeout: hook.timeout || 10,
+            });
+            results.push(result);
+          } else if (hook.type === "prompt") {
+            const result = await this._evalPromptHook(hook, context);
+            results.push(result);
+            if (result.blocked) {
+              return { blocked: true, feedback: result.reason || `LLM hook blocked ${event}` };
+            }
+          } else if (hook.type === "agent") {
+            const result = await this._evalAgentHook(hook, context);
+            results.push(result);
+            if (result.blocked) {
+              return { blocked: true, feedback: result.reason || `Agent hook blocked ${event}` };
+            }
+          }
+        } catch (e) {
+          log(`Hook error (${hook.type}: ${hook.command || hook.url || hook.prompt}): ${e.message}`);
+        }
+      }
+    }
+
+    return { blocked: false, results };
+  }
+
+  _runCommand(command, context, timeoutSec) {
+    return new Promise((resolve) => {
+      const child = spawn("sh", ["-c", command], {
+        stdio: ["pipe", "pipe", "pipe"],
+        timeout: timeoutSec * 1000,
+        cwd: context.cwd || process.cwd(),
+      });
+
+      let stdout = "", stderr = "";
+      child.stdout.on("data", (d) => stdout += d);
+      child.stderr.on("data", (d) => stderr += d);
+
+      child.on("close", (code) => resolve({ exitCode: code || 0, stdout, stderr }));
+      child.on("error", (e) => resolve({ exitCode: 1, stdout, stderr: e.message }));
+
+      // Send context as stdin JSON
+      try {
+        child.stdin.write(JSON.stringify(context));
+        child.stdin.end();
+      } catch { /* stdin may be closed */ }
+
+      // Timeout guard
+      setTimeout(() => { try { child.kill("SIGKILL"); } catch { /* ignore: process may have already exited */ } }, timeoutSec * 1000 + 500);
+    });
+  }
+
+  _sendWebhook(url, context, opts = {}) {
+    return new Promise((resolve) => {
+      const { method = "POST", headers = {}, template = null, timeout = 10 } = opts;
+
+      // Build payload — detect Slack/Discord and format accordingly
+      let payload;
+      if (template) {
+        // User-defined template: replace {{key}} placeholders with context values
+        payload = template;
+        for (const [key, val] of Object.entries(context)) {
+          payload = payload.replace(new RegExp(`\\{\\{${key}\\}\\}`, "g"), typeof val === "string" ? val : JSON.stringify(val));
+        }
+      } else if (url.includes("hooks.slack.com")) {
+        // Slack format
+        const event = context.hook_event_name || "event";
+        const detail = context.tool_name ? ` — ${context.tool_name}` : "";
+        const extra = context.message || context.prompt?.substring(0, 200) || context.response_text?.substring(0, 200) || "";
+        payload = JSON.stringify({
+          text: `*[claude-native]* \`${event}\`${detail}`,
+          blocks: [
+            { type: "section", text: { type: "mrkdwn", text: `*${event}*${detail}\n${extra}` } },
+            { type: "context", elements: [
+              { type: "mrkdwn", text: `model: \`${context.model || "?"}\` | cwd: \`${context.cwd || "?"}\`` },
+            ]},
+          ],
+        });
+      } else if (url.includes("discord.com/api/webhooks")) {
+        // Discord format
+        const event = context.hook_event_name || "event";
+        const detail = context.tool_name ? ` — ${context.tool_name}` : "";
+        payload = JSON.stringify({
+          content: `**[claude-native]** \`${event}\`${detail}`,
+          embeds: [{
+            title: event,
+            description: context.message || context.prompt?.substring(0, 500) || "",
+            color: event.includes("Error") || event.includes("Failure") ? 0xff0000 : 0x00aaff,
+            footer: { text: `${context.model || "?"} | ${context.cwd || "?"}` },
+          }],
+        });
+      } else {
+        // Generic: send full context as JSON
+        payload = JSON.stringify(context);
+      }
+
+      const urlObj = new URL(url);
+      const mod = urlObj.protocol === "https:" ? "https" : "http";
+
+      const reqOpts = {
+        hostname: urlObj.hostname,
+        port: urlObj.port || (mod === "https" ? 443 : 80),
+        path: urlObj.pathname + urlObj.search,
+        method,
+        headers: {
+          "Content-Type": "application/json",
+          "User-Agent": "claude-native-hooks/1.0",
+          ...headers,
+        },
+        timeout: timeout * 1000,
+      };
+
+      import(`node:${mod}`).then(({ default: httpMod }) => {
+        const req = httpMod.request(reqOpts, (res) => {
+          let body = "";
+          res.on("data", (d) => body += d);
+          res.on("end", () => {
+            log(`Webhook ${method} ${url}: ${res.statusCode}`);
+            resolve({ statusCode: res.statusCode, body });
+          });
+        });
+        req.on("error", (e) => {
+          log(`Webhook error: ${e.message}`);
+          resolve({ statusCode: 0, body: e.message });
+        });
+        req.on("timeout", () => {
+          req.destroy();
+          resolve({ statusCode: 0, body: "timeout" });
+        });
+        req.write(payload);
+        req.end();
+      }).catch((e) => resolve({ statusCode: 0, body: e.message }));
+    });
+  }
+
+  // LLM prompt hook: single LLM call, expects JSON { ok, reason }
+  async _evalPromptHook(hook, context) {
+    if (!this._client) { log("Prompt hook skipped: no client"); return { blocked: false }; }
+
+    // Interpolate $ARGUMENTS in prompt template
+    let prompt = hook.prompt || "";
+    for (const [key, val] of Object.entries(context)) {
+      prompt = prompt.replace(new RegExp(`\\$${key.toUpperCase()}`, "g"), typeof val === "string" ? val : JSON.stringify(val));
+    }
+
+    const model = hook.model ? resolveModel(hook.model) : (this._cfg?.model || "claude-haiku-4-5-20251001");
+    const timeout = (hook.timeout || 15) * 1000;
+
+    const systemPrompt = `You are evaluating a hook condition. Respond ONLY with valid JSON: {"ok": true} or {"ok": false, "reason": "explanation"}.
+Do not include any other text, markdown, or formatting. Just the JSON object.`;
+
+    try {
+      const body = {
+        model,
+        max_tokens: 256,
+        system: [{ type: "text", text: systemPrompt }],
+        messages: [{ role: "user", content: prompt }],
+        tools: [],
+      };
+
+      let text = "";
+      const abortController = new AbortController();
+      const timer = setTimeout(() => abortController.abort(), timeout);
+
+      try {
+        for await (const { event, data } of this._client.stream(body, { signal: abortController.signal })) {
+          if (event === "content_block_delta" && data.delta?.type === "text_delta") {
+            text += data.delta.text;
+          }
+        }
+      } finally { clearTimeout(timer); }
+
+      // Parse JSON response — fail closed (block) if parse fails
+      try {
+        const result = JSON.parse(text.trim());
+        if (result.ok === true) return { blocked: false };
+        return { blocked: true, reason: result.reason || "LLM hook returned ok: false" };
+      } catch {
+        log(`Prompt hook: invalid JSON response: ${text.substring(0, 200)}`);
+        // Fail closed: treat unparseable response as block
+        return { blocked: true, reason: `LLM hook returned invalid JSON` };
+      }
+    } catch (e) {
+      log(`Prompt hook error: ${e.message}`);
+      // On error (timeout, network): fail open — don't block
+      return { blocked: false };
+    }
+  }
+
+  // LLM agent hook: spawns a read-only sub-agent, expects { ok, reason } result
+  async _evalAgentHook(hook, context) {
+    if (!this._client || !this._cfg) { log("Agent hook skipped: no client/cfg"); return { blocked: false }; }
+
+    // Interpolate $ARGUMENTS
+    let prompt = hook.prompt || "";
+    for (const [key, val] of Object.entries(context)) {
+      prompt = prompt.replace(new RegExp(`\\$${key.toUpperCase()}`, "g"), typeof val === "string" ? val : JSON.stringify(val));
+    }
+
+    const model = hook.model ? resolveModel(hook.model) : (this._cfg.model || "claude-haiku-4-5-20251001");
+    const maxTurns = Math.min(hook.max_turns || 10, 20); // Hard cap at 20
+
+    // Recursion guard ON
+    this._inHookExecution = true;
+
+    try {
+      const subRegistry = new ToolRegistry();
+      // Read-only tools only
+      const safeTools = ["Read", "Glob", "Grep", "Bash"];
+      const parentRegistry = this._cfg._registry;
+      if (parentRegistry) {
+        for (const name of safeTools) {
+          const tool = parentRegistry._tools.get(name);
+          if (tool) subRegistry.register(name, tool.definition, tool.executor);
+        }
+      }
+
+      const systemBlocks = [{
+        type: "text",
+        text: `You are a hook verification agent. Your job is to evaluate a condition and return a verdict.
+
+Use the available tools to inspect the codebase if needed. When done, respond with ONLY valid JSON:
+{"ok": true} or {"ok": false, "reason": "explanation"}
+
+Do not output anything else after the JSON verdict.`,
+      }];
+
+      // Resolve provider for the hook's model
+      const hookProvider = detectProvider(model);
+      let hookClient = this._client;
+      if (hookProvider.name !== (this._cfg._provider?.name || "Anthropic")) {
+        const providerKey = hookProvider.envKey === "ANTHROPIC_API_KEY" ? (this._cfg.apiKey || this._cfg.authToken)
+          : hookProvider.envKey === "OPENAI_API_KEY" ? this._cfg.openaiApiKey
+          : hookProvider.envKey ? (process.env[hookProvider.envKey] || "") : "no-auth";
+        if (providerKey || !hookProvider.envKey) {
+          const providerUrl = hookProvider.resolveBaseUrl ? hookProvider.resolveBaseUrl(this._cfg) : hookProvider.defaultUrl;
+          hookClient = hookProvider.createClient({ apiKey: this._cfg.apiKey, authToken: this._cfg.authToken, providerKey, providerUrl, model });
+        }
+      }
+
+      const hookCfg = { ...this._cfg, model, maxTurns, _hookRunner: null }; // null _hookRunner prevents recursion
+      const loop = new AgentLoop(hookClient, subRegistry, hookCfg, {}, null);
+      const messages = [{ role: "user", content: prompt }];
+      const result = await loop.run(messages, systemBlocks);
+
+      // Parse the last text for { ok, reason }
+      try {
+        const jsonMatch = result.text.match(/\{[\s\S]*"ok"\s*:\s*(true|false)[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]);
+          if (parsed.ok === true) return { blocked: false };
+          return { blocked: true, reason: parsed.reason || "Agent hook returned ok: false" };
+        }
+        log(`Agent hook: no JSON verdict in response: ${result.text.substring(0, 200)}`);
+        return { blocked: true, reason: "Agent hook did not return a JSON verdict" };
+      } catch {
+        return { blocked: true, reason: "Agent hook returned invalid JSON" };
+      }
+    } catch (e) {
+      log(`Agent hook error: ${e.message}`);
+      return { blocked: false }; // Fail open on error
+    } finally {
+      // Recursion guard OFF
+      this._inHookExecution = false;
+    }
+  }
+
+  hasHooksFor(event, skillContext) {
+    return this._getHooksForEvent(event, skillContext).length > 0;
+  }
+}
+
 // ── System Prompt Builder ───────────────────────────────────────
 
 function buildSystemPrompt(cfg) {
@@ -3321,15 +4907,35 @@ function buildSystemPrompt(cfg) {
 - Model: ${cfg.model}
 ${cfg.appendSystemPrompt ? `\n${cfg.appendSystemPrompt}` : ""}`;
 
-  // Load CLAUDE.md if present
-  let claudeMd = "";
-  const claudeMdPath = path.join(cfg.cwd, "CLAUDE.md");
-  try {
-    claudeMd = fs.readFileSync(claudeMdPath, "utf-8");
-  } catch { /* no CLAUDE.md */ }
+  // Load CLAUDE.md files (enhanced: tree walk + @import)
+  const claudeMdFiles = loadClaudeMdFiles(cfg.cwd);
+  const claudeMd = claudeMdFiles.map((f) => f.content).join("\n\n---\n\n");
+
+  // Load rules
+  const rules = cfg._rules || [];
+  const globalRules = rules.filter((r) => !r.paths).map((r) => r.content).join("\n\n");
+
+  // Load skill index
+  const skillIndex = cfg._skillLoader?.getIndex() || "";
 
   // Load memory system
   const memoryPrompt = buildMemoryPrompt(cfg.cwd);
+
+  // Brief mode instructions
+  const briefSection = cfg.briefMode ? `
+
+# Brief Mode
+
+SendUserMessage is where your replies go. Text outside it is visible if the user expands the detail view, but most won't — assume unread.
+
+Rules:
+- Every time the user says something, the reply they read comes through SendUserMessage
+- If you can answer immediately, send the answer
+- If you need to work first (read files, run commands), ack first in one line ("On it — checking..."), then work, then send the result
+- For longer work: ack → work → result. Send a checkpoint when something useful happened
+- Keep messages tight — the decision, the file:line, the finding
+- Attachments: use for images, diffs, logs the user should see alongside your message
+- Status: 'normal' when replying, 'proactive' when initiating (task done, blocker found)` : "";
 
   const blocks = [
     ...billingBlock,
@@ -3342,7 +4948,10 @@ ${cfg.appendSystemPrompt ? `\n${cfg.appendSystemPrompt}` : ""}`;
       type: "text",
       text: dynamicPrompt
         + (claudeMd ? `\n\n# Project Instructions (CLAUDE.md)\n${claudeMd}` : "")
-        + (memoryPrompt ? `\n\n${memoryPrompt}` : ""),
+        + (globalRules ? `\n\n# Project Rules\n${globalRules}` : "")
+        + (skillIndex ? `\n\n${skillIndex}` : "")
+        + (memoryPrompt ? `\n\n${memoryPrompt}` : "")
+        + briefSection,
     },
   ];
 
@@ -3358,6 +4967,7 @@ class AgentLoop {
     this.cfg = cfg;
     this.cb = callbacks;
     this.permissions = permissionManager;
+    this.skillContext = cfg._skillContext || null; // Active SkillExecutionContext
     this.totalUsage = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
     // Provider is stored on cfg.provider (the provider object, not the string name)
     this.provider = cfg._provider || detectProvider(cfg.model);
@@ -3390,6 +5000,93 @@ class AgentLoop {
       : new Error("Agent run aborted");
   }
 
+  // Context window limits by model family (tokens)
+  static _contextLimits = {
+    "claude-opus": 1000000, "claude-sonnet": 1000000, "claude-haiku": 200000,
+    "gpt-5": 1000000, "gpt-4o": 128000, "gpt-4": 128000, "gpt-3.5": 16385,
+    "o3": 200000, "o4": 200000,
+    "gemini": 1000000, "deepseek": 64000, "mistral": 128000,
+    "codex": 192000,
+    _default: 128000,
+  };
+
+  _getContextLimit() {
+    const model = this.cfg.model || "";
+    for (const [prefix, limit] of Object.entries(AgentLoop._contextLimits)) {
+      if (prefix !== "_default" && model.includes(prefix)) return limit;
+    }
+    return AgentLoop._contextLimits._default;
+  }
+
+  async _autoCompact(messages, systemBlocks) {
+    const inputTokens = this.totalUsage.input_tokens;
+    const contextLimit = this._getContextLimit();
+    const threshold = Math.floor(contextLimit * 0.80);
+
+    if (inputTokens < threshold || messages.length < 6) return false;
+
+    log(`Auto-compacting: ${inputTokens} tokens >= ${threshold} threshold (${messages.length} messages)`);
+    this.cb.onText?.("\n\x1b[2m[auto-compacting conversation...]\x1b[0m\n");
+
+    // PreCompact hook
+    if (this.cfg._hookRunner?.hasHooksFor("PreCompact")) {
+      await this.cfg._hookRunner.fire("PreCompact", {
+        session_id: this.cfg.sessionId || "", cwd: this.cfg.cwd || process.cwd(), hook_event_name: "PreCompact",
+        message_count: messages.length, input_tokens: inputTokens, threshold,
+      });
+    }
+
+    // Build summary request using the current messages
+    const summaryPrompt = "Summarize this conversation concisely. Preserve: key decisions, file paths modified, current task state, blockers, and any exact literals that may matter later (IDs, markers, commands, filenames, errors, code snippets). If the conversation contains short exact strings, copy them verbatim. Output only the summary.";
+    const summaryMessages = [
+      ...messages,
+      { role: "user", content: `<system-reminder>${summaryPrompt}</system-reminder>` },
+    ];
+
+    try {
+      const apiMessages = summaryMessages.map(({ messageId, ...rest }) => rest);
+      const body = {
+        model: this.cfg.model,
+        max_tokens: 4096,
+        system: systemBlocks,
+        messages: apiMessages,
+        tools: [], // No tools for summary
+      };
+
+      let summaryText = "";
+      for await (const { event, data } of this.client.stream(body, { signal: this.cfg.abortSignal })) {
+        if (event === "content_block_delta" && data.delta?.type === "text_delta") {
+          summaryText += data.delta.text;
+        }
+      }
+
+      if (summaryText.length > 50) {
+        // Replace messages with compact summary
+        const originalCount = messages.length;
+        messages.length = 0;
+        messages.push(
+          { role: "user", content: `[Auto-compacted from ${originalCount} messages]\n\nConversation summary:\n${summaryText}` },
+          { role: "assistant", content: "I've reviewed the conversation summary and I'm ready to continue. What would you like to do next?" },
+        );
+        log(`Auto-compact: ${originalCount} → 2 messages, summary ${summaryText.length} chars`);
+        this.cb.onText?.(`\x1b[2m[compacted ${originalCount} → 2 messages]\x1b[0m\n`);
+
+        // PostCompact hook
+        if (this.cfg._hookRunner?.hasHooksFor("PostCompact")) {
+          await this.cfg._hookRunner.fire("PostCompact", {
+            session_id: this.cfg.sessionId || "", cwd: this.cfg.cwd || process.cwd(), hook_event_name: "PostCompact",
+            original_count: originalCount, summary_length: summaryText.length,
+          });
+        }
+
+        return true;
+      }
+    } catch (e) {
+      log(`Auto-compact failed: ${e.message}`);
+    }
+    return false;
+  }
+
   async run(messages, systemBlocks) {
     let turnCount = 0;
 
@@ -3405,6 +5102,32 @@ class AgentLoop {
       const serverTools = caps.supportsHostedWebSearch ? [
         { type: "web_search_20250305", name: "web_search", max_uses: 8 },
       ] : [];
+
+      // Inject deferred tools delta as system-reminder (first turn or when delta changes)
+      const delta = this.registry.getDeferredDelta();
+      if (delta.added.length > 0 || delta.removed.length > 0) {
+        const parts = [];
+        if (delta.added.length > 0) {
+          parts.push(`The following deferred tools are now available via ToolSearch:\n${delta.added.join("\n")}`);
+        }
+        if (delta.removed.length > 0) {
+          parts.push(`The following deferred tools are no longer available:\n${delta.removed.join("\n")}`);
+        }
+        const reminder = `<system-reminder>\n${parts.join("\n\n")}\n</system-reminder>`;
+
+        // Append to the last user message's content, or inject as a new user message
+        const lastUserIdx = messages.findLastIndex((m) => m.role === "user");
+        if (lastUserIdx >= 0) {
+          const msg = messages[lastUserIdx];
+          if (typeof msg.content === "string") {
+            msg.content = msg.content + "\n\n" + reminder;
+          } else if (Array.isArray(msg.content)) {
+            // tool_result array — add as text block
+            msg.content = [...msg.content, { type: "text", text: reminder }];
+          }
+        }
+        log(`Deferred tools delta: +${delta.added.length} -${delta.removed.length} (${delta.all.length} total)`);
+      }
 
       // Strip non-API fields (messageId) from messages before sending
       const apiMessages = messages.map(({ messageId, ...rest }) => rest);
@@ -3492,6 +5215,18 @@ class AgentLoop {
           .filter((b) => b.type === "text")
           .map((b) => b.text)
           .join("");
+
+        // Stop hook (global + skill-scoped)
+        if (this.cfg._hookRunner?.hasHooksFor("Stop", this.skillContext)) {
+          await this.cfg._hookRunner.fire("Stop", {
+            session_id: this.cfg.sessionId || "",
+            cwd: this.registry._cwd || this.cfg.cwd || process.cwd(),
+            hook_event_name: "Stop",
+            stop_reason: stopReason,
+            response_text: textContent.substring(0, 1000),
+          }, { skillContext: this.skillContext });
+        }
+
         return { text: textContent, usage: this.totalUsage, turns: turnCount, stopReason };
       }
 
@@ -3504,10 +5239,66 @@ class AgentLoop {
         this.cb.onToolUse?.(block);
         log(`Tool: ${block.name}(${JSON.stringify(block.input).substring(0, 100)})`);
 
-        // Check permissions before execution
+        // Track file paths for path-scoped rules and skill context
+        const touchedPath = block.input?.file_path || block.input?.path || null;
+        if (touchedPath && this.skillContext) {
+          this.skillContext.recordPath(touchedPath);
+        }
+
+        // Inject path-scoped rules when tools touch matching files
+        if (touchedPath && this.cfg._rules) {
+          const pathRules = this.cfg._rules.filter((r) =>
+            r.paths && r.paths.some((p) => _pathMatchesGlob(touchedPath, p))
+          );
+          if (pathRules.length > 0) {
+            const rulesContent = pathRules.map((r) => r.content).join("\n\n");
+            // Inject path-scoped rules as context in the next user message
+            if (!this._injectedPathRules) this._injectedPathRules = new Set();
+            const ruleKey = pathRules.map((r) => r.file).join(",");
+            if (!this._injectedPathRules.has(ruleKey)) {
+              this._injectedPathRules.add(ruleKey);
+              log(`Activating path-scoped rules for ${touchedPath}: ${pathRules.map((r) => r.file).join(", ")}`);
+              // Prepend rules to the tool result so the model sees them
+              block._pathRules = `<path-rules for="${touchedPath}">\n${rulesContent}\n</path-rules>\n`;
+            }
+          }
+        }
+
+        // PreToolUse hooks (global + skill-scoped)
+        if (this.cfg._hookRunner?.hasHooksFor("PreToolUse", this.skillContext)) {
+          const hookResult = await this.cfg._hookRunner.fire("PreToolUse", {
+            session_id: this.cfg.sessionId || "",
+            cwd: this.registry._cwd || this.cfg.cwd || process.cwd(),
+            hook_event_name: "PreToolUse",
+            tool_name: block.name,
+            tool_input: block.input,
+          }, { skillContext: this.skillContext });
+          if (hookResult.blocked) {
+            log(`Hook blocked tool: ${block.name}`);
+            this.cb.onPermissionDeny?.(block, hookResult.feedback);
+            // Notification hook
+            if (this.cfg._hookRunner?.hasHooksFor("Notification")) {
+              await this.cfg._hookRunner.fire("Notification", {
+                session_id: this.cfg.sessionId || "", cwd: this.registry._cwd || process.cwd(),
+                hook_event_name: "Notification", level: "warn",
+                message: `Tool ${block.name} blocked by hook: ${hookResult.feedback}`,
+              });
+            }
+            toolResults.push({
+              type: "tool_result",
+              tool_use_id: block.id,
+              content: `Tool blocked by hook: ${hookResult.feedback}`,
+              is_error: true,
+            });
+            continue;
+          }
+        }
+
+        // Check permissions before execution (with skill context for tool restrictions)
         if (this.permissions) {
           const perm = await this.permissions.check(block.name, block.input, {
             cwd: this.registry._cwd || this.cfg.cwd || process.cwd(),
+            skillContext: this.skillContext,
           });
           if (perm.behavior === "deny") {
             log(`Permission denied: ${block.name} — ${perm.message}`);
@@ -3549,18 +5340,35 @@ class AgentLoop {
         } else {
           const result = await this.registry.execute(block.name, block.input);
           this._recordUsage(result?.usage);
-          this.cb.onToolResult?.(block.id, result);
+          this.cb.onToolResult?.(block.id, result, block.name);
+          // Prepend path-scoped rules to tool result content if activated
+          const pathRulesPrefix = block._pathRules || "";
           toolResults.push({
             type: "tool_result",
             tool_use_id: block.id,
-            content: result.content,
+            content: pathRulesPrefix + result.content,
             is_error: result.is_error || false,
           });
+        }
+
+        // PostToolUse hooks (global + skill-scoped)
+        if (this.cfg._hookRunner?.hasHooksFor("PostToolUse", this.skillContext)) {
+          await this.cfg._hookRunner.fire("PostToolUse", {
+            session_id: this.cfg.sessionId || "",
+            cwd: this.registry._cwd || this.cfg.cwd || process.cwd(),
+            hook_event_name: "PostToolUse",
+            tool_name: block.name,
+            tool_input: block.input,
+            tool_result: toolResults[toolResults.length - 1],
+          }, { skillContext: this.skillContext });
         }
       }
 
       // Append tool results as user message
       messages.push({ role: "user", content: toolResults });
+
+      // Auto-compact if context is getting full
+      await this._autoCompact(messages, systemBlocks);
     }
 
     return { text: "(max turns reached)", usage: this.totalUsage, turns: turnCount, stopReason: "max_turns" };
@@ -3570,8 +5378,10 @@ class AgentLoop {
 // ── SessionManager ──────────────────────────────────────────────
 
 class SessionManager {
-  constructor() {
-    this.dir = path.join(os.homedir(), ".claude-native", "sessions");
+  constructor(cwd) {
+    // Scope sessions by project directory
+    const sanitized = (cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-").slice(0, 100);
+    this.dir = path.join(os.homedir(), ".claude-native", "projects", sanitized, "sessions");
     fs.mkdirSync(this.dir, { recursive: true });
   }
 
@@ -3583,12 +5393,12 @@ class SessionManager {
   }
 
   load(id) {
-    const filePath = path.join(this.dir, `${id}.jsonl`);
-    if (!fs.existsSync(filePath)) return [];
+    const filePath = this._findFile(id);
+    if (!filePath || !fs.existsSync(filePath)) return [];
     const lines = fs.readFileSync(filePath, "utf-8").split("\n").filter(Boolean);
     return lines.map((l) => {
       try { return JSON.parse(l); } catch { return null; }
-    }).filter(Boolean);
+    }).filter(Boolean).filter((m) => m.role); // Only load actual messages (not metadata)
   }
 
   append(id, message) {
@@ -3596,18 +5406,70 @@ class SessionManager {
     fs.appendFileSync(filePath, JSON.stringify(message) + "\n");
   }
 
-  latest(cwd) {
-    try {
-      const files = fs.readdirSync(this.dir)
-        .filter((f) => f.endsWith(".jsonl"))
-        .map((f) => ({
-          id: f.replace(".jsonl", ""),
-          mtime: fs.statSync(path.join(this.dir, f)).mtimeMs,
-        }))
-        .sort((a, b) => b.mtime - a.mtime);
+  // Save session metadata (title, summary, etc.)
+  setMeta(id, key, value) {
+    const filePath = path.join(this.dir, `${id}.jsonl`);
+    fs.appendFileSync(filePath, JSON.stringify({ _meta: key, value, timestamp: new Date().toISOString() }) + "\n");
+  }
 
-      // Return most recent session (optionally could filter by cwd metadata)
-      return files[0]?.id || null;
+  getMeta(id, key) {
+    const filePath = this._findFile(id);
+    if (!filePath) return null;
+    const lines = fs.readFileSync(filePath, "utf-8").split("\n").filter(Boolean);
+    // Return last matching meta entry
+    let result = null;
+    for (const line of lines) {
+      try {
+        const obj = JSON.parse(line);
+        if (obj._meta === key) result = obj.value;
+      } catch { /* ignore: malformed JSONL line */ }
+    }
+    return result;
+  }
+
+  // Auto-generate title from first user message
+  autoTitle(id) {
+    const msgs = this.load(id);
+    const firstUser = msgs.find((m) => m.role === "user" && typeof m.content === "string");
+    if (!firstUser) return null;
+    const title = firstUser.content.substring(0, 80).replace(/\n/g, " ").trim();
+    return title + (firstUser.content.length > 80 ? "..." : "");
+  }
+
+  // List all sessions for this project, sorted by recency
+  listAll() {
+    try {
+      return fs.readdirSync(this.dir)
+        .filter((f) => f.endsWith(".jsonl"))
+        .map((f) => {
+          const id = f.replace(".jsonl", "");
+          const stat = fs.statSync(path.join(this.dir, f));
+          const title = this.getMeta(id, "title") || this.autoTitle(id) || "(empty)";
+          // Count messages (lines that have a "role" field)
+          let msgCount = 0;
+          try {
+            const content = fs.readFileSync(path.join(this.dir, f), "utf-8");
+            msgCount = content.split("\n").filter((l) => l.includes('"role"')).length;
+          } catch { /* ignore: session file may be unreadable */ }
+          return { id, title, msgCount, mtime: stat.mtimeMs, size: stat.size };
+        })
+        .sort((a, b) => b.mtime - a.mtime);
+    } catch { return []; }
+  }
+
+  latest() {
+    const sessions = this.listAll();
+    return sessions[0]?.id || null;
+  }
+
+  // Find session file — supports full UUID or prefix match
+  _findFile(id) {
+    const exact = path.join(this.dir, `${id}.jsonl`);
+    if (fs.existsSync(exact)) return exact;
+    // Prefix match
+    try {
+      const match = fs.readdirSync(this.dir).find((f) => f.startsWith(id) && f.endsWith(".jsonl"));
+      return match ? path.join(this.dir, match) : null;
     } catch { return null; }
   }
 }
@@ -3672,7 +5534,7 @@ class CheckpointStore {
       const content = fs.readFileSync(absPath, "utf-8");
       fs.writeFileSync(dest, content, { encoding: "utf-8", flush: true });
       // Preserve permissions
-      try { const stat = fs.statSync(absPath); fs.chmodSync(dest, stat.mode); } catch {}
+      try { const stat = fs.statSync(absPath); fs.chmodSync(dest, stat.mode); } catch { /* ignore: permissions may not be readable */ }
     } catch { /* file might not exist */ }
     return { backupFile, version, backupTime: new Date().toISOString() };
   }
@@ -3682,7 +5544,7 @@ class CheckpointStore {
     const content = fs.readFileSync(src, "utf-8");
     fs.mkdirSync(path.dirname(absPath), { recursive: true });
     fs.writeFileSync(absPath, content, { encoding: "utf-8" });
-    try { const stat = fs.statSync(src); fs.chmodSync(absPath, stat.mode); } catch {}
+    try { const stat = fs.statSync(src); fs.chmodSync(absPath, stat.mode); } catch { /* ignore: permissions may not be readable */ }
   }
 
   _diffFile(absPath, backupFile) {
@@ -3690,8 +5552,8 @@ class CheckpointStore {
     let currentExists = false, backupExists = false;
     let currentContent = "", backupContent = "";
 
-    try { currentContent = fs.readFileSync(absPath, "utf-8"); currentExists = true; } catch {}
-    try { backupContent = fs.readFileSync(backupPath, "utf-8"); backupExists = true; } catch {}
+    try { currentContent = fs.readFileSync(absPath, "utf-8"); currentExists = true; } catch { /* ignore: file may not exist */ }
+    try { backupContent = fs.readFileSync(backupPath, "utf-8"); backupExists = true; } catch { /* ignore: backup may not exist */ }
 
     if (!currentExists && !backupExists) return { changed: false, conflict: false, insertions: 0, deletions: 0 };
     if (currentContent === backupContent) return { changed: false, conflict: false, insertions: 0, deletions: 0 };
@@ -3710,7 +5572,7 @@ class CheckpointStore {
         const bakStat = fs.statSync(backupPath);
         // If current file is newer than backup AND content differs, potential conflict
         if (curStat.mtimeMs > bakStat.mtimeMs) conflict = true;
-      } catch {}
+      } catch { /* ignore: stat may fail if file was just deleted */ }
     }
 
     return { changed: true, conflict, insertions, deletions };
@@ -3813,7 +5675,7 @@ class CheckpointStore {
         if (fs.existsSync(absPath)) {
           created.push(relPath);
           if (!dryRun) {
-            try { fs.unlinkSync(absPath); } catch {}
+            try { fs.unlinkSync(absPath); } catch { /* ignore: file may have been removed externally */ }
           }
         }
         continue;
@@ -3871,7 +5733,7 @@ class NdjsonBridge {
     this.client = client;
     this.mcpManager = mcpManager;
     this.permissions = permissions;
-    this.sessions = new SessionManager();
+    this.sessions = new SessionManager(this.cfg.cwd);
     this._pendingToolCalls = new Map(); // id → { resolve }
     this._pendingPermissions = new Map(); // requestId → { resolve }
   }
@@ -3968,6 +5830,17 @@ class NdjsonBridge {
           this.emit({ type: "checkpoint_list_result", snapshots: this.checkpoints?.getSnapshots() || [] });
           break;
 
+        case "set_brief":
+          this.cfg.briefMode = !!msg.enabled;
+          if (this.cfg.briefMode) {
+            registerBriefTools(this.registry, this.cfg);
+          } else {
+            this.registry.unregister("SendUserMessage");
+          }
+          registerToolSearch(this.registry); // Re-evaluate ToolSearch availability
+          this.emit({ type: "brief_mode", enabled: this.cfg.briefMode });
+          break;
+
         default:
           this.emit({ type: "error", error: `Unknown message type: ${msg.type}` });
       }
@@ -3984,9 +5857,10 @@ class NdjsonBridge {
           this.registry.register(tool.name, {
             description: tool.description || "",
             input_schema: tool.input_schema || tool.parameters || { type: "object", properties: {} },
-          }, null); // No local executor — handled via NDJSON
+          }, null, { deferred: !!tool.deferred }); // External tools optionally deferred
         }
       }
+      registerToolSearch(this.registry); // Re-evaluate ToolSearch after external tools added
     }
 
     // Build system prompt
@@ -4009,7 +5883,7 @@ class NdjsonBridge {
 
     const loop = new AgentLoop(this.client, this.registry, this.cfg, {
       onText: (delta) => {
-        this.emit({ type: "stream", event_type: "text_delta", data: { text: delta } });
+        this.emit({ type: "stream", event_type: "text_delta", data: { text: delta, ...(this.cfg.briefMode ? { is_trace: true } : {}) } });
       },
       onToolUse: (block) => {
         this.emit({ type: "tool_use", id: block.id, name: block.name, input: block.input });
@@ -4019,6 +5893,14 @@ class NdjsonBridge {
         return new Promise((resolve) => {
           this._pendingToolCalls.set(block.id, { resolve });
         });
+      },
+      onToolResult: (id, result, toolName) => {
+        if (toolName === "SendUserMessage" && !result.is_error) {
+          try {
+            const parsed = JSON.parse(result.content);
+            this.emit({ type: "user_message", message: parsed.message, attachments: parsed.attachments, status: parsed.status, sentAt: parsed.sentAt });
+          } catch { /* ignore: non-JSON tool result from SendUserMessage */ }
+        }
       },
       onPermissionDeny: (block, msg) => {
         this.emit({ type: "permission_denied", tool: block.name, message: msg });
@@ -4072,6 +5954,122 @@ class NdjsonBridge {
 
 // ── InteractiveMode ─────────────────────────────────────────────
 
+// ── Slash Command Registry ─────────────────────────────────────
+
+// ── Interactive Form — generic input collector ─────────────────
+//
+// Works in both readline and Ink modes. Each field is:
+//   { name, label, type: "text"|"choice"|"confirm", default, options: [{label, value}] }
+//
+// Returns: { fieldName: value, ... } or null if cancelled.
+
+async function interactiveForm(fields, { title = null } = {}) {
+  const answers = {};
+
+  if (title) process.stderr.write(`\n\x1b[1m  ${title}\x1b[0m\n\n`);
+
+  for (const field of fields) {
+    const answer = await _askField(field);
+    if (answer === null && field.required !== false) return null; // cancelled
+    answers[field.name] = answer !== null ? answer : (field.default ?? "");
+  }
+
+  return answers;
+}
+
+function _askField(field) {
+  return new Promise((resolve) => {
+    if (field.type === "confirm") {
+      const def = field.default === true ? "Y/n" : "y/N";
+      process.stderr.write(`\x1b[33m${field.label} (${def}): \x1b[0m`);
+      const rl = createInterface({ input: process.stdin, output: process.stderr });
+      rl.question("", (answer) => {
+        rl.close();
+        const a = answer.trim().toLowerCase();
+        if (!a) resolve(field.default ?? false);
+        else resolve(a === "y" || a === "yes");
+      });
+
+    } else if (field.type === "choice" && field.options?.length > 0) {
+      process.stderr.write(`\x1b[33m${field.label}\x1b[0m\n`);
+      for (let i = 0; i < field.options.length; i++) {
+        const opt = field.options[i];
+        const desc = opt.description ? `  \x1b[2m${opt.description}\x1b[0m` : "";
+        process.stderr.write(`  \x1b[36m${i + 1}.\x1b[0m ${opt.label}${desc}\n`);
+      }
+      const defHint = field.default ? `, default: ${field.default}` : "";
+      process.stderr.write(`\x1b[33mChoose (1-${field.options.length}${defHint}): \x1b[0m`);
+      const rl = createInterface({ input: process.stdin, output: process.stderr });
+      rl.question("", (answer) => {
+        rl.close();
+        const num = parseInt(answer.trim(), 10);
+        if (num >= 1 && num <= field.options.length) {
+          resolve(field.options[num - 1].value ?? field.options[num - 1].label);
+        } else if (!answer.trim() && field.default) {
+          resolve(field.default);
+        } else {
+          resolve(answer.trim() || field.default || null);
+        }
+      });
+
+    } else {
+      // text input
+      const defHint = field.default ? ` (default: ${field.default})` : "";
+      process.stderr.write(`\x1b[33m${field.label}${defHint}: \x1b[0m`);
+      const rl = createInterface({ input: process.stdin, output: process.stderr });
+      rl.question("", (answer) => {
+        rl.close();
+        resolve(answer.trim() || field.default || "");
+      });
+    }
+  });
+}
+
+// Multi-line text input (end with empty line)
+async function interactiveMultiline(label) {
+  process.stderr.write(`\x1b[33m${label} (end with empty line):\x1b[0m\n`);
+  const lines = [];
+  while (true) {
+    const line = await _askField({ name: "_", label: "", type: "text" });
+    if (!line) break;
+    lines.push(line);
+  }
+  return lines.join("\n");
+}
+
+class SlashCommandRegistry {
+  constructor() { this._commands = []; }
+
+  register(cmd) {
+    this._commands.push({ aliases: [], source: "builtin", argumentHint: "", isEnabled: () => true, isHidden: false, immediate: false, handler: null, ...cmd });
+  }
+
+  get(nameWithSlash) {
+    const n = nameWithSlash.startsWith("/") ? nameWithSlash.slice(1) : nameWithSlash;
+    return this._commands.find((c) => c.name === n || c.aliases.includes(n));
+  }
+
+  list(source = null) {
+    return this._commands.filter((c) => {
+      if (c.isHidden) return false;
+      if (typeof c.isEnabled === "function" && !c.isEnabled()) return false;
+      if (source && c.source !== source) return false;
+      return true;
+    });
+  }
+
+  completionNames() {
+    const names = [];
+    for (const c of this._commands) {
+      if (c.isHidden) continue;
+      if (typeof c.isEnabled === "function" && !c.isEnabled()) continue;
+      names.push("/" + c.name);
+      for (const a of c.aliases) names.push("/" + a);
+    }
+    return names;
+  }
+}
+
 class InteractiveMode {
   constructor(cfg, registry, client, mcpManager, permissions = null) {
     this.cfg = cfg;
@@ -4079,10 +6077,513 @@ class InteractiveMode {
     this.client = client;
     this.mcpManager = mcpManager;
     this.permissions = permissions;
-    this.sessions = new SessionManager();
+    this.sessions = new SessionManager(this.cfg.cwd);
     this.sessionId = null;
     this.messages = [];
     this.totalCost = 0;
+    this.slashCommands = new SlashCommandRegistry();
+    this._rl = null;
+    this._statuslineScript = null;
+  }
+
+  // ── Command Registration ─────────────────────────────────────
+  _initSlashCommands() {
+    const self = this;
+    const s = this.slashCommands;
+
+    // Session
+    s.register({ name: "exit", aliases: ["quit", "q"], description: "Exit the REPL", immediate: true, handler: () => "exit" });
+    s.register({ name: "clear", aliases: ["reset", "new"], description: "Clear conversation history", immediate: true,
+      handler: () => { self.messages = []; self.sessionId = self.sessions.create(); process.stderr.write(`\x1b[2mNew session: ${self.sessionId}\x1b[0m\n`); } });
+    s.register({ name: "session", description: "Show session info", immediate: true,
+      handler: () => { process.stderr.write(`\x1b[2mSession: ${self.sessionId} (${self.messages.length} messages)\x1b[0m\n`); } });
+    s.register({ name: "sessions", description: "List recent sessions or resume one", argumentHint: "[id]",
+      handler: async (args) => {
+        if (args[0]) {
+          // Resume specific session by ID or prefix
+          const id = args[0];
+          const sessions = self.sessions.listAll();
+          const match = sessions.find((s) => s.id === id || s.id.startsWith(id));
+          if (!match) { process.stderr.write(`\x1b[31mSession not found: ${id}\x1b[0m\n`); return; }
+          self.messages = self.sessions.load(match.id);
+          self.sessionId = match.id;
+          process.stderr.write(`\x1b[2mResumed session ${match.id.slice(0,8)} (${self.messages.length} messages): ${match.title}\x1b[0m\n`);
+          return;
+        }
+        // List sessions
+        const sessions = self.sessions.listAll();
+        if (sessions.length === 0) { process.stderr.write(`\x1b[2mNo sessions yet.\x1b[0m\n`); return; }
+        process.stderr.write(`\x1b[1m  Recent Sessions\x1b[0m\n`);
+        const shown = sessions.slice(0, 10);
+        for (const s of shown) {
+          const ago = Date.now() - s.mtime;
+          const agoStr = ago < 60000 ? "just now" : ago < 3600000 ? `${Math.floor(ago/60000)}m ago` : ago < 86400000 ? `${Math.floor(ago/3600000)}h ago` : `${Math.floor(ago/86400000)}d ago`;
+          const active = s.id === self.sessionId ? " \x1b[32m●\x1b[0m" : "";
+          process.stderr.write(`  \x1b[2m${s.id.slice(0,8)}\x1b[0m  ${s.title.substring(0, 60)}  \x1b[2m${s.msgCount}msg ${agoStr}\x1b[0m${active}\n`);
+        }
+        if (sessions.length > 10) process.stderr.write(`\x1b[2m  ... and ${sessions.length - 10} more\x1b[0m\n`);
+        process.stderr.write(`\n\x1b[2m  /sessions <id> to resume. --resume to auto-resume latest.\x1b[0m\n`);
+      } });
+    s.register({ name: "cost", description: "Show total cost estimate", immediate: true,
+      handler: () => { process.stderr.write(`\x1b[2mTotal cost: ~$${self.totalCost.toFixed(4)}\x1b[0m\n`); } });
+
+    // Model / Provider
+    s.register({ name: "model", argumentHint: "[name]", description: "Switch model or show current",
+      handler: (args) => { self._handleModel(args); } });
+    s.register({ name: "login", description: "Login to Anthropic (OAuth)", isHidden: true,
+      handler: async () => { await oauthLogin(); try { const { authToken, subscriptionType } = await getOAuthAccessToken(false); self.cfg.authToken = authToken; self.client = new AnthropicClient({ apiKey: self.cfg.apiKey, authToken: self.cfg.authToken, apiUrl: self.cfg.apiUrl }); process.stderr.write(`\x1b[2mSwitched to ${subscriptionType} subscription\x1b[0m\n`); } catch { /* ignore: token refresh may fail silently */ } } });
+    s.register({ name: "logout", description: "Remove Anthropic credentials", isHidden: true, handler: () => { oauthLogout(); } });
+    s.register({ name: "openai-login", description: "Login to OpenAI (OAuth)", isHidden: true,
+      handler: async () => { try { const t = await openaiOAuthLogin(); self.cfg.openaiApiKey = t; process.stderr.write(`\x1b[2mOpenAI auth ready. Use /model codex to switch.\x1b[0m\n`); } catch (e) { process.stderr.write(`\x1b[31mOpenAI login failed: ${e.message}\x1b[0m\n`); } } });
+    s.register({ name: "openai-logout", description: "Remove OpenAI credentials", isHidden: true, handler: () => { openaiOAuthLogout(); } });
+
+    // Modes
+    s.register({ name: "thinking", argumentHint: "[budget]", description: "Toggle extended thinking", immediate: true,
+      handler: (args) => { const b = parseInt(args[0], 10); self.cfg.thinkingBudget = b || (self.cfg.thinkingBudget ? 0 : 10000); process.stderr.write(`\x1b[2mThinking: ${self.cfg.thinkingBudget ? `enabled (${self.cfg.thinkingBudget} tokens)` : "disabled"}\x1b[0m\n`); } });
+    s.register({ name: "brief", description: "Toggle brief mode", immediate: true,
+      handler: () => { self.cfg.briefMode = !self.cfg.briefMode; if (self.cfg.briefMode) { registerBriefTools(self.registry, self.cfg); self.messages.push({ role: "user", content: "<system-reminder>Brief mode enabled. Use SendUserMessage for all user-facing output.</system-reminder>" }); } else { self.registry.unregister("SendUserMessage"); self.messages.push({ role: "user", content: "<system-reminder>Brief mode disabled. Reply with plain text.</system-reminder>" }); } registerToolSearch(self.registry); process.stderr.write(`\x1b[2mBrief mode: ${self.cfg.briefMode ? "enabled" : "disabled"}\x1b[0m\n`); } });
+    s.register({ name: "permission", aliases: ["permissions", "mode"], argumentHint: "[mode]", description: "Get/set permission mode", immediate: true,
+      handler: (args) => { if (args[0]) { self.permissions?.setMode(args[0]); process.stderr.write(`\x1b[2mPermission mode: ${args[0]}\x1b[0m\n`); } else { process.stderr.write(`\x1b[2mPermission mode: ${self.permissions?.mode || "default"}\x1b[0m\n`); process.stderr.write(`\x1b[2mModes: default, plan, acceptEdits, bypassPermissions, dontAsk\x1b[0m\n`); } } });
+
+    // Memory / Checkpoints
+    s.register({ name: "memory", aliases: ["mem"], description: "Show memory index", immediate: true,
+      handler: () => { const d = ensureMemoryDir(self.cfg.cwd); const idx = loadMemoryIndex(self.cfg.cwd); process.stderr.write(`\x1b[2mMemory directory: ${d}\x1b[0m\n`); if (idx) { process.stderr.write(`\x1b[2m${idx.split("\n").length} lines in MEMORY.md:\x1b[0m\n`); process.stderr.write(`\x1b[2m${idx.substring(0, 500)}\x1b[0m\n`); } else { process.stderr.write(`\x1b[2mNo memories yet.\x1b[0m\n`); } } });
+    s.register({ name: "checkpoints", aliases: ["ckpt"], description: "List file checkpoints", immediate: true,
+      handler: () => { if (!self.checkpoints) { process.stderr.write("\x1b[2mCheckpointing not enabled.\x1b[0m\n"); return; } const snaps = self.checkpoints.getSnapshots(); if (snaps.length === 0) { process.stderr.write("\x1b[2mNo checkpoints yet.\x1b[0m\n"); return; } for (const sn of snaps) { const ago = Math.floor((Date.now() - new Date(sn.timestamp).getTime()) / 1000); const agoStr = ago < 60 ? `${ago}s ago` : ago < 3600 ? `${Math.floor(ago/60)}m ago` : `${Math.floor(ago/3600)}h ago`; process.stderr.write(`\x1b[2m  [${sn.messageId.slice(0,8)}] ${sn.fileCount} files | ${agoStr}\x1b[0m\n`); } } });
+    s.register({ name: "rewind", argumentHint: "[id]", description: "Rewind to a checkpoint",
+      handler: async (args) => { await self._handleRewind(args); } });
+
+    // UI
+    s.register({ name: "help", argumentHint: "[filter]", description: "Show command palette", immediate: true,
+      handler: (args) => { self._renderHelp(args.join(" ")); } });
+    s.register({ name: "status", description: "Show status line", immediate: true,
+      handler: () => { self._renderStatusLine(); } });
+    s.register({ name: "statusline", argumentHint: "[path|off]", description: "Configure status line script", immediate: true,
+      handler: (args) => { self._handleStatuslineConfig(args); } });
+
+    // Webhooks
+    s.register({ name: "webhook", argumentHint: "<event> <url> | list | remove <event>", description: "Add a webhook to a hook event (Slack, Discord, or any URL)",
+      handler: (args) => {
+        if (!args[0] || args[0] === "list") {
+          // List current webhooks
+          const config = self.cfg._hooksConfig || {};
+          let found = false;
+          for (const [event, groups] of Object.entries(config)) {
+            for (const group of groups) {
+              for (const hook of group.hooks || []) {
+                if (hook.type === "webhook") {
+                  process.stderr.write(`  \x1b[36m${event}\x1b[0m → ${hook.url}\n`);
+                  found = true;
+                }
+              }
+            }
+          }
+          if (!found) process.stderr.write(`\x1b[2mNo webhooks configured. Usage: /webhook <event> <url>\x1b[0m\n`);
+          process.stderr.write(`\x1b[2mEvents: SessionStart, SessionEnd, Stop, UserPromptSubmit, SubagentStart, SubagentStop, PreCompact, PostCompact, Notification, PreToolUse, PostToolUse\x1b[0m\n`);
+          return;
+        }
+
+        if (args[0] === "remove") {
+          const event = args[1];
+          if (!event) { process.stderr.write(`\x1b[2mUsage: /webhook remove <event>\x1b[0m\n`); return; }
+          const config = self.cfg._hooksConfig || {};
+          if (config[event]) {
+            for (const group of config[event]) {
+              group.hooks = (group.hooks || []).filter(h => h.type !== "webhook");
+            }
+            config[event] = config[event].filter(g => (g.hooks || []).length > 0);
+            if (config[event].length === 0) delete config[event];
+          }
+          process.stderr.write(`\x1b[2mRemoved webhooks for ${event}.\x1b[0m\n`);
+          return;
+        }
+
+        // Add webhook: /webhook <event> <url>
+        const event = args[0];
+        const url = args[1];
+        if (!url) { process.stderr.write(`\x1b[2mUsage: /webhook <event> <url>\x1b[0m\n`); return; }
+        try { new URL(url); } catch { process.stderr.write(`\x1b[31mInvalid URL: ${url}\x1b[0m\n`); return; }
+
+        if (!self.cfg._hooksConfig) self.cfg._hooksConfig = {};
+        if (!self.cfg._hooksConfig[event]) self.cfg._hooksConfig[event] = [];
+        self.cfg._hooksConfig[event].push({ hooks: [{ type: "webhook", url }] });
+
+        // Rebuild hook runner with updated config
+        self.cfg._hookRunner = new HookRunner(self.cfg._hooksConfig);
+
+        const platform = url.includes("hooks.slack.com") ? " (Slack format)"
+          : url.includes("discord.com/api/webhooks") ? " (Discord format)" : "";
+        process.stderr.write(`\x1b[32mWebhook added:\x1b[0m ${event} → ${url}${platform}\n`);
+      } });
+
+    // Plan mode
+    s.register({ name: "plan", argumentHint: "[open|description]", description: "Enable plan mode or view current plan",
+      handler: (args) => {
+        if (!self.cfg._planMode) {
+          // Not in plan mode → enable it
+          self.cfg._planMode = true;
+          self.permissions?.setMode("plan");
+          self.messages.push({ role: "user", content: "<system-reminder>Plan mode enabled. Use read-only tools to research, then produce a plan. Call ExitPlanMode when done.</system-reminder>" });
+          process.stderr.write(`\x1b[2mPlan mode enabled. Read-only tools only. Type /plan to view plan, /plan open to edit.\x1b[0m\n`);
+          if (args.length > 0 && args[0] !== "open") {
+            // Description provided — pass it as context
+            const desc = args.join(" ");
+            process.stderr.write(`\x1b[2mPlan focus: ${desc}\x1b[0m\n`);
+          }
+        } else {
+          // Already in plan mode → show plan or open in editor
+          if (args[0] === "open") {
+            // Find plan file and open in $EDITOR
+            const planFiles = [];
+            try {
+              const planDir = path.join(os.homedir(), ".claude", "plans");
+              if (fs.existsSync(planDir)) {
+                for (const f of fs.readdirSync(planDir)) {
+                  if (f.endsWith(".md")) planFiles.push(path.join(planDir, f));
+                }
+              }
+            } catch { /* ignore: plans directory may not exist */ }
+            if (planFiles.length > 0) {
+              const latest = planFiles.sort((a, b) => fs.statSync(b).mtimeMs - fs.statSync(a).mtimeMs)[0];
+              const editor = process.env.EDITOR || process.env.VISUAL || "vi";
+              process.stderr.write(`\x1b[2mOpening ${latest} in ${editor}...\x1b[0m\n`);
+              try { execSync(`${editor} "${latest}"`, { stdio: "inherit" }); } catch { /* ignore: editor may exit with error */ }
+            } else {
+              process.stderr.write(`\x1b[2mNo plan files found.\x1b[0m\n`);
+            }
+          } else {
+            // Show current plan
+            const planDir = path.join(os.homedir(), ".claude", "plans");
+            let shown = false;
+            try {
+              if (fs.existsSync(planDir)) {
+                const files = fs.readdirSync(planDir).filter(f => f.endsWith(".md")).sort((a, b) =>
+                  fs.statSync(path.join(planDir, b)).mtimeMs - fs.statSync(path.join(planDir, a)).mtimeMs
+                );
+                if (files.length > 0) {
+                  const content = fs.readFileSync(path.join(planDir, files[0]), "utf-8");
+                  process.stderr.write(`\x1b[1mCurrent plan:\x1b[0m \x1b[2m${path.join(planDir, files[0])}\x1b[0m\n`);
+                  process.stderr.write(`${content.substring(0, 2000)}\n`);
+                  if (content.length > 2000) process.stderr.write(`\x1b[2m... (${content.length - 2000} more chars, /plan open to see full)\x1b[0m\n`);
+                  shown = true;
+                }
+              }
+            } catch { /* ignore: plans directory may not exist */ }
+            if (!shown) process.stderr.write(`\x1b[2mNo plan yet. The model will create one in plan mode.\x1b[0m\n`);
+            process.stderr.write(`\x1b[2mUse /plan open to edit in $EDITOR.\x1b[0m\n`);
+          }
+        }
+      } });
+
+    // Agents
+    s.register({ name: "agents", argumentHint: "[kill <id>]", description: "Show running/recent agents, or kill a background agent",
+      handler: (args) => {
+        // /agents kill <id>
+        if (args[0] === "kill" && args[1]) {
+          const id = args[1];
+          // Try full ID or prefix match
+          const agents = _backgroundManager.list();
+          const match = agents.find(a => a.agentId === id || a.agentId.startsWith(id));
+          if (!match) { process.stderr.write(`\x1b[31mAgent not found: ${id}\x1b[0m\n`); return; }
+          _backgroundManager.stop(match.agentId);
+          process.stderr.write(`\x1b[33mCancelled agent ${match.agentId.slice(0,8)} (${match.description || match.status})\x1b[0m\n`);
+          return;
+        }
+
+        // Show running + recent agents
+        const agents = _backgroundManager.list();
+        if (agents.length > 0) {
+          process.stderr.write(`\x1b[1m  Agents\x1b[0m\n`);
+          for (const a of agents) {
+            const elapsed = a.elapsedMs < 60000 ? `${Math.floor(a.elapsedMs / 1000)}s` : `${Math.floor(a.elapsedMs / 60000)}m`;
+            const icon = a.status === "running" ? "\x1b[33m●\x1b[0m"
+              : a.status === "completed" ? "\x1b[32m✓\x1b[0m"
+              : a.status === "cancelled" ? "\x1b[31m✗\x1b[0m"
+              : a.status === "failed" ? "\x1b[31m!\x1b[0m" : "\x1b[2m○\x1b[0m";
+            process.stderr.write(`  ${icon} \x1b[2m${a.agentId.slice(0,8)}\x1b[0m  ${a.description || "agent"}  \x1b[2m${a.status} ${elapsed}\x1b[0m\n`);
+          }
+          const running = agents.filter(a => a.status === "running").length;
+          if (running > 0) process.stderr.write(`\n\x1b[2m  ${running} running. Use /agents kill <id> to cancel.\x1b[0m\n`);
+          process.stderr.write("\n");
+        } else {
+          process.stderr.write(`\x1b[2mNo agents running or recent.\x1b[0m\n\n`);
+        }
+
+        // Show available types
+        process.stderr.write(`\x1b[1m  Agent Types\x1b[0m\n`);
+        const agentTypes = [
+          { name: "general-purpose", desc: "Full tool access. Complex multi-step tasks.", model: "inherits" },
+          { name: "Explore", desc: "Read-only codebase exploration. Fast.", model: "haiku" },
+          { name: "Plan", desc: "Architecture and implementation planning. Read-only.", model: "inherits" },
+          { name: "claude-code-guide", desc: "Claude Code/API docs. Read-only.", model: "haiku" },
+          { name: "verification", desc: "Adversarial testing. Cannot modify project files.", model: "inherits" },
+          { name: "orchestrator", desc: "Smart task router. Decomposes, routes, runs in parallel.", model: "inherits" },
+        ];
+        const maxName = Math.max(...agentTypes.map(a => a.name.length));
+        for (const a of agentTypes) {
+          const pad = " ".repeat(maxName + 2 - a.name.length);
+          process.stderr.write(`  \x1b[36m${a.name}\x1b[0m${pad}${a.desc}  \x1b[2m(${a.model})\x1b[0m\n`);
+        }
+        // Custom agents from disk
+        const customAgents = self.cfg._agentLoader?.list() || [];
+        if (customAgents.length > 0) {
+          process.stderr.write(`\n\x1b[1m  Custom Agents\x1b[0m \x1b[35m[disk]\x1b[0m\n`);
+          for (const a of customAgents) {
+            const modelHint = a.model ? ` (${a.model})` : "";
+            process.stderr.write(`  \x1b[35m${a.name}\x1b[0m  ${a.description}${modelHint}  \x1b[2m[${a.source}]\x1b[0m\n`);
+          }
+        }
+
+        process.stderr.write(`\n\x1b[2m  Ask Claude to launch agents: "Use an Explore agent to find all API endpoints"\x1b[0m\n\n`);
+      } });
+
+    // Agent create — interactive agent builder (uses interactiveForm)
+    s.register({ name: "agent-create", argumentHint: "[name]", description: "Create a custom agent interactively",
+      handler: async (args) => {
+        // Step 1: Name
+        let name = args[0] || "";
+        if (!name) {
+          const nameForm = await interactiveForm([
+            { name: "name", label: "Agent name (kebab-case)", type: "text" },
+          ], { title: "Create Custom Agent" });
+          if (!nameForm) { process.stderr.write(`\x1b[2mCancelled.\x1b[0m\n`); return; }
+          name = nameForm.name;
+        }
+        if (!name) { process.stderr.write(`\x1b[2mCancelled.\x1b[0m\n`); return; }
+        name = name.toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9-]/g, "");
+
+        const projectDir = path.join(self.cfg.cwd, ".claude", "agents", name);
+        const personalDir = path.join(os.homedir(), ".claude", "agents", name);
+
+        // Step 2: Collect all fields via form
+        const form = await interactiveForm([
+          { name: "scope", label: "Scope", type: "choice", default: "project",
+            options: [{ label: "project", description: "Visible in this project only" }, { label: "personal", description: "Visible in all projects" }] },
+          { name: "description", label: "Description (1 line)", type: "text" },
+          { name: "model", label: "Model (haiku/sonnet/opus/gpt-5/gpt-4o/ollama/... or empty to inherit)", type: "text", default: "", required: false },
+          { name: "provider", label: "Provider (anthropic/openai/ollama/lmstudio/vllm/... or empty to auto-detect)", type: "text", default: "", required: false },
+          { name: "readOnly", label: "Read-only agent?", type: "confirm", default: false },
+          { name: "disallowedTools", label: "Disallowed tools (comma-separated, or empty)", type: "text", default: "", required: false },
+          { name: "workload", label: "Workload category", type: "choice", default: "",
+            options: [
+              { label: "exploration", description: "Search, grep, fast scan" },
+              { label: "planning", description: "Architecture, design, tradeoffs" },
+              { label: "implementation", description: "Code writing, tool-heavy" },
+              { label: "verification", description: "Testing, adversarial, review" },
+              { label: "documentation", description: "Docs, summaries, retrieval" },
+              { label: "reasoning", description: "Complex logic, deep analysis" },
+            ] },
+        ]);
+        if (!form) { process.stderr.write(`\x1b[2mCancelled.\x1b[0m\n`); return; }
+
+        const scope = form.scope || "project";
+        const targetDir = scope === "personal" ? personalDir : projectDir;
+
+        // Warn on override
+        if (fs.existsSync(path.join(targetDir, "AGENT.md"))) {
+          const overwrite = await interactiveForm([
+            { name: "confirm", label: `Agent "${name}" exists in ${scope} scope. Overwrite?`, type: "confirm", default: false },
+          ]);
+          if (!overwrite?.confirm) { process.stderr.write(`\x1b[2mCancelled.\x1b[0m\n`); return; }
+        } else if (scope === "project" && fs.existsSync(path.join(personalDir, "AGENT.md"))) {
+          process.stderr.write(`\x1b[2mNote: "${name}" exists in personal scope. Project version will take priority.\x1b[0m\n`);
+        }
+
+        // Step 3: System prompt (multi-line)
+        const systemPrompt = await interactiveMultiline("System prompt (what this agent does)") || `You are ${name}. ${form.description}`;
+
+        // Build AGENT.md
+        const frontmatter = [`---`, `name: ${name}`, `description: ${form.description}`];
+        if (form.model) frontmatter.push(`model: ${form.model}`);
+        if (form.provider) frontmatter.push(`provider: ${form.provider}`);
+        if (form.readOnly) frontmatter.push(`read_only: true`);
+        if (form.disallowedTools) frontmatter.push(`disallowed_tools: ${form.disallowedTools}`);
+        if (form.workload) frontmatter.push(`workload: ${form.workload}`);
+        frontmatter.push(`---`);
+
+        const content = frontmatter.join("\n") + "\n\n" + systemPrompt + "\n";
+
+        // Write
+        fs.mkdirSync(targetDir, { recursive: true });
+        const filePath = path.join(targetDir, "AGENT.md");
+        fs.writeFileSync(filePath, content);
+
+        // Reload agents
+        self.cfg._agentLoader = new AgentLoader().scan(self.cfg.cwd);
+
+        process.stderr.write(`\n\x1b[32mAgent created:\x1b[0m ${filePath}\n`);
+        process.stderr.write(`\x1b[2mUse it: "Use the ${name} agent to ..."\x1b[0m\n`);
+        process.stderr.write(`\x1b[2mOr: Agent({ subagent_type: "${name}", prompt: "..." })\x1b[0m\n\n`);
+      } });
+
+    // Orchestrate (convenience)
+    s.register({ name: "orchestrate", argumentHint: "<task>", description: "Route a complex task through the smart orchestrator",
+      handler: async (args) => {
+        const task = args.join(" ");
+        if (!task) { process.stderr.write(`\x1b[2mUsage: /orchestrate <task description>\x1b[0m\n`); return; }
+        process.stderr.write(`\x1b[2mLaunching orchestrator...\x1b[0m\n`);
+        await self._processInput(`Use the orchestrator agent to handle this task: ${task}`);
+      } });
+
+    // Diff
+    s.register({ name: "diff", description: "View uncommitted git changes", immediate: true,
+      handler: () => {
+        try {
+          const status = execSync("git status --short 2>/dev/null", { cwd: self.cfg.cwd, encoding: "utf-8", timeout: 5000 }).trim();
+          if (!status) { process.stderr.write(`\x1b[2mNo uncommitted changes.\x1b[0m\n`); return; }
+          process.stderr.write(`\x1b[1m  Uncommitted changes\x1b[0m\n`);
+          for (const line of status.split("\n")) {
+            const code = line.slice(0, 2);
+            const file = line.slice(3);
+            const color = code.includes("M") ? "33" : code.includes("A") || code.includes("?") ? "32" : code.includes("D") ? "31" : "0";
+            process.stderr.write(`  \x1b[${color}m${code}\x1b[0m ${file}\n`);
+          }
+          // Show diff stats
+          const stats = execSync("git diff --stat 2>/dev/null", { cwd: self.cfg.cwd, encoding: "utf-8", timeout: 5000 }).trim();
+          if (stats) {
+            const lastLine = stats.split("\n").pop();
+            process.stderr.write(`\n\x1b[2m  ${lastLine}\x1b[0m\n`);
+          }
+        } catch {
+          process.stderr.write(`\x1b[2mNot in a git repository.\x1b[0m\n`);
+        }
+      } });
+
+    // Compact
+    s.register({ name: "compact", argumentHint: "[instructions]", description: "Compact conversation with summary to free context", aliases: [],
+      handler: async (args) => {
+        const instructionText = args.join(" ") || "Summarize the conversation so far, preserving key decisions, file paths mentioned, and current task state.";
+        const msgCount = self.messages.length;
+        if (msgCount < 4) { process.stderr.write(`\x1b[2mConversation too short to compact (${msgCount} messages).\x1b[0m\n`); return; }
+
+        process.stderr.write(`\x1b[2mCompacting ${msgCount} messages...\x1b[0m\n`);
+
+        // Build a summary request
+        const summaryMessages = [
+          ...self.messages,
+          { role: "user", content: `<system-reminder>Summarize this conversation so it can be resumed later. ${instructionText}\n\nInclude: key decisions made, file paths mentioned or modified, current task state, blockers, and any exact literals that may matter later (IDs, markers, commands, errors, filenames, code snippets). If the conversation contains short exact strings, copy them verbatim. Be concise but complete enough to resume work. Output only the summary.</system-reminder>` },
+        ];
+
+        try {
+          const systemBlocks = buildSystemPrompt(self.cfg);
+          const loop = new AgentLoop(self.client, self.registry, self.cfg, {}, self.permissions);
+          const result = await loop.run(summaryMessages, systemBlocks);
+
+          // Replace conversation with summary
+          self.messages = [
+            { role: "user", content: "Previous conversation summary:" },
+            { role: "assistant", content: result.text },
+          ];
+          process.stderr.write(`\x1b[2mCompacted ${msgCount} → 2 messages. Summary:\x1b[0m\n`);
+          process.stderr.write(`\x1b[2m${result.text.substring(0, 500)}${result.text.length > 500 ? "..." : ""}\x1b[0m\n`);
+        } catch (e) {
+          process.stderr.write(`\x1b[31mCompact failed: ${e.message}\x1b[0m\n`);
+        }
+      } });
+
+    // Context — visualize context usage
+    s.register({ name: "context", description: "Show context window usage", immediate: true,
+      handler: () => {
+        const totalIn = self.messages.reduce((acc, m) => acc + (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length), 0);
+        const estimatedTokens = Math.ceil(totalIn / 4); // rough char-to-token ratio
+        const maxContext = 200000; // typical context window
+        const pct = Math.min(100, Math.round((estimatedTokens / maxContext) * 100));
+        const barLen = 40;
+        const filled = Math.round(barLen * pct / 100);
+        const bar = "\x1b[32m" + "█".repeat(Math.min(filled, Math.round(barLen * 0.6)))
+          + "\x1b[33m" + "█".repeat(Math.max(0, Math.min(filled - Math.round(barLen * 0.6), Math.round(barLen * 0.2))))
+          + "\x1b[31m" + "█".repeat(Math.max(0, filled - Math.round(barLen * 0.8)))
+          + "\x1b[0m" + "░".repeat(barLen - filled);
+        process.stderr.write(`\x1b[1m  Context Usage\x1b[0m\n`);
+        process.stderr.write(`  [${bar}] ${pct}%\n`);
+        process.stderr.write(`\x1b[2m  ~${(estimatedTokens / 1000).toFixed(1)}k tokens | ${self.messages.length} messages | ${(totalIn / 1024).toFixed(1)}kb raw\x1b[0m\n`);
+        if (pct > 70) process.stderr.write(`\x1b[33m  Consider /compact to free context.\x1b[0m\n`);
+      } });
+
+    // Tasks — list background tasks (from TaskList tool)
+    s.register({ name: "tasks", aliases: ["bashes"], description: "List tasks and their status", immediate: true,
+      handler: async () => {
+        const result = await self.registry.execute("TaskList", {});
+        if (result.is_error) { process.stderr.write(`\x1b[2mNo tasks yet.\x1b[0m\n`); return; }
+        try {
+          const tasks = JSON.parse(result.content);
+          if (tasks.length === 0) { process.stderr.write(`\x1b[2mNo tasks yet.\x1b[0m\n`); return; }
+          process.stderr.write(`\x1b[1m  Tasks\x1b[0m\n`);
+          for (const t of tasks) {
+            const statusIcon = t.status === "completed" ? "\x1b[32m✓\x1b[0m"
+              : t.status === "in_progress" ? "\x1b[33m●\x1b[0m"
+              : t.status === "blocked" ? "\x1b[31m✗\x1b[0m"
+              : "\x1b[2m○\x1b[0m";
+            const pri = t.priority === "high" ? " \x1b[31m!\x1b[0m" : t.priority === "low" ? " \x1b[2m↓\x1b[0m" : "";
+            process.stderr.write(`  ${statusIcon} ${t.id} ${t.title}${pri}\n`);
+          }
+        } catch { process.stderr.write(`\x1b[2mNo tasks yet.\x1b[0m\n`); }
+      } });
+
+    // Skills — list available skills
+    s.register({ name: "skills", description: "List available skills", immediate: true,
+      handler: () => {
+        const allSkills = self.cfg._skillLoader?.list() || [];
+        if (allSkills.length === 0) { process.stderr.write(`\x1b[2mNo skills installed. Add skills to .claude/skills/\x1b[0m\n`); return; }
+        process.stderr.write(`\x1b[1m  Installed Skills\x1b[0m\n`);
+        for (const sk of allSkills) {
+          process.stderr.write(`  \x1b[35m/${sk.name}\x1b[0m  ${sk.description || ""}\n`);
+        }
+      } });
+
+    // Copy — copy last response to clipboard
+    s.register({ name: "copy", argumentHint: "[n]", description: "Copy last response to clipboard", immediate: true,
+      handler: (args) => {
+        const n = parseInt(args[0], 10) || 1;
+        const assistantMsgs = self.messages.filter(m => m.role === "assistant");
+        const target = assistantMsgs[assistantMsgs.length - n];
+        if (!target) { process.stderr.write(`\x1b[2mNo response to copy.\x1b[0m\n`); return; }
+        const text = typeof target.content === "string" ? target.content
+          : Array.isArray(target.content) ? target.content.filter(b => b.type === "text").map(b => b.text).join("") : "";
+        try {
+          const cmd = process.platform === "darwin" ? "pbcopy" : process.platform === "win32" ? "clip" : "xclip -selection clipboard";
+          execSync(cmd, { input: text, timeout: 3000 });
+          process.stderr.write(`\x1b[2mCopied ${text.length} chars to clipboard.\x1b[0m\n`);
+        } catch {
+          process.stderr.write(`\x1b[31mClipboard not available.\x1b[0m\n`);
+        }
+      } });
+
+    // Doctor — basic installation health check
+    s.register({ name: "doctor", description: "Diagnose installation and connectivity", immediate: true,
+      handler: async () => {
+        process.stderr.write(`\x1b[1m  Diagnostics\x1b[0m\n`);
+        // Node version
+        process.stderr.write(`  \x1b[32m✓\x1b[0m Node ${process.version}\n`);
+        // Auth
+        const hasAuth = !!(self.cfg.apiKey || self.cfg.authToken);
+        process.stderr.write(`  ${hasAuth ? "\x1b[32m✓\x1b[0m" : "\x1b[31m✗\x1b[0m"} Anthropic auth ${hasAuth ? "configured" : "missing"}\n`);
+        const hasOAI = !!self.cfg.openaiApiKey;
+        process.stderr.write(`  ${hasOAI ? "\x1b[32m✓\x1b[0m" : "\x1b[2m○\x1b[0m"} OpenAI auth ${hasOAI ? "configured" : "not set"}\n`);
+        // Git
+        let hasGit = false;
+        try { execSync("git --version", { encoding: "utf-8", timeout: 2000 }); hasGit = true; } catch { /* ignore: git may not be installed */ }
+        process.stderr.write(`  ${hasGit ? "\x1b[32m✓\x1b[0m" : "\x1b[33m!\x1b[0m"} Git ${hasGit ? "available" : "not found"}\n`);
+        // Tools
+        const toolCount = self.registry.getAllDefinitions().length;
+        const deferredCount = self.registry.getDeferredNames().length;
+        process.stderr.write(`  \x1b[32m✓\x1b[0m ${toolCount} tools registered (${deferredCount} deferred)\n`);
+        // MCP
+        const mcpCount = self.registry.getAllDefinitions().filter(t => t.name.startsWith("mcp__")).length;
+        process.stderr.write(`  ${mcpCount > 0 ? "\x1b[32m✓\x1b[0m" : "\x1b[2m○\x1b[0m"} ${mcpCount} MCP tools\n`);
+        // Skills
+        const skillCount = self.cfg._skillLoader?.list().length || 0;
+        process.stderr.write(`  ${skillCount > 0 ? "\x1b[32m✓\x1b[0m" : "\x1b[2m○\x1b[0m"} ${skillCount} skills\n`);
+        // Model
+        const provider = (self.cfg._provider || detectProvider(self.cfg.model))?.name || "?";
+        process.stderr.write(`  \x1b[32m✓\x1b[0m Model: ${self.cfg.model} (${provider})\n`);
+      } });
+
+    // Skills (dynamic)
+    const skills = this.cfg._skillLoader?.list() || [];
+    for (const skill of skills) {
+      s.register({ name: skill.name, description: skill.description || `Skill: ${skill.name}`, argumentHint: "[args]", source: "skill", handler: null });
+    }
   }
 
   _promptLabel() {
@@ -4093,10 +6594,208 @@ class InteractiveMode {
     return `\x1b[36m${short}>\x1b[0m `;
   }
 
+  // ── Status Line ──────────────────────────────────────────────
+  _renderStatusLine() {
+    const provider = (this.cfg._provider || detectProvider(this.cfg.model))?.name || "?";
+    const model = this.cfg.model;
+    const modes = [];
+    if (this.cfg.briefMode) modes.push("brief");
+    if (this.cfg.thinkingBudget > 0) modes.push(`think:${this.cfg.thinkingBudget}`);
+    if (this.cfg._planMode) modes.push("plan");
+    const modeStr = modes.length > 0 ? modes.join(",") : "";
+
+    let gitBranch = "";
+    try { gitBranch = execSync("git rev-parse --abbrev-ref HEAD 2>/dev/null", { cwd: this.cfg.cwd, encoding: "utf-8", timeout: 2000 }).trim(); } catch { /* ignore: not in a git repo */ }
+
+    const cwd = this.cfg.cwd.replace(os.homedir(), "~");
+    const session = this.sessionId ? this.sessionId.slice(0, 8) : "-";
+    const cost = this.totalCost > 0 ? `$${this.totalCost.toFixed(4)}` : "";
+    const msgs = `${this.messages.length}msg`;
+
+    const parts = [
+      `\x1b[2m${provider}\x1b[0m`,
+      `\x1b[36m${model}\x1b[0m`,
+      modeStr ? `\x1b[33m[${modeStr}]\x1b[0m` : "",
+      gitBranch ? `\x1b[35m${gitBranch}\x1b[0m` : "",
+      `\x1b[2m${cwd}\x1b[0m`,
+      `\x1b[2m${session}\x1b[0m`,
+      `\x1b[2m${msgs}\x1b[0m`,
+      cost ? `\x1b[2m${cost}\x1b[0m` : "",
+    ].filter(Boolean);
+
+    let statusStr = parts.join(" \x1b[2m|\x1b[0m ");
+
+    // Custom statusline script (trust-gated)
+    if (this._statuslineScript) {
+      try {
+        const custom = execSync(this._statuslineScript, { cwd: this.cfg.cwd, encoding: "utf-8", timeout: 3000 }).trim();
+        if (custom) statusStr += ` \x1b[2m|\x1b[0m ${custom}`;
+      } catch { /* ignore: statusline script may fail */ }
+    }
+
+    process.stderr.write(`${statusStr}\n`);
+  }
+
+  _handleStatuslineConfig(args) {
+    if (!args[0] || args[0] === "off") {
+      this._statuslineScript = null;
+      process.stderr.write(`\x1b[2mStatusline script: off\x1b[0m\n`);
+      return;
+    }
+    const scriptPath = path.resolve(this.cfg.cwd, args[0]);
+    if (!fs.existsSync(scriptPath)) {
+      process.stderr.write(`\x1b[31mScript not found: ${scriptPath}\x1b[0m\n`);
+      return;
+    }
+    const home = os.homedir();
+    if (!scriptPath.startsWith(home) && !scriptPath.startsWith(this.cfg.cwd)) {
+      process.stderr.write(`\x1b[31mStatusline script must be under $HOME or project directory.\x1b[0m\n`);
+      return;
+    }
+    this._statuslineScript = scriptPath;
+    process.stderr.write(`\x1b[2mStatusline script: ${scriptPath}\x1b[0m\n`);
+    this._renderStatusLine();
+  }
+
+  // ── Help / Command Palette ───────────────────────────────────
+  _renderHelp(filter = "") {
+    const query = filter.toLowerCase().trim();
+    const builtins = this.slashCommands.list("builtin");
+    const skills = this.slashCommands.list("skill");
+
+    const filterFn = (c) => {
+      if (!query) return true;
+      return c.name.includes(query) || c.aliases.some((a) => a.includes(query)) || c.description.toLowerCase().includes(query);
+    };
+
+    const filteredBuiltins = builtins.filter(filterFn);
+    const filteredSkills = skills.filter(filterFn);
+
+    // General section (only when unfiltered)
+    if (!query) {
+      process.stderr.write(`\n\x1b[1m  Quick Reference\x1b[0m\n`);
+      process.stderr.write(`\x1b[2m  Type normally to chat. Use / commands to control the session.\x1b[0m\n`);
+      process.stderr.write(`\x1b[2m  Tab completes command names. Ctrl+C to interrupt.\x1b[0m\n\n`);
+    }
+
+    // Commands section
+    if (filteredBuiltins.length > 0) {
+      process.stderr.write(`\x1b[1m  Commands\x1b[0m\n`);
+      const maxName = Math.max(...filteredBuiltins.map((c) => c.name.length + (c.argumentHint ? c.argumentHint.length + 1 : 0)));
+      for (const cmd of filteredBuiltins) {
+        const nameCol = "/" + cmd.name + (cmd.argumentHint ? " " + cmd.argumentHint : "");
+        const pad = " ".repeat(Math.max(0, maxName + 4 - nameCol.length));
+        const aliases = cmd.aliases.length > 0 ? `  \x1b[2m(${cmd.aliases.map((a) => "/" + a).join(", ")})\x1b[0m` : "";
+        process.stderr.write(`  \x1b[36m${nameCol}\x1b[0m${pad}${cmd.description}${aliases}\n`);
+      }
+      process.stderr.write("\n");
+    }
+
+    // Custom Commands section
+    if (filteredSkills.length > 0) {
+      process.stderr.write(`\x1b[1m  Custom Commands\x1b[0m \x1b[35m[skill]\x1b[0m\n`);
+      const maxName = Math.max(...filteredSkills.map((c) => c.name.length + (c.argumentHint ? c.argumentHint.length + 1 : 0)));
+      for (const cmd of filteredSkills) {
+        const nameCol = "/" + cmd.name + (cmd.argumentHint ? " " + cmd.argumentHint : "");
+        const pad = " ".repeat(Math.max(0, maxName + 4 - nameCol.length));
+        process.stderr.write(`  \x1b[35m${nameCol}\x1b[0m${pad}${cmd.description}\n`);
+      }
+      process.stderr.write("\n");
+    }
+
+    if (filteredBuiltins.length === 0 && filteredSkills.length === 0) {
+      process.stderr.write(`\x1b[2m  No commands matching "${filter}"\x1b[0m\n\n`);
+    }
+  }
+
+  // ── Tab Completer ────────────────────────────────────────────
+  _completer(line) {
+    if (!line.startsWith("/")) return [[], line];
+    const names = this.slashCommands.completionNames();
+    const hits = names.filter((n) => n.startsWith(line));
+    return [hits.length > 0 ? hits : names, line];
+  }
+
   async run() {
+    this._initSlashCommands();
+
+    // Override AskUserQuestion with interactive stdin prompt
+    const self = this;
+    this.registry.register("AskUserQuestion", {
+      description: "Ask the user a question and wait for their answer. Use when you need clarification, a decision between options, or confirmation before proceeding.",
+      input_schema: {
+        type: "object",
+        properties: {
+          question: { type: "string", description: "The question to ask the user" },
+          options: {
+            type: "array",
+            items: {
+              type: "object",
+              properties: {
+                label: { type: "string", description: "Short label (1-5 words)" },
+                description: { type: "string", description: "What this option means" },
+              },
+              required: ["label"],
+            },
+            description: "2-6 options. An 'Other' free-text option is added automatically.",
+          },
+        },
+        required: ["question"],
+      },
+    }, async (input) => {
+      return new Promise((resolve) => {
+        process.stderr.write(`\n\x1b[1m  ${input.question}\x1b[0m\n\n`);
+
+        const options = input.options || [];
+        if (options.length > 0) {
+          // Numbered options
+          for (let i = 0; i < options.length; i++) {
+            const desc = options[i].description ? `  \x1b[2m${options[i].description}\x1b[0m` : "";
+            process.stderr.write(`  \x1b[36m${i + 1}.\x1b[0m ${options[i].label}${desc}\n`);
+          }
+          process.stderr.write(`  \x1b[36m${options.length + 1}.\x1b[0m Other (type your answer)\n`);
+          process.stderr.write(`\n\x1b[33mChoose (1-${options.length + 1}): \x1b[0m`);
+
+          const rl = createInterface({ input: process.stdin, output: process.stderr });
+          rl.question("", (answer) => {
+            rl.close();
+            const num = parseInt(answer.trim(), 10);
+            if (num >= 1 && num <= options.length) {
+              const chosen = options[num - 1];
+              resolve({ content: JSON.stringify({ answer: chosen.label, index: num - 1 }), is_error: false });
+            } else if (num === options.length + 1 || isNaN(num)) {
+              // "Other" or free text
+              const text = isNaN(num) ? answer.trim() : "";
+              if (text) {
+                resolve({ content: JSON.stringify({ answer: text, index: -1, freeText: true }), is_error: false });
+              } else {
+                // Ask for free text
+                process.stderr.write(`\x1b[33mYour answer: \x1b[0m`);
+                const rl2 = createInterface({ input: process.stdin, output: process.stderr });
+                rl2.question("", (freeAnswer) => {
+                  rl2.close();
+                  resolve({ content: JSON.stringify({ answer: freeAnswer.trim(), index: -1, freeText: true }), is_error: false });
+                });
+              }
+            } else {
+              resolve({ content: JSON.stringify({ answer: answer.trim(), index: -1, freeText: true }), is_error: false });
+            }
+          });
+        } else {
+          // No options — free text question
+          process.stderr.write(`\x1b[33mYour answer: \x1b[0m`);
+          const rl = createInterface({ input: process.stdin, output: process.stderr });
+          rl.question("", (answer) => {
+            rl.close();
+            resolve({ content: JSON.stringify({ answer: answer.trim() }), is_error: false });
+          });
+        }
+      });
+    });
+
     // Resume or create session
     if (this.cfg.resume) {
-      this.sessionId = this.cfg.sessionId || this.sessions.latest(this.cfg.cwd);
+      this.sessionId = this.cfg.sessionId || this.sessions.latest();
       if (this.sessionId) {
         this.messages = this.sessions.load(this.sessionId);
         process.stderr.write(`\x1b[2mResumed session ${this.sessionId} (${this.messages.length} messages)\x1b[0m\n`);
@@ -4107,199 +6806,222 @@ class InteractiveMode {
     }
     this.checkpoints = new CheckpointStore(this.sessionId);
 
-    process.stderr.write(`\x1b[1mclaude-native\x1b[0m \x1b[2m(${this.cfg.model})\x1b[0m\n`);
-    process.stderr.write(`\x1b[2mSession: ${this.sessionId}\x1b[0m\n`);
-    process.stderr.write(`\x1b[2mType /exit to quit, /model <name> to switch, /clear to reset, /cost for usage\x1b[0m\n\n`);
+    // Auto-load statusline script
+    const statuslineCmd = path.join(os.homedir(), ".claude", "statusline-command.sh");
+    if (fs.existsSync(statuslineCmd)) this._statuslineScript = statuslineCmd;
+
+    // Try Ink UI when TTY is available, fall back to readline
+    if (process.stdin.isTTY && process.stdout.isTTY) {
+      try {
+        const { startInkUI } = await import("./ink-ui.mjs");
+        await startInkUI(this);
+        this.mcpManager.shutdown();
+        return;
+      } catch (e) {
+        log(`Ink UI failed, falling back to readline: ${e.message}`);
+      }
+    }
+
+    // ── Readline fallback ──────────────────────────────────────
+    await this._runReadline();
+  }
+
+  async _runReadline() {
+    // SessionStart hook
+    if (this.cfg._hookRunner?.hasHooksFor("SessionStart")) {
+      await this.cfg._hookRunner.fire("SessionStart", {
+        session_id: this.sessionId || "", cwd: this.cfg.cwd, hook_event_name: "SessionStart",
+        model: this.cfg.model,
+      });
+    }
+
+    process.stderr.write(`\x1b[1mclaude-native\x1b[0m\n`);
+    this._renderStatusLine();
+    process.stderr.write(`\x1b[2mType \x1b[0m/\x1b[2m for commands, \x1b[0mTab\x1b[2m to complete. \x1b[0m↑↓\x1b[2m for history.\x1b[0m\n\n`);
+
+    // Load command history from disk
+    const historyFile = path.join(os.homedir(), ".claude-native", "history");
+    let history = [];
+    try {
+      if (fs.existsSync(historyFile)) {
+        history = fs.readFileSync(historyFile, "utf-8").split("\n").filter(Boolean).reverse();
+      }
+    } catch { /* ignore: history file may not exist */ }
 
     const rl = createInterface({
       input: process.stdin,
       output: process.stderr,
       prompt: this._promptLabel(),
+      completer: (line) => this._completer(line),
+      history,
+      historySize: 500,
     });
+    this._rl = rl;
 
     rl.prompt();
+
+    // Save history helper
+    const _saveHistory = () => {
+      try {
+        fs.mkdirSync(path.dirname(historyFile), { recursive: true });
+        // rl.history is newest-first; save as oldest-first for next load
+        const lines = (rl.history || []).slice().reverse();
+        fs.writeFileSync(historyFile, lines.join("\n") + "\n");
+      } catch { /* ignore: history dir may not be writable */ }
+    };
 
     for await (const line of rl) {
       const input = line.trim();
       if (!input) { rl.prompt(); continue; }
 
+      // Save history after each input
+      _saveHistory();
+
+      // Bare "/" or "/help" → show palette
+      if (input === "/" || input === "/help") {
+        this._renderHelp();
+        rl.prompt();
+        continue;
+      }
+
       // Slash commands
       if (input.startsWith("/")) {
-        const handled = await this._handleSlashCommand(input, rl);
-        if (handled === "exit") break;
+        const result = await this._handleSlashCommand(input, rl);
+        if (result === "exit") break;
         rl.prompt();
         continue;
       }
 
       await this._processInput(input);
+      this._renderStatusLine();
       rl.prompt();
+    }
+
+    // Save history on exit
+    _saveHistory();
+
+    // SessionEnd hook
+    if (this.cfg._hookRunner?.hasHooksFor("SessionEnd")) {
+      await this.cfg._hookRunner.fire("SessionEnd", {
+        session_id: this.sessionId || "", cwd: this.cfg.cwd, hook_event_name: "SessionEnd",
+        message_count: this.messages.length, total_cost: this.totalCost,
+      });
     }
 
     this.mcpManager.shutdown();
   }
 
   async _handleSlashCommand(input, rl) {
-    const [cmd, ...args] = input.split(/\s+/);
-    switch (cmd) {
-      case "/exit": case "/quit": case "/q":
-        return "exit";
-      case "/model":
-        if (args[0]) {
-          const newModel = resolveModel(args[0]);
-          const newProvider = detectProvider(newModel, this.cfg.provider);
-          const effectiveModel = newProvider.transformModel ? newProvider.transformModel(newModel) : newModel;
+    const [rawCmd, ...args] = input.split(/\s+/);
+    const cmdName = rawCmd.slice(1);
 
-          // Resolve credentials for the new provider
-          const providerKey = newProvider.envKey === "ANTHROPIC_API_KEY" ? (this.cfg.apiKey || this.cfg.authToken)
-            : newProvider.envKey === "OPENAI_API_KEY" ? this.cfg.openaiApiKey
-            : newProvider.envKey ? (process.env[newProvider.envKey] || "")
-            : "no-auth";
-
-          if (!providerKey && newProvider.envKey) {
-            const hint = newProvider.name === "Anthropic"
-              ? "Run /login or set ANTHROPIC_API_KEY"
-              : newProvider.envKey === "OPENAI_API_KEY"
-                ? "Run /openai-login or set OPENAI_API_KEY"
-                : `Set ${newProvider.envKey}`;
-            process.stderr.write(`\x1b[31mCannot switch to ${newModel}: no ${newProvider.name} credentials.\x1b[0m\n`);
-            process.stderr.write(`\x1b[31m${hint} first.\x1b[0m\n`);
-            break;
-          }
-
-          // Determine provider URL
-          const providerUrl = newProvider.resolveBaseUrl
-            ? newProvider.resolveBaseUrl(this.cfg)
-            : newProvider.defaultUrl;
-
-          // Create new client via provider contract
-          this.client = newProvider.createClient({
-            apiKey: this.cfg.apiKey, authToken: this.cfg.authToken,
-            providerKey, providerUrl, model: effectiveModel,
-            openaiApiKey: this.cfg.openaiApiKey, openaiApiUrl: this.cfg.openaiApiUrl,
-          });
-          this.registry._client = this.client;
-          this.registry._provider = newProvider;
-          this.cfg.model = effectiveModel;
-          this.cfg._provider = newProvider;
-          this.registry._currentModel = effectiveModel;
-          const backend = newProvider.name !== "Anthropic" ? ` (${newProvider.name})` : "";
-          process.stderr.write(`\x1b[2mSwitched to ${this.cfg.model}${backend}\x1b[0m\n`);
-          rl.setPrompt(this._promptLabel());
-        } else {
-          const currentProvider = this.cfg._provider || detectProvider(this.cfg.model);
-          process.stderr.write(`\x1b[2mCurrent model: ${this.cfg.model} (${currentProvider.name})\x1b[0m\n`);
-        }
-        break;
-      case "/clear":
-        this.messages = [];
-        this.sessionId = this.sessions.create();
-        process.stderr.write(`\x1b[2mNew session: ${this.sessionId}\x1b[0m\n`);
-        break;
-      case "/cost":
-        process.stderr.write(`\x1b[2mTotal cost: ~$${this.totalCost.toFixed(4)}\x1b[0m\n`);
-        break;
-      case "/session":
-        process.stderr.write(`\x1b[2mSession: ${this.sessionId} (${this.messages.length} messages)\x1b[0m\n`);
-        break;
-      case "/thinking":
-        const budget = parseInt(args[0], 10);
-        this.cfg.thinkingBudget = budget || (this.cfg.thinkingBudget ? 0 : 10000);
-        process.stderr.write(`\x1b[2mThinking: ${this.cfg.thinkingBudget ? `enabled (${this.cfg.thinkingBudget} tokens)` : "disabled"}\x1b[0m\n`);
-        break;
-      case "/memory": case "/mem":
-        const memDir = ensureMemoryDir(this.cfg.cwd);
-        const memIndex = loadMemoryIndex(this.cfg.cwd);
-        process.stderr.write(`\x1b[2mMemory directory: ${memDir}\x1b[0m\n`);
-        if (memIndex) {
-          process.stderr.write(`\x1b[2m${memIndex.split("\n").length} lines in MEMORY.md:\x1b[0m\n`);
-          process.stderr.write(`\x1b[2m${memIndex.substring(0, 500)}\x1b[0m\n`);
-        } else {
-          process.stderr.write(`\x1b[2mNo memories yet. Claude will save memories as you work.\x1b[0m\n`);
-        }
-        break;
-      case "/checkpoints": case "/ckpt":
-        if (this.checkpoints) {
-          const snaps = this.checkpoints.getSnapshots();
-          if (snaps.length === 0) { process.stderr.write("\x1b[2mNo checkpoints yet.\x1b[0m\n"); break; }
-          for (const s of snaps) {
-            const ago = Math.floor((Date.now() - new Date(s.timestamp).getTime()) / 1000);
-            const agoStr = ago < 60 ? `${ago}s ago` : ago < 3600 ? `${Math.floor(ago/60)}m ago` : `${Math.floor(ago/3600)}h ago`;
-            process.stderr.write(`\x1b[2m  [${s.messageId.slice(0,8)}] ${s.fileCount} files | ${agoStr}\x1b[0m\n`);
-          }
-        } else { process.stderr.write("\x1b[2mCheckpointing not enabled.\x1b[0m\n"); }
-        break;
-      case "/rewind":
-        if (!this.checkpoints) { process.stderr.write("\x1b[2mCheckpointing not enabled.\x1b[0m\n"); break; }
-        const targetId = args[0] || this.checkpoints.getSnapshots().at(-1)?.messageId;
-        if (!targetId) { process.stderr.write("\x1b[2mNo checkpoints to rewind to.\x1b[0m\n"); break; }
-        // Dry-run first
-        const preview = this.checkpoints.rewind(targetId, true);
-        if (!preview.canRewind) { process.stderr.write(`\x1b[31m${preview.error}\x1b[0m\n`); break; }
-        const total = preview.restored.length + preview.created.length + preview.deleted.length;
-        if (total === 0) { process.stderr.write("\x1b[2mNothing to rewind.\x1b[0m\n"); break; }
-        process.stderr.write(`\x1b[33mRewind to ${targetId.slice(0,8)}:\x1b[0m\n`);
-        for (const f of preview.restored) process.stderr.write(`  \x1b[33mrestore\x1b[0m ${f}\n`);
-        for (const f of preview.created) process.stderr.write(`  \x1b[31mdelete\x1b[0m  ${f} (created after checkpoint)\n`);
-        for (const f of preview.deleted) process.stderr.write(`  \x1b[32mrecreate\x1b[0m ${f}\n`);
-        for (const c of preview.conflicts) process.stderr.write(`  \x1b[33m⚠ conflict\x1b[0m ${c.file}: ${c.reason}\n`);
-        process.stderr.write(`  (${preview.insertions}+ ${preview.deletions}-)\n`);
-        // Confirm
-        await new Promise((resolve) => {
-          process.stderr.write(`\x1b[33mProceed? (y/n): \x1b[0m`);
-          const confirmRl = createInterface({ input: process.stdin, output: process.stderr });
-          confirmRl.question("", (answer) => {
-            confirmRl.close();
-            if (answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes") {
-              const result = this.checkpoints.rewind(targetId, false);
-              process.stderr.write(`\x1b[32mRewound ${result.restored.length + result.created.length + result.deleted.length} files.\x1b[0m\n`);
-            } else {
-              process.stderr.write("\x1b[2mRewind cancelled.\x1b[0m\n");
-            }
-            resolve();
-          });
+    // Skills first — fork mode (sub-agent) or inline fallback
+    if (this.cfg._skillLoader?.has(cmdName)) {
+      const argsStr = args.join(" ");
+      const skill = this.cfg._skillLoader.invoke(cmdName, argsStr);
+      if (skill) {
+        const skillContext = new SkillExecutionContext({
+          name: skill.name, skillRoot: skill.skillRoot, allowedTools: skill.allowedTools,
+          hooks: skill.hooks, dataDir: skill.dataDir, trackingId: `skill_${randomUUID().slice(0, 8)}`,
         });
-        break;
-      case "/permission": case "/permissions": case "/mode":
-        if (args[0]) {
-          this.permissions?.setMode(args[0]);
-          process.stderr.write(`\x1b[2mPermission mode: ${args[0]}\x1b[0m\n`);
-        } else {
-          process.stderr.write(`\x1b[2mPermission mode: ${this.permissions?.mode || "default"}\x1b[0m\n`);
-          process.stderr.write(`\x1b[2mModes: default, plan, acceptEdits, bypassPermissions, dontAsk\x1b[0m\n`);
+        log(`Skill invocation: /${skill.name} [${skillContext.trackingId}]`);
+
+        // Try fork mode: run as sub-agent for isolation
+        if (this.cfg.skillFork !== false) {
+          try {
+            await this._processSkillFork(skill, skillContext);
+            return null;
+          } catch (e) {
+            log(`Skill fork failed, falling back to inline: ${e.message}`);
+          }
         }
-        break;
-      case "/login":
-        await oauthLogin();
-        // Reload auth after login
-        try {
-          const { authToken, subscriptionType } = await getOAuthAccessToken(false);
-          this.cfg.authToken = authToken;
-          this.client = new AnthropicClient({ apiKey: this.cfg.apiKey, authToken: this.cfg.authToken, apiUrl: this.cfg.apiUrl });
-          process.stderr.write(`\x1b[2mSwitched to ${subscriptionType} subscription\x1b[0m\n`);
-        } catch {}
-        break;
-      case "/logout":
-        oauthLogout();
-        break;
-      case "/openai-login":
-        try {
-          const oaiToken = await openaiOAuthLogin();
-          this.cfg.openaiApiKey = oaiToken;
-          process.stderr.write(`\x1b[2mOpenAI auth ready. Use /model codex to switch.\x1b[0m\n`);
-        } catch (e) {
-          process.stderr.write(`\x1b[31mOpenAI login failed: ${e.message}\x1b[0m\n`);
-        }
-        break;
-      case "/openai-logout":
-        openaiOAuthLogout();
-        break;
-      default:
-        process.stderr.write(`\x1b[2mUnknown command: ${cmd}\x1b[0m\n`);
+
+        // Inline fallback
+        await this._processSkillInput(`<skill-invocation name="${skill.name}" tracking-id="${skillContext.trackingId}">\n${skill.body}\n</skill-invocation>`, skillContext);
+        return null;
+      }
     }
+
+    // Registry lookup
+    const cmd = this.slashCommands.get(cmdName);
+    if (cmd && cmd.handler) {
+      const result = await cmd.handler(args, rl);
+      if (result === "exit") return "exit";
+      if (cmd.name === "model") rl.setPrompt(this._promptLabel());
+      return null;
+    }
+
+    // Unknown → filtered help
+    this._renderHelp(cmdName);
     return null;
   }
 
+  // ── /model (extracted) ───────────────────────────────────────
+  _handleModel(args) {
+    if (args[0]) {
+      const newModel = resolveModel(args[0]);
+      const newProvider = detectProvider(newModel, this.cfg.provider);
+      const effectiveModel = newProvider.transformModel ? newProvider.transformModel(newModel) : newModel;
+      const providerKey = newProvider.envKey === "ANTHROPIC_API_KEY" ? (this.cfg.apiKey || this.cfg.authToken)
+        : newProvider.envKey === "OPENAI_API_KEY" ? this.cfg.openaiApiKey
+        : newProvider.envKey ? (process.env[newProvider.envKey] || "") : "no-auth";
+      if (!providerKey && newProvider.envKey) {
+        const hint = newProvider.name === "Anthropic" ? "Run /login or set ANTHROPIC_API_KEY"
+          : newProvider.envKey === "OPENAI_API_KEY" ? "Run /openai-login or set OPENAI_API_KEY" : `Set ${newProvider.envKey}`;
+        process.stderr.write(`\x1b[31mCannot switch to ${newModel}: no ${newProvider.name} credentials.\x1b[0m\n`);
+        process.stderr.write(`\x1b[31m${hint} first.\x1b[0m\n`);
+        return;
+      }
+      const providerUrl = newProvider.resolveBaseUrl ? newProvider.resolveBaseUrl(this.cfg) : newProvider.defaultUrl;
+      this.client = newProvider.createClient({ apiKey: this.cfg.apiKey, authToken: this.cfg.authToken, providerKey, providerUrl, model: effectiveModel, openaiApiKey: this.cfg.openaiApiKey, openaiApiUrl: this.cfg.openaiApiUrl });
+      this.registry._client = this.client; this.registry._provider = newProvider;
+      this.cfg.model = effectiveModel; this.cfg._provider = newProvider; this.registry._currentModel = effectiveModel;
+      const backend = newProvider.name !== "Anthropic" ? ` (${newProvider.name})` : "";
+      process.stderr.write(`\x1b[2mSwitched to ${this.cfg.model}${backend}\x1b[0m\n`);
+    } else {
+      const currentProvider = this.cfg._provider || detectProvider(this.cfg.model);
+      process.stderr.write(`\x1b[2mCurrent model: ${this.cfg.model} (${currentProvider.name})\x1b[0m\n`);
+    }
+  }
+
+  // ── /rewind (extracted) ──────────────────────────────────────
+  async _handleRewind(args) {
+    if (!this.checkpoints) { process.stderr.write("\x1b[2mCheckpointing not enabled.\x1b[0m\n"); return; }
+    const targetId = args[0] || this.checkpoints.getSnapshots().at(-1)?.messageId;
+    if (!targetId) { process.stderr.write("\x1b[2mNo checkpoints to rewind to.\x1b[0m\n"); return; }
+    const preview = this.checkpoints.rewind(targetId, true);
+    if (!preview.canRewind) { process.stderr.write(`\x1b[31m${preview.error}\x1b[0m\n`); return; }
+    const total = preview.restored.length + preview.created.length + preview.deleted.length;
+    if (total === 0) { process.stderr.write("\x1b[2mNothing to rewind.\x1b[0m\n"); return; }
+    process.stderr.write(`\x1b[33mRewind to ${targetId.slice(0,8)}:\x1b[0m\n`);
+    for (const f of preview.restored) process.stderr.write(`  \x1b[33mrestore\x1b[0m ${f}\n`);
+    for (const f of preview.created) process.stderr.write(`  \x1b[31mdelete\x1b[0m  ${f} (created after checkpoint)\n`);
+    for (const f of preview.deleted) process.stderr.write(`  \x1b[32mrecreate\x1b[0m ${f}\n`);
+    for (const c of preview.conflicts) process.stderr.write(`  \x1b[33m⚠ conflict\x1b[0m ${c.file}: ${c.reason}\n`);
+    process.stderr.write(`  (${preview.insertions}+ ${preview.deletions}-)\n`);
+    await new Promise((resolve) => {
+      process.stderr.write(`\x1b[33mProceed? (y/n): \x1b[0m`);
+      const confirmRl = createInterface({ input: process.stdin, output: process.stderr });
+      confirmRl.question("", (answer) => {
+        confirmRl.close();
+        if (answer.trim().toLowerCase() === "y" || answer.trim().toLowerCase() === "yes") {
+          const result = this.checkpoints.rewind(targetId, false);
+          process.stderr.write(`\x1b[32mRewound ${result.restored.length + result.created.length + result.deleted.length} files.\x1b[0m\n`);
+        } else { process.stderr.write("\x1b[2mRewind cancelled.\x1b[0m\n"); }
+        resolve();
+      });
+    });
+  }
+
   async _processInput(input) {
+    // UserPromptSubmit hook
+    if (this.cfg._hookRunner?.hasHooksFor("UserPromptSubmit")) {
+      await this.cfg._hookRunner.fire("UserPromptSubmit", {
+        session_id: this.sessionId || "", cwd: this.cfg.cwd, hook_event_name: "UserPromptSubmit",
+        prompt: input.substring(0, 1000),
+      });
+    }
+
     const messageId = randomUUID();
     this.messages.push({ role: "user", content: input, messageId });
     this.sessions.append(this.sessionId, { role: "user", content: input, messageId });
@@ -4314,9 +7036,14 @@ class InteractiveMode {
     const systemBlocks = buildSystemPrompt(this.cfg);
     let toolCalls = 0;
 
+    const brief = this.cfg.briefMode;
     const loop = new AgentLoop(this.client, this.registry, this.cfg, {
       onText: (delta) => {
-        process.stderr.write(delta);
+        if (brief) {
+          process.stderr.write(`\x1b[2m${delta}\x1b[0m`);
+        } else {
+          process.stderr.write(delta);
+        }
       },
       onThinking: (delta) => {
         process.stderr.write(`\x1b[2m${delta}\x1b[0m`);
@@ -4326,8 +7053,13 @@ class InteractiveMode {
         const inputStr = JSON.stringify(block.input).substring(0, 80);
         process.stderr.write(`\n\x1b[2m[${block.name}: ${inputStr}]\x1b[0m\n`);
       },
-      onToolResult: (id, result) => {
-        if (result.is_error) {
+      onToolResult: (id, result, toolName) => {
+        if (toolName === "SendUserMessage" && brief && !result.is_error) {
+          try {
+            const parsed = JSON.parse(result.content);
+            process.stderr.write(`\n${parsed.message}\n`);
+          } catch { /* ignore: non-JSON tool result from SendUserMessage */ }
+        } else if (result.is_error) {
           process.stderr.write(`\x1b[31m[Error]\x1b[0m\n`);
         }
       },
@@ -4361,6 +7093,12 @@ class InteractiveMode {
       // Save assistant message
       this.sessions.append(this.sessionId, { role: "assistant", content: result.text });
 
+      // Auto-save session title on first exchange
+      if (!this.sessions.getMeta(this.sessionId, "title") && this.messages.length >= 2) {
+        const title = this.sessions.autoTitle(this.sessionId);
+        if (title) this.sessions.setMeta(this.sessionId, "title", title);
+      }
+
       // Cost estimate (rough: $3/M input, $15/M output for sonnet)
       const costIn = (result.usage.input_tokens / 1_000_000) * 3;
       const costOut = (result.usage.output_tokens / 1_000_000) * 15;
@@ -4369,6 +7107,140 @@ class InteractiveMode {
       const inK = (result.usage.input_tokens / 1000).toFixed(1);
       const outK = (result.usage.output_tokens / 1000).toFixed(1);
       process.stderr.write(`\n\x1b[2m(${inK}k in / ${outK}k out | ${toolCalls} tools | $${(costIn + costOut).toFixed(4)} | ${result.turns} turns)\x1b[0m\n\n`);
+    } catch (e) {
+      process.stderr.write(`\n\x1b[31mError: ${e.message}\x1b[0m\n\n`);
+    }
+  }
+
+  // Skill-scoped execution: same as _processInput but with a SkillExecutionContext
+  // ── Skill fork execution (sub-agent) ──────────────────────
+  async _processSkillFork(skill, skillContext) {
+    process.stderr.write(`\x1b[2m[forking sub-agent for /${skill.name}...]\x1b[0m\n`);
+
+    const prompt = `<skill-invocation name="${skill.name}" tracking-id="${skillContext.trackingId}">\n${skill.body}\n</skill-invocation>`;
+
+    // Use the Agent tool's SubAgentRunner
+    const result = await this.registry.execute("Agent", {
+      prompt,
+      subagent_type: "general-purpose",
+      description: `Skill: ${skill.name}`,
+    });
+
+    if (result.is_error) throw new Error(result.content);
+
+    // Parse the sub-agent result and display it
+    try {
+      const parsed = JSON.parse(result.content);
+      process.stderr.write(parsed.content || result.content);
+      process.stderr.write("\n");
+
+      // Record cost
+      if (parsed.usage) {
+        const costIn = (parsed.usage.input_tokens / 1_000_000) * 3;
+        const costOut = (parsed.usage.output_tokens / 1_000_000) * 15;
+        this.totalCost += costIn + costOut;
+        const inK = (parsed.usage.input_tokens / 1000).toFixed(1);
+        const outK = (parsed.usage.output_tokens / 1000).toFixed(1);
+        process.stderr.write(`\x1b[2m(/${skill.name} fork: ${inK}k in / ${outK}k out | ${parsed.turns || 0} turns)\x1b[0m\n\n`);
+      }
+
+      // Add to conversation history
+      this.messages.push({ role: "user", content: prompt });
+      this.messages.push({ role: "assistant", content: parsed.content || result.content });
+      this.sessions.append(this.sessionId, { role: "assistant", content: parsed.content || result.content });
+    } catch {
+      // Non-JSON result — display raw
+      process.stderr.write(result.content);
+      process.stderr.write("\n");
+      this.messages.push({ role: "user", content: prompt });
+      this.messages.push({ role: "assistant", content: result.content });
+    }
+  }
+
+  async _processSkillInput(input, skillContext) {
+    const messageId = randomUUID();
+    this.messages.push({ role: "user", content: input, messageId });
+    this.sessions.append(this.sessionId, { role: "user", content: input, messageId });
+
+    // Snapshot before agent runs
+    if (this.checkpoints) {
+      this.checkpoints.createSnapshot(messageId);
+      this.registry._checkpoints = this.checkpoints;
+      this.registry._messageId = messageId;
+    }
+
+    const systemBlocks = buildSystemPrompt(this.cfg);
+    let toolCalls = 0;
+
+    // Create a skill-scoped cfg that carries the execution context
+    const skillCfg = { ...this.cfg, _skillContext: skillContext };
+
+    const brief = this.cfg.briefMode;
+    const loop = new AgentLoop(this.client, this.registry, skillCfg, {
+      onText: (delta) => {
+        if (brief) {
+          process.stderr.write(`\x1b[2m${delta}\x1b[0m`);
+        } else {
+          process.stderr.write(delta);
+        }
+      },
+      onThinking: (delta) => {
+        process.stderr.write(`\x1b[2m${delta}\x1b[0m`);
+      },
+      onToolUse: (block) => {
+        toolCalls++;
+        const inputStr = JSON.stringify(block.input).substring(0, 80);
+        process.stderr.write(`\n\x1b[2m[${block.name}: ${inputStr}]\x1b[0m\n`);
+      },
+      onToolResult: (id, result, toolName) => {
+        if (toolName === "SendUserMessage" && brief && !result.is_error) {
+          try {
+            const parsed = JSON.parse(result.content);
+            process.stderr.write(`\n${parsed.message}\n`);
+          } catch { /* ignore: non-JSON tool result from SendUserMessage */ }
+        } else if (result.is_error) {
+          process.stderr.write(`\x1b[31m[Error]\x1b[0m\n`);
+        }
+      },
+      onPermissionDeny: (block, msg) => {
+        process.stderr.write(`\x1b[33m[Denied: ${block.name}] ${msg}\x1b[0m\n`);
+      },
+      onInteractivePermission: (block, message) => {
+        return new Promise((resolve) => {
+          const inputStr = JSON.stringify(block.input).substring(0, 100);
+          process.stderr.write(`\n\x1b[33m${message}\x1b[0m\n`);
+          process.stderr.write(`\x1b[2m  ${block.name}: ${inputStr}\x1b[0m\n`);
+          process.stderr.write(`\x1b[33mAllow? (y/n/always): \x1b[0m`);
+          const rl = createInterface({ input: process.stdin, output: process.stderr });
+          rl.question("", (answer) => {
+            rl.close();
+            const a = answer.trim().toLowerCase();
+            if (a === "always" || a === "a") {
+              this.permissions?.addRule(block.name, null, "allow");
+              resolve(true);
+            } else {
+              resolve(a === "y" || a === "yes");
+            }
+          });
+        });
+      },
+    }, this.permissions);
+
+    try {
+      const result = await loop.run(this.messages, systemBlocks);
+
+      // Save assistant message
+      this.sessions.append(this.sessionId, { role: "assistant", content: result.text });
+
+      // Cost estimate
+      const costIn = (result.usage.input_tokens / 1_000_000) * 3;
+      const costOut = (result.usage.output_tokens / 1_000_000) * 15;
+      this.totalCost += costIn + costOut;
+
+      const inK = (result.usage.input_tokens / 1000).toFixed(1);
+      const outK = (result.usage.output_tokens / 1000).toFixed(1);
+      const skillLabel = `/${skillContext.name} [${skillContext.trackingId}]`;
+      process.stderr.write(`\n\x1b[2m(${skillLabel} | ${inK}k in / ${outK}k out | ${toolCalls} tools | $${(costIn + costOut).toFixed(4)} | ${result.turns} turns)\x1b[0m\n\n`);
     } catch (e) {
       process.stderr.write(`\n\x1b[31mError: ${e.message}\x1b[0m\n\n`);
     }
@@ -4695,7 +7567,7 @@ async function main() {
     } catch (e) {
       if (cfg.useOAuth) {
         process.stderr.write(`Error: ${e.message}\n`);
-        process.exit(1);
+        process.exit(EXIT.AUTH_FAILURE);
       }
       // Fall through to API key check
     }
@@ -4711,7 +7583,7 @@ async function main() {
     } catch (e) {
       if (cfg.useOpenAIOAuth) {
         process.stderr.write(`Error: ${e.message}\n`);
-        process.exit(1);
+        process.exit(EXIT.AUTH_FAILURE);
       }
     }
   }
@@ -4736,7 +7608,7 @@ async function main() {
       ? "Run --login, use --api-key, or set ANTHROPIC_API_KEY"
       : `Set ${provider.envKey}`;
     process.stderr.write(`Error: No ${provider.name} auth. ${hint}\n`);
-    process.exit(1);
+    process.exit(EXIT.AUTH_FAILURE);
   }
 
   if (provider.name !== "Anthropic") {
@@ -4755,13 +7627,49 @@ async function main() {
   registry._currentModel = cfg.model; // Used by WebFetch to pick summary model
   registry._provider = provider; // Used by WebFetch for summary model selection
   registerBuiltinTools(registry);
+  registerAskUserQuestion(registry);
+  registerDeferredBuiltinTools(registry, cfg);
+  if (cfg.briefMode) registerBriefTools(registry, cfg);
 
   if (cfg.allowedTools || cfg.disallowedTools) {
     registry.setFilter(cfg.allowedTools, cfg.disallowedTools);
   }
 
-  // Permission manager
+  // Load settings from .claude/settings.json (user → project → local)
+  const settings = loadSettings(cfg.cwd);
+  applySettings(cfg, settings);
+
+  // Load rules from .claude/rules/*.md
+  cfg._rules = loadRules(cfg.cwd);
+
+  // Load skills
+  cfg._skillLoader = new SkillLoader().scan(cfg.cwd);
+
+  // Load custom agents from disk
+  cfg._agentLoader = new AgentLoader().scan(cfg.cwd);
+
+  // Load model profiles (user overrides for orchestrator routing)
+  const modelProfilesPath = path.join(os.homedir(), ".claude", "model-profiles.json");
+  try {
+    if (fs.existsSync(modelProfilesPath)) {
+      cfg._modelProfiles = JSON.parse(fs.readFileSync(modelProfilesPath, "utf-8"));
+      log(`Loaded model profiles from ${modelProfilesPath}`);
+    }
+  } catch (e) { log(`Failed to load model profiles: ${e.message}`); }
+
+  // Initialize hook runner (wire client + cfg for LLM hooks after client is created)
+  cfg._hookRunner = new HookRunner(cfg._hooksConfig || {});
+  cfg._hookRunner._client = client;
+  cfg._hookRunner._cfg = cfg;
+  cfg._registry = registry; // Used by agent hooks for tool access
+
+  // Permission manager (after settings applied so rules are merged)
   const permissions = new PermissionManager(cfg);
+
+  // Apply settings permission rules
+  for (const rule of cfg.permissionRules) {
+    permissions.addRule(rule.tool, rule.pattern, rule.behavior);
+  }
 
   // Register Agent tool (sub-agents)
   registerAgentTool(registry, client, permissions, cfg);
@@ -4771,14 +7679,50 @@ async function main() {
 
   // MCP servers
   const mcpManager = new McpManager();
+  registry._mcpManager = mcpManager;
+  registerMcpResourceTools(registry);
   if (cfg.mcpConfig) {
+    if (!fs.existsSync(cfg.mcpConfig)) {
+      process.stderr.write(`Error: MCP config file not found: ${cfg.mcpConfig}\n`);
+      process.exit(EXIT.BAD_ARGS);
+    }
+    try {
+      JSON.parse(fs.readFileSync(cfg.mcpConfig, "utf-8"));
+    } catch (e) {
+      process.stderr.write(`Error: Invalid JSON in MCP config: ${cfg.mcpConfig}\n  ${e.message}\n`);
+      process.exit(EXIT.BAD_ARGS);
+    }
     await mcpManager.loadConfig(cfg.mcpConfig, registry);
   }
+
+  // MCP servers from settings
+  if (cfg._settingsMcpServers) {
+    const tmpConfigPath = path.join(os.tmpdir(), `.claude-native-mcp-${Date.now()}.json`);
+    fs.writeFileSync(tmpConfigPath, JSON.stringify({ mcpServers: cfg._settingsMcpServers }));
+    try {
+      await mcpManager.loadConfig(tmpConfigPath, registry);
+    } finally {
+      try { fs.unlinkSync(tmpConfigPath); } catch { /* ignore: temp file may already be cleaned up */ }
+    }
+  }
+
+  // Register ToolSearch if there are deferred tools (after all tools registered)
+  registerToolSearch(registry);
 
   // Handle shutdown
   const cleanup = () => { mcpManager.shutdown(); process.exit(0); };
   process.on("SIGINT", cleanup);
   process.on("SIGTERM", cleanup);
+
+  // Global timeout
+  let timeoutTimer = null;
+  if (cfg.timeout > 0) {
+    timeoutTimer = setTimeout(() => {
+      process.stderr.write(`Error: Global timeout (${cfg.timeout}s) exceeded\n`);
+      mcpManager.shutdown();
+      process.exit(EXIT.TIMEOUT);
+    }, cfg.timeout * 1000);
+  }
 
   // Mode dispatch
   if (cfg.ndjson) {
@@ -4796,17 +7740,39 @@ async function main() {
     const systemBlocks = buildSystemPrompt(cfg);
     const messages = [{ role: "user", content: cfg.prompt, messageId }];
 
+    const isJsonOutput = cfg.outputFormat === "json";
+
     const loop = new AgentLoop(client, registry, cfg, {
-      onText: (delta) => process.stdout.write(delta),
+      onText: isJsonOutput ? () => {} : (delta) => process.stdout.write(delta),
       onToolUse: (block) => {
         if (_verbose) process.stderr.write(`\x1b[2m[${block.name}]\x1b[0m\n`);
       },
     }, permissions);
 
     const result = await loop.run(messages, systemBlocks);
-    process.stdout.write("\n");
 
-    if (_verbose) {
+    if (isJsonOutput) {
+      const jsonOutput = {
+        version: cfg.outputVersion || "1",
+        message: result.text,
+        model: cfg.model,
+        provider: provider.name,
+        usage: {
+          input_tokens: result.usage.input_tokens,
+          output_tokens: result.usage.output_tokens,
+          cache_creation_input_tokens: result.usage.cache_creation_input_tokens,
+          cache_read_input_tokens: result.usage.cache_read_input_tokens,
+        },
+        stop_reason: result.stopReason,
+        turns: result.turns,
+        session_id: cfg.sessionId || messageId,
+      };
+      process.stdout.write(JSON.stringify(jsonOutput) + "\n");
+    } else {
+      process.stdout.write("\n");
+    }
+
+    if (_verbose && !isJsonOutput) {
       process.stderr.write(`\x1b[2m(${result.usage.input_tokens} in / ${result.usage.output_tokens} out | ${result.turns} turns)\x1b[0m\n`);
     }
   } else {
@@ -4816,10 +7782,18 @@ async function main() {
     await repl.run();
   }
 
+  if (timeoutTimer) clearTimeout(timeoutTimer);
   mcpManager.shutdown();
 }
 
 main().catch((err) => {
   process.stderr.write(`Fatal: ${err.message}\n${err.stack}\n`);
-  process.exit(1);
+  // Map known error types to structured exit codes
+  const msg = err.message || "";
+  if (msg.includes("No ") && (msg.includes("auth") || msg.includes("credentials") || msg.includes("API key"))) {
+    process.exit(EXIT.AUTH_FAILURE);
+  } else if (msg.includes("provider") || msg.includes("Unknown model") || msg.includes("ECONNREFUSED")) {
+    process.exit(EXIT.PROVIDER_ERROR);
+  }
+  process.exit(EXIT.RUNTIME_ERROR);
 });

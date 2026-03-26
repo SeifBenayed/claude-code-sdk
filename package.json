@@ -1,0 +1,29 @@
+{
+  "name": "claude-native",
+  "version": "2.4.0",
+  "description": "Open-source Claude Code alternative — multi-provider AI coding agent CLI. Single file, 13 providers, zero native deps.",
+  "main": "claude-native.mjs",
+  "bin": {
+    "claude-native": "./claude-native.mjs"
+  },
+  "files": [
+    "claude-native.mjs",
+    "ink-ui.mjs",
+    "README.md",
+    "ROADMAP.md"
+  ],
+  "scripts": {
+    "test": "node test-suite.mjs",
+    "test:ink": "node test-ink-smoke.mjs",
+    "test:e2e": "node test-e2e-deferred.mjs"
+  },
+  "keywords": ["claude", "ai", "cli", "agent", "anthropic", "openai", "mcp", "coding-agent"],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "ink": "^6.8.0",
+    "ink-select-input": "^6.2.0",
+    "ink-text-input": "^6.0.0",
+    "react": "^19.2.4"
+  }
+}
