@@ -4933,7 +4933,7 @@ async function skillImport(cfg, client, registry, permissions, source) {
   // 5. LLM review if WARN (and runner available)
   let llmVerdict = null;
   let llmReport = null;
-  if (scan.verdict === "WARN" && cfg._subAgentRunner) {
+  if (cfg._subAgentRunner) {
     try {
       process.stderr.write(`\x1b[2mRunning security review...\x1b[0m\n`);
       const contents = Object.entries(skill.files).map(([f, c]) => `--- ${f} ---\n${c}`).join("\n\n");
