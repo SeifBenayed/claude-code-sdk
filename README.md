@@ -266,4 +266,4 @@ Every provider implements: `detect()`, `createClient()`, `resolveAuth()`, `capab
 
 ## License
 
-ISC
+MIT

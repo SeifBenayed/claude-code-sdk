@@ -28,7 +28,7 @@
     "coding-agent"
   ],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "dependencies": {
     "ink": "^6.8.0",
     "ink-select-input": "^6.2.0",
