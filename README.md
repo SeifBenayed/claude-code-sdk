@@ -1,4 +1,4 @@
-# claude-native
+# cloclo
 
 Open-source Claude Code alternative — multi-provider AI coding agent CLI. Single file, 13 providers, zero native deps.
 
@@ -6,35 +6,35 @@ Open-source Claude Code alternative — multi-provider AI coding agent CLI. Sing
 
 ```bash
 # npm (recommended)
-npm install -g claude-native
+npm install -g cloclo
 
 # Or run directly
-npx claude-native
+npx cloclo
 
 # Or clone and run
-git clone https://github.com/anthropics/claude-native.git
-cd claude-native && node claude-native.mjs
+git clone https://github.com/SeifBenayed/claude-code-sdk.git
+cd claude-code-sdk && node claude-native.mjs
 ```
 
 ## Quick Start
 
 ```bash
 # Login (opens browser, saves token to macOS keychain)
-claude-native --login              # Anthropic (Pro/Max subscription)
-claude-native --openai-login       # OpenAI (ChatGPT Plus/Pro subscription)
+cloclo --login              # Anthropic (Pro/Max subscription)
+cloclo --openai-login       # OpenAI (ChatGPT Plus/Pro subscription)
 
 # Interactive REPL
-claude-native                      # Default: Claude Sonnet
-claude-native -m codex             # OpenAI Codex
-claude-native -m ollama/llama3.2   # Local Ollama
+cloclo                      # Default: Claude Sonnet
+cloclo -m codex             # OpenAI Codex
+cloclo -m ollama/llama3.2   # Local Ollama
 
 # One-shot
-claude-native -p "explain this code"
-claude-native -m gpt-5.4 -p "fix the bug in main.js"
-cat error.log | claude-native -p "explain this error"
+cloclo -p "explain this code"
+cloclo -m gpt-5.4 -p "fix the bug in main.js"
+cat error.log | cloclo -p "explain this error"
 
 # Programmatic (NDJSON bridge)
-echo '{"type":"message","content":"hello"}' | claude-native --ndjson
+echo '{"type":"message","content":"hello"}' | cloclo --ndjson
 ```
 
 ## Providers
@@ -144,7 +144,7 @@ Switch providers live in the REPL: `/model codex`, `/model sonnet`, `/model olla
 Use `--json` (or `--output json`) in one-shot mode for machine-readable output:
 
 ```bash
-claude-native -p "what is 2+2" --json
+cloclo -p "what is 2+2" --json
 ```
 
 ```json
@@ -172,17 +172,17 @@ Pin the schema version with `--output-version` to protect against future changes
 ### Anthropic (Claude)
 
 ```bash
-claude-native --login         # OAuth — uses your Pro/Max subscription
+cloclo --login         # OAuth — uses your Pro/Max subscription
 # or
-ANTHROPIC_API_KEY=sk-ant-... claude-native   # API key — pay-per-token
+ANTHROPIC_API_KEY=sk-ant-... cloclo   # API key — pay-per-token
 ```
 
 ### OpenAI
 
 ```bash
-claude-native --openai-login  # OAuth — uses your ChatGPT Plus/Pro subscription
+cloclo --openai-login  # OAuth — uses your ChatGPT Plus/Pro subscription
 # or
-OPENAI_API_KEY=sk-... claude-native -m codex  # API key
+OPENAI_API_KEY=sk-... cloclo -m codex  # API key
 ```
 
 ### Local Providers
@@ -190,13 +190,13 @@ OPENAI_API_KEY=sk-... claude-native -m codex  # API key
 ```bash
 # Ollama (install: https://ollama.com)
 ollama pull llama3.2
-claude-native -m ollama/llama3.2
+cloclo -m ollama/llama3.2
 
 # LM Studio
-claude-native -m lmstudio/qwen2.5-coder
+cloclo -m lmstudio/qwen2.5-coder
 
 # Custom URL
-OLLAMA_API_URL=http://gpu-box:11434 claude-native -m ollama/llama3.2
+OLLAMA_API_URL=http://gpu-box:11434 cloclo -m ollama/llama3.2
 ```
 
 ## NDJSON Bridge Protocol
@@ -216,7 +216,7 @@ Pass custom tools in the message payload — the SDK calls them via NDJSON and r
 ## MCP Integration
 
 ```bash
-claude-native --mcp-config mcp-servers.json
+cloclo --mcp-config mcp-servers.json
 ```
 
 ```json
