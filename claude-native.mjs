@@ -117,6 +117,9 @@ async function parseArgs(argv = process.argv.slice(2)) {
     else { process.stderr.write(`Error: Unknown skill subcommand "${sub || ""}"\n  Available: import, list, info, remove, update, export, verify, search, publish\n`); process.exit(EXIT.BAD_ARGS); }
   }
 
+  // Top-level catalog shortcut: cloclo catalog [query]
+  if (argv[0] === "catalog") { cfg._subcommand = "tool-catalog"; cfg._toolCatalogQuery = argv.slice(1).join(" ") || "*"; cfg.interactive = false; return cfg; }
+
   // Tool subcommands
   if (argv[0] === "tool") {
     const sub = argv[1];
