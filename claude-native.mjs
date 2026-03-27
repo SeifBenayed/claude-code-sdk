@@ -120,6 +120,9 @@ async function parseArgs(argv = process.argv.slice(2)) {
   // Top-level catalog shortcut: cloclo catalog [query]
   if (argv[0] === "catalog") { cfg._subcommand = "tool-catalog"; cfg._toolCatalogQuery = argv.slice(1).join(" ") || "*"; cfg.interactive = false; return cfg; }
 
+  // Remote session: cloclo remote [stop]
+  if (argv[0] === "remote") { cfg._subcommand = "remote"; cfg._remoteSub = argv[1] || "start"; cfg.interactive = true; return cfg; }
+
   // Tool subcommands
   if (argv[0] === "tool") {
     const sub = argv[1];
@@ -9035,6 +9038,110 @@ class SlashCommandRegistry {
   }
 }
 
+// ── Remote Session Manager ────────────────────────────────────────────────
+
+class RemoteSessionManager {
+  constructor() {
+    this._relayUrl = process.env.CLOCLO_RELAY_URL || process.env.CLOCLO_REGISTRY_URL || "https://cloclo-registry-799190737906.europe-west1.run.app";
+    this._token = null; this._url = null; this._expiresAt = null; this._mode = null;
+    this._ws = null; this._active = false; this._clients = 0;
+  }
+
+  async start(sessionId, mode = "chat", expiryMinutes = 60) {
+    // Register with relay
+    const body = JSON.stringify({ session_id: sessionId, mode, expiry_minutes: expiryMinutes });
+    const resp = await new Promise((resolve, reject) => {
+      const parsed = new URL(`${this._relayUrl}/api/remote/register`);
+      const mod = parsed.protocol === "https:" ? _https : _http;
+      const req = mod.request({ hostname: parsed.hostname, port: parsed.port || (parsed.protocol === "https:" ? 443 : 80), path: parsed.pathname, method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) }, timeout: 10000 }, (res) => { let d = ""; res.on("data", c => d += c); res.on("end", () => res.statusCode < 400 ? resolve(d) : reject(new Error(`HTTP ${res.statusCode}: ${d.slice(0, 200)}`))); });
+      req.on("error", reject); req.on("timeout", () => { req.destroy(); reject(new Error("Relay timeout")); }); req.write(body); req.end();
+    });
+    const data = JSON.parse(resp);
+    this._token = data.token; this._url = data.url; this._expiresAt = data.expires_at; this._mode = mode;
+    // Connect outbound WS to relay as host
+    await this._connectRelay();
+    this._active = true;
+    return { token: this._token, url: this._url, expiresAt: this._expiresAt };
+  }
+
+  async stop() {
+    if (!this._active) return;
+    // Revoke on relay
+    try {
+      const body = JSON.stringify({ token: this._token });
+      await new Promise((resolve) => {
+        const parsed = new URL(`${this._relayUrl}/api/remote/revoke`);
+        const mod = parsed.protocol === "https:" ? _https : _http;
+        const req = mod.request({ hostname: parsed.hostname, port: parsed.port || (parsed.protocol === "https:" ? 443 : 80), path: parsed.pathname, method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body) }, timeout: 5000 }, (res) => { res.resume(); resolve(); });
+        req.on("error", () => resolve()); req.write(body); req.end();
+      });
+    } catch { /* best effort */ }
+    if (this._ws) { try { this._ws.destroy(); } catch { /* already closed */ } this._ws = null; }
+    this._active = false; this._token = null; this._url = null;
+  }
+
+  async status() {
+    if (!this._active) return { active: false };
+    return { active: true, mode: this._mode, url: this._url, expiresAt: this._expiresAt, clients: this._clients };
+  }
+
+  isActive() { return this._active; }
+
+  emit(event) {
+    if (!this._ws || !this._active) return;
+    const data = typeof event === "string" ? event : JSON.stringify(event);
+    // Send as masked WS frame (client→server must be masked)
+    const payload = Buffer.from(data, "utf-8");
+    const mask = Buffer.from(Array.from({ length: 4 }, () => Math.floor(Math.random() * 256)));
+    let header;
+    if (payload.length < 126) { header = Buffer.alloc(2); header[0] = 0x81; header[1] = 0x80 | payload.length; }
+    else if (payload.length < 65536) { header = Buffer.alloc(4); header[0] = 0x81; header[1] = 0x80 | 126; header.writeUInt16BE(payload.length, 2); }
+    else { header = Buffer.alloc(10); header[0] = 0x81; header[1] = 0x80 | 127; header.writeBigUInt64BE(BigInt(payload.length), 2); }
+    const masked = Buffer.alloc(payload.length); for (let i = 0; i < payload.length; i++) masked[i] = payload[i] ^ mask[i % 4];
+    try { this._ws.write(Buffer.concat([header, mask, masked])); } catch { /* ws dead */ }
+  }
+
+  _connectRelay() {
+    return new Promise((resolve, reject) => {
+      const wsUrl = this._relayUrl.replace(/^http/, "ws") + "/ws/remote/" + this._token;
+      const parsed = new URL(wsUrl);
+      const mod = parsed.protocol === "wss:" ? _https : _http;
+      const key = Buffer.from(Array.from({ length: 16 }, () => Math.floor(Math.random() * 256))).toString("base64");
+      const req = mod.request({ hostname: parsed.hostname, port: parsed.port || (parsed.protocol === "wss:" ? 443 : 80), path: parsed.pathname, headers: { Upgrade: "websocket", Connection: "Upgrade", "Sec-WebSocket-Key": key, "Sec-WebSocket-Version": "13", "X-Remote-Role": "host" } });
+      req.on("upgrade", (res, socket) => {
+        this._ws = socket;
+        let buf = Buffer.alloc(0);
+        socket.on("data", (chunk) => {
+          buf = Buffer.concat([buf, chunk]);
+          while (buf.length >= 2) {
+            const pLen = buf[1] & 0x7f; let off = 2, len = pLen;
+            if (pLen === 126) { if (buf.length < 4) break; len = buf.readUInt16BE(2); off = 4; }
+            else if (pLen === 127) { if (buf.length < 10) break; len = Number(buf.readBigUInt64BE(2)); off = 10; }
+            if (buf.length < off + len) break;
+            const payload = buf.slice(off, off + len).toString("utf-8"); buf = buf.slice(off + len);
+            try {
+              const msg = JSON.parse(payload);
+              if (msg.type === "remote_status") { this._clients = msg.clients; }
+              else if (this._onRemoteMessage) { this._onRemoteMessage(msg); }
+            } catch { /* non-JSON */ }
+          }
+        });
+        socket.on("close", () => { this._ws = null; this._active = false; });
+        socket.on("error", () => { this._ws = null; });
+        resolve();
+      });
+      req.on("error", reject);
+      req.setTimeout(10000, () => { req.destroy(); reject(new Error("WS relay timeout")); });
+      req.end();
+    });
+  }
+
+  _onRemoteMessage = null; // set by InteractiveMode
+}
+
+let _remoteManager = null;
+function _getRemoteManager() { if (!_remoteManager) _remoteManager = new RemoteSessionManager(); return _remoteManager; }
+
 class InteractiveMode {
   constructor(cfg, registry, client, mcpManager, permissions = null) {
     this.cfg = cfg;
@@ -9666,6 +9773,37 @@ class InteractiveMode {
     s.register({ name: "catalog", description: "Browse the tool marketplace", argumentHint: "[query]",
       handler: async (args) => { await toolCatalog(args.join(" ") || "*"); } });
 
+    // Remote session
+    s.register({ name: "remote", description: "Remote session access", argumentHint: "[status|stop|renew]",
+      handler: async (args) => {
+        const sub = args[0];
+        const mgr = _getRemoteManager();
+        if (!sub || sub === "start") {
+          if (mgr.isActive()) { const s = await mgr.status(); process.stderr.write(`\n  Remote already active\n  Link: ${s.url}\n  Mode: ${s.mode}\n  Expires: ${s.expiresAt}\n  Clients: ${s.clients}\n\n`); return; }
+          try {
+            const sessionId = self.sessionManager?.currentSessionId() || "session-" + Date.now();
+            const result = await mgr.start(sessionId);
+            // Wire remote input to processInput
+            mgr._onRemoteMessage = (msg) => { if (msg.type === "message" && msg.content) { process.stderr.write(`\n\x1b[36m[remote]\x1b[0m ${msg.content.slice(0, 80)}\n`); self._processInput(msg.content); } };
+            process.stderr.write(`\n  \x1b[32mRemote session ready\x1b[0m\n  Link:    ${result.url}\n  Mode:    chat\n  Expires: ${new Date(result.expiresAt).toLocaleTimeString()}\n\n`);
+          } catch (e) { process.stderr.write(`\x1b[31mRemote failed:\x1b[0m ${e.message}\n`); }
+        } else if (sub === "status") {
+          const s = await mgr.status();
+          if (!s.active) { process.stderr.write("  No active remote session.\n"); return; }
+          process.stderr.write(`\n  Active:  yes\n  Link:    ${s.url}\n  Mode:    ${s.mode}\n  Clients: ${s.clients}\n  Expires: ${s.expiresAt}\n\n`);
+        } else if (sub === "stop") {
+          await mgr.stop();
+          process.stderr.write("  Remote session stopped.\n");
+        } else if (sub === "renew") {
+          if (!mgr.isActive()) { process.stderr.write("  No active remote session to renew.\n"); return; }
+          await mgr.stop();
+          const sessionId = self.sessionManager?.currentSessionId() || "session-" + Date.now();
+          const result = await mgr.start(sessionId);
+          mgr._onRemoteMessage = (msg) => { if (msg.type === "message" && msg.content) { process.stderr.write(`\n\x1b[36m[remote]\x1b[0m ${msg.content.slice(0, 80)}\n`); self._processInput(msg.content); } };
+          process.stderr.write(`\n  \x1b[32mRemote renewed\x1b[0m\n  Link:    ${result.url}\n  Expires: ${new Date(result.expiresAt).toLocaleTimeString()}\n\n`);
+        } else { process.stderr.write("Usage: /remote [status|stop|renew]\n"); }
+      } });
+
     // Doctor — basic installation health check
     s.register({ name: "doctor", description: "Diagnose installation and connectivity", immediate: true,
       handler: async () => {
@@ -10154,13 +10292,11 @@ class InteractiveMode {
     let toolCalls = 0;
 
     const brief = this.cfg.briefMode;
+    const remote = _remoteManager?.isActive() ? _remoteManager : null;
     const loop = new AgentLoop(this.client, this.registry, this.cfg, {
       onText: (delta) => {
-        if (brief) {
-          process.stderr.write(`\x1b[2m${delta}\x1b[0m`);
-        } else {
-          process.stderr.write(delta);
-        }
+        if (brief) { process.stderr.write(`\x1b[2m${delta}\x1b[0m`); } else { process.stderr.write(delta); }
+        if (remote) remote.emit({ type: "stream", event_type: "text_delta", data: { text: delta } });
       },
       onThinking: (delta) => {
         process.stderr.write(`\x1b[2m${delta}\x1b[0m`);
@@ -10169,16 +10305,13 @@ class InteractiveMode {
         toolCalls++;
         const inputStr = JSON.stringify(block.input).substring(0, 80);
         process.stderr.write(`\n\x1b[2m[${block.name}: ${inputStr}]\x1b[0m\n`);
+        if (remote) remote.emit({ type: "tool_use", name: block.name, input: block.input, id: block.id });
       },
       onToolResult: (id, result, toolName) => {
         if (toolName === "SendUserMessage" && brief && !result.is_error) {
-          try {
-            const parsed = JSON.parse(result.content);
-            process.stderr.write(`\n${parsed.message}\n`);
-          } catch { /* ignore: non-JSON tool result from SendUserMessage */ }
-        } else if (result.is_error) {
-          process.stderr.write(`\x1b[31m[Error]\x1b[0m\n`);
-        }
+          try { const parsed = JSON.parse(result.content); process.stderr.write(`\n${parsed.message}\n`); } catch { /* ignore */ }
+        } else if (result.is_error) { process.stderr.write(`\x1b[31m[Error]\x1b[0m\n`); }
+        if (remote) remote.emit({ type: "tool_result", id, tool_name: toolName, is_error: result.is_error });
       },
       onPermissionDeny: (block, msg) => {
         process.stderr.write(`\x1b[33m[Denied: ${block.name}] ${msg}\x1b[0m\n`);

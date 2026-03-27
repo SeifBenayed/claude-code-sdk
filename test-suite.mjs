@@ -5638,6 +5638,68 @@ section("E2E: tool list shows document + desktop tools (deferred)");
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// T6 — REMOTE SESSION (/remote)
+// ═══════════════════════════════════════════════════════════════════
+
+section("UNIT: RemoteSessionManager exists");
+
+{
+  assert(source.includes("class RemoteSessionManager"), "RemoteSessionManager class exists");
+  assert(source.includes("_connectRelay"), "WS relay connection method exists");
+  assert(source.includes("_onRemoteMessage"), "Remote message handler exists");
+  assert(source.includes("CLOCLO_RELAY_URL") || source.includes("CLOCLO_REGISTRY_URL"), "Relay URL configurable via env");
+}
+
+section("UNIT: /remote command registered");
+
+{
+  assert(source.includes('name: "remote"') && source.includes("Remote session"), "/remote slash command registered");
+  assert(source.includes('"status"') && source.includes('"stop"') && source.includes('"renew"'), "/remote has status, stop, renew subcommands");
+}
+
+section("UNIT: callback wrapping emits to remote");
+
+{
+  assert(source.includes("remote.emit") || source.includes("remote) remote.emit"), "AgentLoop callbacks emit to remote when active");
+  assert(source.includes("text_delta") && source.includes("tool_use") && source.includes("tool_result"), "Remote events include text_delta, tool_use, tool_result");
+}
+
+section("UNIT: relay server has remote endpoints");
+
+{
+  const relaySrc = fs.readFileSync(path.join(__dirname, "registry-server.mjs"), "utf-8");
+  assert(relaySrc.includes("/api/remote/register"), "Relay has /api/remote/register endpoint");
+  assert(relaySrc.includes("/api/remote/revoke"), "Relay has /api/remote/revoke endpoint");
+  assert(relaySrc.includes("remote session status") || relaySrc.includes("statusMatch"), "Relay has remote status endpoint");
+  assert(relaySrc.includes("/ws/remote/"), "Relay has WebSocket upgrade for /ws/remote/");
+  assert(relaySrc.includes("_remoteSessions"), "Relay has session state map");
+  assert(relaySrc.includes("x-remote-role") || relaySrc.includes("X-Remote-Role"), "Relay distinguishes host vs client role");
+  assert(relaySrc.includes("_wsAccept") && relaySrc.includes("258EAFA5"), "Relay implements WS handshake");
+  assert(relaySrc.includes("_wsSend") && relaySrc.includes("_wsParseFrames"), "Relay has WS frame helpers");
+}
+
+section("UNIT: relay serves remote web UI");
+
+{
+  const relaySrc = fs.readFileSync(path.join(__dirname, "registry-server.mjs"), "utf-8");
+  assert(relaySrc.includes("_remoteClientHtml"), "Relay has web UI template function");
+  assert(relaySrc.includes("cloclo remote") || relaySrc.includes("cloclo</h1>"), "Web UI has cloclo branding");
+  assert(relaySrc.includes("WebSocket") && relaySrc.includes("ws.onmessage"), "Web UI connects via WebSocket");
+  assert(relaySrc.includes("text_delta") && relaySrc.includes("tool_use"), "Web UI handles stream events");
+  assert(relaySrc.includes("mobile") || relaySrc.includes("viewport"), "Web UI is mobile-responsive");
+}
+
+section("UNIT: remote security");
+
+{
+  const relaySrc = fs.readFileSync(path.join(__dirname, "registry-server.mjs"), "utf-8");
+  assert(relaySrc.includes("HMAC") || relaySrc.includes("createHmac"), "Token is HMAC-signed");
+  assert(relaySrc.includes("REMOTE_SECRET"), "Signing secret exists");
+  assert(relaySrc.includes("expiresAt") || relaySrc.includes("expires_at"), "Sessions have expiry");
+  assert(relaySrc.includes("_lastMessage") || relaySrc.includes("rate limit"), "Client messages are rate-limited");
+  assert(relaySrc.includes("410") || relaySrc.includes("expired"), "Expired sessions return 410");
+}
+
 // OFFICIAL TOOL CATALOG
 // ═══════════════════════════════════════════════════════════════════
 
