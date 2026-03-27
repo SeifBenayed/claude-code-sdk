@@ -2073,12 +2073,15 @@ function _createCliExecutor(toolDef, toolDir) {
     const installResult = await _autoInstallBinary(toolDef.binary, toolDef.install_hint, toolDir, toolDef._registry);
     if (installResult.error) return { content: installResult.error, is_error: true };
     const binPath = installResult.path;
-    // Build args from template
-    const args = (toolDef.args_template || []).map(a => {
+    // Build args from template — if a template is ONLY a variable (e.g. "$ARGS"), split its value as shell args
+    const args = [];
+    for (const a of (toolDef.args_template || [])) {
       let s = a.replace(/\$INPUT_JSON/g, JSON.stringify(input));
       for (const [k, v] of Object.entries(input || {})) s = s.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), String(v));
-      return s;
-    });
+      // If the original template was a single variable (e.g. "$ARGS") and it expanded to a multi-word string, split it
+      if (/^\$[A-Z_]+$/.test(a) && s.includes(" ")) args.push(...s.split(/\s+/).filter(Boolean));
+      else args.push(s);
+    }
     return new Promise((resolve) => {
       let stdout = "", stderr = "";
       const child = spawn(binPath, args, { cwd: toolDef.cwd || process.cwd(), env: process.env, timeout, stdio: ["pipe", "pipe", "pipe"] });
@@ -2203,90 +2206,89 @@ function toolRemove(cfg, name) {
 // Install via: cloclo tool install official:<name>
 
 const _OFFICIAL_CATALOG = {
-  "github-pr-list": {
-    name: "github-pr-list", type: "cli", description: "List GitHub pull requests from the current repo",
-    binary: "gh", args_template: ["pr", "list", "--json", "number,title,state,author,url"], input_schema: { type: "object", properties: {} },
-    timeout: 15000, read_only: true, parse_mode: "json", healthcheck: ["gh", "--version"], install_hint: "brew install gh",
-    _meta: { category: "devops", author: "cloclo", env_required: [], auth_note: "Requires gh auth login" }
-  },
-  "github-pr-create": {
-    name: "github-pr-create", type: "cli", description: "Create a GitHub pull request",
-    binary: "gh", args_template: ["pr", "create", "--title", "$TITLE", "--body", "$BODY"], input_schema: { type: "object", properties: { title: { type: "string", description: "PR title" }, body: { type: "string", description: "PR description" } }, required: ["title"] },
+  "gh": {
+    name: "gh", type: "cli", description: "GitHub CLI — PRs, issues, repos, releases, actions, gists",
+    binary: "gh", args_template: ["$ARGS"], input_schema: { type: "object", properties: { args: { type: "string", description: "gh subcommand and flags (e.g. 'pr list --json number,title', 'issue create --title Bug', 'repo view', 'run list')" } }, required: ["args"] },
     timeout: 30000, read_only: false, parse_mode: "text", healthcheck: ["gh", "--version"], install_hint: "brew install gh",
-    _meta: { category: "devops", author: "cloclo", env_required: [], auth_note: "Requires gh auth login" }
+    _meta: { category: "devops", author: "cloclo", env_required: [], auth_note: "Run: gh auth login" }
   },
-  "github-issue-list": {
-    name: "github-issue-list", type: "cli", description: "List GitHub issues from the current repo",
-    binary: "gh", args_template: ["issue", "list", "--json", "number,title,state,author,labels"], input_schema: { type: "object", properties: {} },
-    timeout: 15000, read_only: true, parse_mode: "json", healthcheck: ["gh", "--version"], install_hint: "brew install gh",
-    _meta: { category: "devops", author: "cloclo", env_required: [], auth_note: "Requires gh auth login" }
-  },
-  "docker-ps": {
-    name: "docker-ps", type: "cli", description: "List running Docker containers",
-    binary: "docker", args_template: ["ps", "--format", "json"], input_schema: { type: "object", properties: {} },
-    timeout: 10000, read_only: true, parse_mode: "lines", healthcheck: ["docker", "--version"], install_hint: "brew install docker",
+  "docker": {
+    name: "docker", type: "cli", description: "Docker CLI — containers, images, volumes, networks, compose",
+    binary: "docker", args_template: ["$ARGS"], input_schema: { type: "object", properties: { args: { type: "string", description: "docker subcommand and flags (e.g. 'ps --format json', 'logs --tail 100 mycontainer', 'images', 'compose up -d')" } }, required: ["args"] },
+    timeout: 30000, read_only: false, parse_mode: "text", healthcheck: ["docker", "--version"], install_hint: "brew install docker",
     _meta: { category: "devops", author: "cloclo", env_required: [], auth_note: "Docker daemon must be running" }
   },
-  "docker-logs": {
-    name: "docker-logs", type: "cli", description: "Get logs from a Docker container",
-    binary: "docker", args_template: ["logs", "--tail", "100", "$CONTAINER"], input_schema: { type: "object", properties: { container: { type: "string", description: "Container name or ID" } }, required: ["container"] },
-    timeout: 10000, read_only: true, parse_mode: "text", healthcheck: ["docker", "--version"], install_hint: "brew install docker",
-    _meta: { category: "devops", author: "cloclo", env_required: [], auth_note: "Docker daemon must be running" }
+  "vercel": {
+    name: "vercel", type: "cli", description: "Vercel CLI — deployments, domains, env, logs, projects",
+    binary: "vercel", args_template: ["$ARGS"], input_schema: { type: "object", properties: { args: { type: "string", description: "vercel subcommand and flags (e.g. 'list --json', 'deploy', 'env pull', 'logs myproject')" } }, required: ["args"] },
+    timeout: 30000, read_only: false, parse_mode: "text", healthcheck: ["vercel", "--version"], install_hint: "npm install -g vercel",
+    _meta: { category: "deploy", author: "cloclo", env_required: ["VERCEL_TOKEN"], auth_note: "Set VERCEL_TOKEN or run: vercel login" }
   },
-  "vercel-list": {
-    name: "vercel-list", type: "cli", description: "List Vercel deployments",
-    binary: "vercel", args_template: ["list", "--json"], input_schema: { type: "object", properties: {} },
-    timeout: 15000, read_only: true, parse_mode: "json", healthcheck: ["vercel", "--version"], install_hint: "npm install -g vercel",
-    _meta: { category: "deploy", author: "cloclo", env_required: ["VERCEL_TOKEN"], auth_note: "Set VERCEL_TOKEN or run vercel login" }
-  },
-  "kubectl-pods": {
-    name: "kubectl-pods", type: "cli", description: "List Kubernetes pods",
-    binary: "kubectl", args_template: ["get", "pods", "-o", "json"], input_schema: { type: "object", properties: { namespace: { type: "string", description: "Kubernetes namespace" } } },
-    timeout: 15000, read_only: true, parse_mode: "json", healthcheck: ["kubectl", "version", "--client", "--short"], install_hint: "brew install kubectl",
+  "kubectl": {
+    name: "kubectl", type: "cli", description: "Kubernetes CLI — pods, services, deployments, logs, config",
+    binary: "kubectl", args_template: ["$ARGS"], input_schema: { type: "object", properties: { args: { type: "string", description: "kubectl subcommand and flags (e.g. 'get pods -o json', 'logs mypod', 'describe svc myservice', 'apply -f manifest.yaml')" } }, required: ["args"] },
+    timeout: 30000, read_only: false, parse_mode: "text", healthcheck: ["kubectl", "version", "--client", "--short"], install_hint: "brew install kubectl",
     _meta: { category: "devops", author: "cloclo", env_required: [], auth_note: "Requires configured kubeconfig" }
   },
-  "jq-transform": {
-    name: "jq-transform", type: "cli", description: "Transform JSON using jq expressions",
-    binary: "jq", args_template: ["$EXPRESSION"], stdin_template: "$INPUT_JSON", input_schema: { type: "object", properties: { expression: { type: "string", description: "jq expression (e.g. '.[] | .name')" }, data: { type: "object", description: "JSON data to transform" } }, required: ["expression"] },
+  "fly": {
+    name: "fly", type: "cli", description: "Fly.io CLI — apps, machines, volumes, secrets, deploy",
+    binary: "fly", args_template: ["$ARGS"], input_schema: { type: "object", properties: { args: { type: "string", description: "fly subcommand and flags (e.g. 'apps list', 'status', 'deploy', 'logs', 'secrets set KEY=value')" } }, required: ["args"] },
+    timeout: 30000, read_only: false, parse_mode: "text", healthcheck: ["fly", "version"], install_hint: "brew install flyctl",
+    _meta: { category: "deploy", author: "cloclo", env_required: [], auth_note: "Run: fly auth login" }
+  },
+  "aws": {
+    name: "aws", type: "cli", description: "AWS CLI — S3, EC2, Lambda, IAM, CloudFormation, and 200+ services",
+    binary: "aws", args_template: ["$ARGS"], input_schema: { type: "object", properties: { args: { type: "string", description: "aws subcommand and flags (e.g. 's3 ls', 'ec2 describe-instances', 'lambda list-functions', 'sts get-caller-identity')" } }, required: ["args"] },
+    timeout: 30000, read_only: false, parse_mode: "text", healthcheck: ["aws", "--version"], install_hint: "brew install awscli",
+    _meta: { category: "cloud", author: "cloclo", env_required: ["AWS_ACCESS_KEY_ID", "AWS_SECRET_ACCESS_KEY"], auth_note: "Run: aws configure" }
+  },
+  "gcloud": {
+    name: "gcloud", type: "cli", description: "Google Cloud CLI — compute, storage, run, functions, IAM",
+    binary: "gcloud", args_template: ["$ARGS"], input_schema: { type: "object", properties: { args: { type: "string", description: "gcloud subcommand and flags (e.g. 'run services list', 'compute instances list', 'auth list')" } }, required: ["args"] },
+    timeout: 30000, read_only: false, parse_mode: "text", healthcheck: ["gcloud", "--version"], install_hint: "brew install google-cloud-sdk",
+    _meta: { category: "cloud", author: "cloclo", env_required: [], auth_note: "Run: gcloud auth login" }
+  },
+  "terraform": {
+    name: "terraform", type: "cli", description: "Terraform CLI — plan, apply, destroy, state, import infrastructure",
+    binary: "terraform", args_template: ["$ARGS"], input_schema: { type: "object", properties: { args: { type: "string", description: "terraform subcommand and flags (e.g. 'plan', 'apply -auto-approve', 'state list', 'output -json')" } }, required: ["args"] },
+    timeout: 120000, read_only: false, parse_mode: "text", healthcheck: ["terraform", "--version"], install_hint: "brew install terraform",
+    _meta: { category: "infra", author: "cloclo", env_required: [], auth_note: "Requires provider credentials" }
+  },
+  "jq": {
+    name: "jq", type: "cli", description: "jq — lightweight JSON processor, filter, transform, query",
+    binary: "jq", args_template: ["$EXPRESSION"], stdin_template: "$INPUT_JSON", input_schema: { type: "object", properties: { expression: { type: "string", description: "jq expression (e.g. '.[] | .name', 'keys', 'length', '.items[] | select(.status==\"active\")')" }, data: { type: "object", description: "JSON data to transform" } }, required: ["expression"] },
     timeout: 5000, read_only: true, parse_mode: "json", healthcheck: ["jq", "--version"], install_hint: "brew install jq",
     _meta: { category: "data", author: "cloclo", env_required: [] }
   },
-  "ripgrep-search": {
-    name: "ripgrep-search", type: "cli", description: "Fast regex search across files using ripgrep",
-    binary: "rg", args_template: ["--json", "$PATTERN"], input_schema: { type: "object", properties: { pattern: { type: "string", description: "Regex pattern to search" }, path: { type: "string", description: "Directory to search in" } }, required: ["pattern"] },
-    timeout: 15000, read_only: true, parse_mode: "lines", healthcheck: ["rg", "--version"], install_hint: "brew install ripgrep",
+  "rg": {
+    name: "rg", type: "cli", description: "ripgrep — fast recursive regex search across files",
+    binary: "rg", args_template: ["$ARGS"], input_schema: { type: "object", properties: { args: { type: "string", description: "rg flags and pattern (e.g. '--json \"TODO\"', '-l \"import.*react\"', '-t py \"def main\"', '-c \"error\" /var/log')" } }, required: ["args"] },
+    timeout: 15000, read_only: true, parse_mode: "text", healthcheck: ["rg", "--version"], install_hint: "brew install ripgrep",
     _meta: { category: "search", author: "cloclo", env_required: [] }
   },
+  "ffprobe": {
+    name: "ffprobe", type: "cli", description: "ffprobe — inspect media files (video, audio, streams, formats)",
+    binary: "ffprobe", args_template: ["$ARGS"], input_schema: { type: "object", properties: { args: { type: "string", description: "ffprobe flags and file (e.g. '-v quiet -print_format json -show_format -show_streams video.mp4')" } }, required: ["args"] },
+    timeout: 15000, read_only: true, parse_mode: "text", healthcheck: ["ffprobe", "-version"], install_hint: "brew install ffmpeg",
+    _meta: { category: "media", author: "cloclo", env_required: [] }
+  },
   "hedi-fraud-check": {
-    name: "hedi-fraud-check", type: "http", description: "Check if a document is suspicious using Hedi fraud detection",
+    name: "hedi-fraud-check", type: "http", description: "Hedi AI — fraud detection on documents and transactions",
     method: "POST", url: "https://api.hedi.ai/v1/fraud/check",
     headers: { "Authorization": "Bearer ${HEDI_API_KEY}", "Content-Type": "application/json" },
     timeout: 15000, read_only: true, healthcheck_url: "https://api.hedi.ai/health",
-    error_map: { "401": "Auth failed — set HEDI_API_KEY env var", "503": "Hedi service unavailable", "429": "Rate limit exceeded" },
+    error_map: { "401": "Auth failed — set HEDI_API_KEY", "503": "Hedi service unavailable", "429": "Rate limit exceeded" },
     input_schema: { type: "object", properties: { document_text: { type: "string", description: "Document text to analyze for fraud" } }, required: ["document_text"] },
-    _meta: { category: "enterprise", author: "hedi", env_required: ["HEDI_API_KEY"], auth_note: "Get API key from https://hedi.ai/dashboard" }
+    _meta: { category: "enterprise", author: "hedi", env_required: ["HEDI_API_KEY"], auth_note: "Get API key at https://hedi.ai/dashboard" }
   },
-  "slack-post": {
-    name: "slack-post", type: "http", description: "Post a message to a Slack channel via webhook",
+  "slack": {
+    name: "slack", type: "http", description: "Slack — post messages to channels via webhook",
     method: "POST", url: "${SLACK_WEBHOOK_URL}",
     headers: { "Content-Type": "application/json" },
     timeout: 10000, read_only: false,
-    error_map: { "400": "Invalid payload — check message format", "403": "Webhook URL invalid or revoked", "404": "Webhook not found — check SLACK_WEBHOOK_URL" },
-    input_schema: { type: "object", properties: { text: { type: "string", description: "Message text" }, channel: { type: "string", description: "Channel override (optional)" } }, required: ["text"] },
+    error_map: { "400": "Invalid payload", "403": "Webhook revoked", "404": "Webhook not found — check SLACK_WEBHOOK_URL" },
+    input_schema: { type: "object", properties: { text: { type: "string", description: "Message text (supports Slack markdown)" }, channel: { type: "string", description: "Channel override (optional)" } }, required: ["text"] },
     _meta: { category: "communication", author: "cloclo", env_required: ["SLACK_WEBHOOK_URL"], auth_note: "Create webhook at https://api.slack.com/messaging/webhooks" }
-  },
-  "system-info": {
-    name: "system-info", type: "cli", description: "Get system information (OS, architecture, hostname)",
-    binary: "uname", args_template: ["-a"], input_schema: { type: "object", properties: {} },
-    timeout: 5000, read_only: true, parse_mode: "text", healthcheck: ["uname", "-s"],
-    _meta: { category: "system", author: "cloclo", env_required: [] }
-  },
-  "ffmpeg-info": {
-    name: "ffmpeg-info", type: "cli", description: "Get media file information using ffprobe",
-    binary: "ffprobe", args_template: ["-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", "$FILE_PATH"],
-    input_schema: { type: "object", properties: { file_path: { type: "string", description: "Path to media file" } }, required: ["file_path"] },
-    timeout: 15000, read_only: true, parse_mode: "json", healthcheck: ["ffprobe", "-version"], install_hint: "brew install ffmpeg",
-    _meta: { category: "media", author: "cloclo", env_required: [] }
   },
 };
 

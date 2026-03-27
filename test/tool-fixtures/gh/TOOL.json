@@ -1,0 +1,19 @@
+{
+  "name": "gh",
+  "type": "cli",
+  "description": "GitHub CLI — PRs, issues, repos, releases, actions, gists",
+  "binary": "gh",
+  "args_template": ["$ARGS"],
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "args": { "type": "string", "description": "gh subcommand and flags" }
+    },
+    "required": ["args"]
+  },
+  "timeout": 30000,
+  "read_only": false,
+  "parse_mode": "text",
+  "healthcheck": ["gh", "--version"],
+  "install_hint": "brew install gh"
+}

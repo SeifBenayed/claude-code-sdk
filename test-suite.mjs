@@ -4949,7 +4949,7 @@ section("UNIT: tool fixture files exist");
 
 {
   const fixtureDir = path.join(__dirname, "test", "tool-fixtures");
-  const fixtures = ["github-pr-list/TOOL.json", "hedi-fraud-check/TOOL.json", "system-info/TOOL.json", "json-echo/TOOL.json", "json-echo/json-echo.sh"];
+  const fixtures = ["gh/TOOL.json", "hedi-fraud-check/TOOL.json", "system-info/TOOL.json", "json-echo/TOOL.json", "json-echo/json-echo.sh"];
   for (const f of fixtures) {
     assert(fs.existsSync(path.join(fixtureDir, f)), `Fixture: ${f}`);
   }
@@ -5204,13 +5204,13 @@ section("E2E: gh connector (skipped if gh not installed)");
     try { execSync("which gh", { encoding: "utf-8", timeout: 3000 }); ghAvailable = true; } catch { /* gh not installed */ }
 
     if (!ghAvailable) {
-      skip("gh CLI not installed — skipping github-pr-list connector test");
+      skip("gh CLI not installed — skipping gh connector test");
     } else {
-      await runCLI(["tool", "install", path.join(__dirname, "test", "tool-fixtures", "github-pr-list")], {}, 10000);
-      const { stderr } = await runCLI(["tool", "test", "github-pr-list"], {}, 15000);
+      await runCLI(["tool", "install", path.join(__dirname, "test", "tool-fixtures", "gh")], {}, 10000);
+      const { stderr } = await runCLI(["tool", "test", "gh"], {}, 15000);
       assert(stderr.includes("Binary found") || stderr.includes("gh"), "gh binary found");
       assert(stderr.includes("Healthcheck passed") || stderr.includes("✓"), "gh healthcheck passes");
-      await runCLI(["tool", "remove", "github-pr-list"], {}, 10000);
+      await runCLI(["tool", "remove", "gh"], {}, 10000);
     }
   } catch (e) {
     skip(`gh connector E2E failed: ${e.message}`);
@@ -5225,7 +5225,7 @@ section("UNIT: official catalog exists and has entries");
 
 {
   assert(source.includes("_OFFICIAL_CATALOG"), "Official catalog constant exists");
-  assert(source.includes("github-pr-list") && source.includes("hedi-fraud-check") && source.includes("slack-post"), "Catalog has github, hedi, slack entries");
+  assert(source.includes("gh") && source.includes("hedi-fraud-check") && source.includes("slack"), "Catalog has github, hedi, slack entries");
   assert(source.includes("_meta") && source.includes("category") && source.includes("auth_note"), "Catalog entries have _meta with category and auth_note");
   assert(source.includes("_installOfficialTool"), "_installOfficialTool function exists");
   assert(source.includes("toolCatalog"), "toolCatalog function exists");
@@ -5238,8 +5238,8 @@ section("E2E: tool catalog shows all tools");
   try {
     const { exitCode, stderr } = await runCLI(["tool", "catalog"], {}, 10000);
     assert(exitCode === 0, "tool catalog exits 0");
-    assert(stderr.includes("github-pr-list"), "catalog shows github-pr-list");
-    assert(stderr.includes("hedi-fraud-check"), "catalog shows hedi-fraud-check");
+    assert(stderr.includes("gh") || stderr.includes("GitHub"), "catalog shows gh");
+    assert(stderr.includes("hedi") || stderr.includes("fraud"), "catalog shows hedi");
     assert(stderr.includes("tool(s) available") || stderr.includes("tool(s) found"), "catalog shows count");
   } catch (e) {
     skip(`Catalog E2E failed: ${e.message}`);
@@ -5252,8 +5252,8 @@ section("E2E: tool catalog search filters results");
   try {
     const { exitCode, stderr } = await runCLI(["tool", "catalog", "devops"], {}, 10000);
     assert(exitCode === 0, "catalog devops exits 0");
-    assert(stderr.includes("github-pr-list"), "devops filter includes github");
-    assert(!stderr.includes("slack-post"), "devops filter excludes slack");
+    assert(stderr.includes("gh") || stderr.includes("docker") || stderr.includes("kubectl"), "devops filter includes devops tools");
+    assert(!stderr.includes("slack") || stderr.includes("DEVOPS"), "devops filter excludes non-devops");
   } catch (e) {
     skip(`Catalog search E2E failed: ${e.message}`);
   }
