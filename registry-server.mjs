@@ -369,7 +369,7 @@ async function handleRequest(req, res) {
     const expiry = (expiry_minutes || 60) * 60 * 1000;
     const expiresAt = new Date(Date.now() + expiry).toISOString();
     const token = crypto.createHmac("sha256", REMOTE_SECRET).update(session_id + "::" + expiresAt).digest("hex").slice(0, 32);
-    _remoteSessions.set(token, { sessionId: session_id, mode: mode || "chat", expiresAt, hostWs: null, clients: new Set(), created: Date.now() });
+    _remoteSessions.set(token, { sessionId: session_id, mode: mode || "chat", expiresAt, hostWs: null, clients: new Set(), created: Date.now(), messageBuffer: [], hostDisconnectedAt: null, replayBuffer: [] });
     const baseUrl = `${req.headers["x-forwarded-proto"] || "https"}://${req.headers.host || "localhost:" + PORT}`;
     log(`Remote registered: ${session_id} → ${token.slice(0, 8)}...`);
     return json(res, 200, { token, url: `${baseUrl}/remote/${token}`, expires_at: expiresAt });
@@ -380,7 +380,7 @@ async function handleRequest(req, res) {
   if (statusMatch && method === "GET") {
     const session = _remoteSessions.get(statusMatch[1]);
     if (!session || new Date(session.expiresAt) < new Date()) return json(res, 404, { error: "Session not found or expired" });
-    return json(res, 200, { active: !!session.hostWs, mode: session.mode, clients: session.clients.size, expires_at: session.expiresAt });
+    return json(res, 200, { active: !!session.hostWs, mode: session.mode, clients: session.clients.size, expires_at: session.expiresAt, host_disconnected_at: session.hostDisconnectedAt, pending_messages: session.messageBuffer.length });
   }
 
   // Revoke a remote session
@@ -397,6 +397,70 @@ async function handleRequest(req, res) {
     return json(res, 200, { revoked: true });
   }
 
+  // Update remote session mode
+  if (pathname === "/api/remote/mode" && method === "POST") {
+    let body;
+    try { body = JSON.parse(await readBody(req)); } catch { return json(res, 400, { error: "Invalid JSON" }); }
+    const session = _remoteSessions.get(body.token);
+    if (!session) return json(res, 404, { error: "Session not found" });
+    const validModes = ["view", "chat", "control", "privileged"];
+    if (!validModes.includes(body.mode)) return json(res, 400, { error: "Invalid mode. Use: view, chat, control, privileged" });
+    const prevMode = session.mode;
+    session.mode = body.mode;
+    // Notify all clients of mode change
+    _broadcastToClients(session, { type: "mode_changed", mode: body.mode, previous: prevMode });
+    log(`Remote mode changed: ${body.token.slice(0, 8)}... ${prevMode} → ${body.mode}`);
+    return json(res, 200, { ok: true, mode: body.mode, previous: prevMode });
+  }
+
+  // SSE stream endpoint: client subscribes to events from host
+  const sseMatch = pathname.match(/^\/api\/remote\/stream\/([a-f0-9]+)$/);
+  if (sseMatch && method === "GET") {
+    const token = sseMatch[1];
+    const session = _remoteSessions.get(token);
+    if (!session || new Date(session.expiresAt) < new Date()) return json(res, 410, { error: "Session expired" });
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream", "Cache-Control": "no-cache", Connection: "keep-alive",
+      "Access-Control-Allow-Origin": "*", "X-Accel-Buffering": "no",
+    });
+    res.write(":\n\n"); // comment to establish connection
+    // Register this SSE client
+    if (!session.sseClients) session.sseClients = new Set();
+    session.sseClients.add(res);
+    session.clients.add(res); // count SSE as client
+    log(`Remote SSE client connected: ${token.slice(0, 8)}... (${session.clients.size} client(s))`);
+    if (session.hostWs) _wsSend(session.hostWs, JSON.stringify({ type: "remote_status", clients: session.clients.size }));
+    // Replay conversation history to late-joining client
+    if (session.replayBuffer.length > 0) {
+      for (const msg of session.replayBuffer) _sseSend(res, msg);
+    }
+    // Keepalive comment every 15s
+    const sseKeepAlive = setInterval(() => { try { res.write(":\n\n"); } catch { /* dead */ } }, 15000);
+    req.on("close", () => {
+      clearInterval(sseKeepAlive);
+      session.sseClients?.delete(res);
+      session.clients.delete(res);
+      log(`Remote SSE client disconnected: ${token.slice(0, 8)}... (${session.clients.size} left)`);
+      if (session.hostWs) _wsSend(session.hostWs, JSON.stringify({ type: "remote_status", clients: session.clients.size }));
+    });
+    return;
+  }
+
+  // POST message endpoint: client sends messages to host
+  const sendMatch = pathname.match(/^\/api\/remote\/send\/([a-f0-9]+)$/);
+  if (sendMatch && method === "POST") {
+    const token = sendMatch[1];
+    const session = _remoteSessions.get(token);
+    if (!session || new Date(session.expiresAt) < new Date()) return json(res, 410, { error: "Session expired" });
+    const text = await readBody(req);
+    if (session.hostWs) {
+      _wsSend(session.hostWs, text);
+    } else if (session.messageBuffer.length < 50) {
+      session.messageBuffer.push(text);
+    }
+    return json(res, 200, { ok: true });
+  }
+
   // Serve remote web UI
   const remoteMatch = pathname.match(/^\/remote\/([a-f0-9]+)$/);
   if (remoteMatch && method === "GET") {
@@ -407,9 +471,9 @@ async function handleRequest(req, res) {
       res.end("<html><body style='font-family:system-ui;text-align:center;padding:60px'><h1>Session expired</h1><p>This remote session link is no longer valid.</p></body></html>");
       return;
     }
-    const wsUrl = `${req.headers["x-forwarded-proto"] === "https" ? "wss" : "ws"}://${req.headers.host || "localhost:" + PORT}/ws/remote/${token}`;
+    const baseUrl = `${req.headers["x-forwarded-proto"] || "https"}://${req.headers.host || "localhost:" + PORT}`;
     res.writeHead(200, { "Content-Type": "text/html" });
-    res.end(_remoteClientHtml(wsUrl, session.mode, session.expiresAt));
+    res.end(_remoteClientHtml(baseUrl, token, session.mode, session.expiresAt));
     return;
   }
 
@@ -455,8 +519,9 @@ function _wsSend(socket, data) {
   try { socket.write(Buffer.concat([header, payload])); } catch { /* socket dead */ }
 }
 
-function _wsParseFrames(buf, onMessage) {
+function _wsParseFrames(buf, onMessage, socket) {
   while (buf.length >= 2) {
+    const opcode = buf[0] & 0x0f;
     const masked = (buf[1] & 0x80) !== 0;
     let pLen = buf[1] & 0x7f; let off = 2;
     if (pLen === 126) { if (buf.length < 4) break; pLen = buf.readUInt16BE(2); off = 4; }
@@ -470,130 +535,216 @@ function _wsParseFrames(buf, onMessage) {
       for (let i = 0; i < pLen; i++) payload[i] = buf[off + i] ^ mask[i % 4];
     } else { payload = buf.slice(off, off + pLen); }
     buf = buf.slice(off + pLen);
-    // Check opcode
-    const opcode = buf.length > 0 ? (buf[0] & 0x0f) : 0x1;
     if (opcode === 0x8) return buf; // close frame
+    if (opcode === 0x9) { // ping → send pong
+      if (socket) { const pong = Buffer.alloc(2); pong[0] = 0x8a; pong[1] = 0; try { socket.write(pong); } catch {} }
+      continue;
+    }
+    if (opcode === 0xa) continue; // pong — ignore
     try { onMessage(payload.toString("utf-8")); } catch { /* bad payload */ }
   }
   return buf;
 }
 
+function _wsPing(socket) {
+  const frame = Buffer.alloc(2); frame[0] = 0x89; frame[1] = 0;
+  try { socket.write(frame); } catch { /* socket dead */ }
+}
+
+function _sseSend(res, data) {
+  const str = typeof data === "string" ? data : JSON.stringify(data);
+  try { res.write(`data: ${str}\n\n`); } catch { /* dead */ }
+}
+
+function _broadcastToClients(session, data) {
+  const str = typeof data === "string" ? data : JSON.stringify(data);
+  // Buffer for replay to late-joining clients (cap at 500)
+  session.replayBuffer.push(str);
+  if (session.replayBuffer.length > 500) session.replayBuffer = session.replayBuffer.slice(-500);
+  for (const client of session.clients) {
+    if (session.sseClients?.has(client)) _sseSend(client, str);
+    else _wsSend(client, str);
+  }
+}
+
 // ── Remote Web UI Template ───────────────────────────────────
 
-function _remoteClientHtml(wsUrl, mode, expiresAt) {
+function _remoteClientHtml(baseUrl, token, mode, expiresAt) {
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <title>cloclo remote</title>
 <style>
+  :root { --bg: #1a1b26; --fg: #a9b1d6; --fg-dim: #565f89; --fg-bright: #c0caf5; --cyan: #7dcfff; --blue: #7aa2f7; --green: #9ece6a; --yellow: #e0af68; --red: #f7768e; --magenta: #bb9af7; --border: #292e42; --surface: #1f2335; --input-bg: #16161e; }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif; background: #0d1117; color: #c9d1d9; height: 100dvh; display: flex; flex-direction: column; }
-  #header { padding: 12px 16px; background: #161b22; border-bottom: 1px solid #30363d; display: flex; align-items: center; gap: 12px; flex-shrink: 0; }
-  #header h1 { font-size: 16px; color: #58a6ff; font-weight: 600; }
-  #status { font-size: 12px; padding: 2px 8px; border-radius: 12px; }
-  .connected { background: #1b4332; color: #2dd4bf; }
-  .disconnected { background: #3b1818; color: #f87171; }
-  .connecting { background: #3b3518; color: #fbbf24; }
-  #expiry { font-size: 12px; color: #8b949e; margin-left: auto; }
-  #messages { flex: 1; overflow-y: auto; padding: 16px; display: flex; flex-direction: column; gap: 12px; }
-  .msg { padding: 10px 14px; border-radius: 12px; max-width: 85%; line-height: 1.5; white-space: pre-wrap; word-break: break-word; font-size: 14px; }
-  .msg.user { background: #1f6feb; color: #fff; align-self: flex-end; border-bottom-right-radius: 4px; }
-  .msg.assistant { background: #21262d; border: 1px solid #30363d; align-self: flex-start; border-bottom-left-radius: 4px; }
-  .msg.tool { background: #161b22; border: 1px solid #30363d; align-self: flex-start; font-size: 12px; color: #8b949e; font-family: monospace; }
-  .msg.system { background: transparent; color: #8b949e; font-size: 12px; text-align: center; align-self: center; }
-  #input-area { padding: 12px 16px; background: #161b22; border-top: 1px solid #30363d; display: flex; gap: 8px; flex-shrink: 0; }
-  #prompt { flex: 1; background: #0d1117; border: 1px solid #30363d; color: #c9d1d9; padding: 10px 14px; border-radius: 8px; font-size: 14px; font-family: inherit; outline: none; resize: none; }
-  #prompt:focus { border-color: #58a6ff; }
-  #send { background: #238636; color: #fff; border: none; padding: 10px 20px; border-radius: 8px; font-size: 14px; cursor: pointer; font-weight: 500; }
-  #send:hover { background: #2ea043; }
-  #send:disabled { opacity: 0.5; cursor: not-allowed; }
-  #mode { font-size: 11px; color: #8b949e; padding: 2px 6px; background: #21262d; border-radius: 4px; }
+  body { font-family: 'SF Mono', 'Fira Code', 'JetBrains Mono', 'Cascadia Code', Menlo, Monaco, Consolas, monospace; background: var(--bg); color: var(--fg); height: 100dvh; display: flex; flex-direction: column; font-size: 13px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+
+  /* ── Status bar (top) ── */
+  #statusbar { padding: 6px 12px; background: var(--surface); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 4px; flex-shrink: 0; font-size: 12px; overflow-x: auto; white-space: nowrap; }
+  #statusbar .sep { color: var(--fg-dim); margin: 0 4px; }
+  #statusbar .label { color: var(--fg-dim); }
+  #statusbar .val-cyan { color: var(--cyan); }
+  #statusbar .val-green { color: var(--green); }
+  #statusbar .val-yellow { color: var(--yellow); }
+  #statusbar .val-red { color: var(--red); }
+  #statusbar .val-magenta { color: var(--magenta); }
+
+  /* ── Output area ── */
+  #output { flex: 1; overflow-y: auto; padding: 8px 12px; display: flex; flex-direction: column; gap: 2px; }
+  #output::-webkit-scrollbar { width: 6px; }
+  #output::-webkit-scrollbar-track { background: transparent; }
+  #output::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
+
+  /* Terminal-style message blocks */
+  .line { white-space: pre-wrap; word-break: break-word; padding: 1px 0; }
+  .line.user-prompt { color: var(--cyan); font-weight: 600; padding: 8px 0 2px; }
+  .line.user-prompt::before { content: "> "; color: var(--cyan); }
+  .line.assistant { color: var(--fg-bright); }
+  .line.tool-call { color: var(--fg-dim); font-size: 12px; padding: 4px 8px; margin: 4px 0; border-left: 2px solid var(--border); background: var(--surface); }
+  .line.tool-result { color: var(--fg-dim); font-size: 11px; padding: 2px 8px; border-left: 2px solid var(--border); }
+  .line.tool-result.error { border-left-color: var(--red); color: var(--red); }
+  .line.system-msg { color: var(--fg-dim); font-size: 11px; font-style: italic; padding: 2px 0; }
+  .line.system-msg.warn { color: var(--yellow); }
+  .line.system-msg.ok { color: var(--green); }
+  .line.system-msg.err { color: var(--red); }
+  .line.stats { color: var(--fg-dim); font-size: 11px; padding: 4px 0 8px; }
+
+  /* ── Input area ── */
+  #input-area { padding: 8px 12px; background: var(--surface); border-top: 1px solid var(--border); display: flex; gap: 8px; flex-shrink: 0; align-items: flex-end; }
+  #input-area .prompt-icon { color: var(--cyan); font-weight: 700; padding: 8px 0; flex-shrink: 0; }
+  #prompt { flex: 1; background: var(--input-bg); border: 1px solid var(--border); color: var(--fg-bright); padding: 8px 10px; border-radius: 4px; font-size: 13px; font-family: inherit; outline: none; resize: none; line-height: 1.5; max-height: 120px; }
+  #prompt:focus { border-color: var(--blue); }
+  #prompt::placeholder { color: var(--fg-dim); }
+  #send { background: var(--blue); color: var(--bg); border: none; padding: 8px 14px; border-radius: 4px; font-size: 12px; cursor: pointer; font-weight: 600; font-family: inherit; flex-shrink: 0; }
+  #send:hover { background: var(--cyan); }
+  #send:active { transform: scale(0.97); }
+  #send:disabled { opacity: 0.3; cursor: not-allowed; }
 </style>
 </head>
 <body>
-<div id="header">
-  <h1>cloclo</h1>
-  <span id="mode">${mode}</span>
-  <span id="status" class="connecting">connecting...</span>
-  <span id="expiry"></span>
+<!-- Status bar like Ink UI -->
+<div id="statusbar">
+  <span class="val-cyan">cloclo</span>
+  <span class="sep">|</span>
+  <span class="label">mode:</span><span id="mode-val" class="val-yellow">${mode}</span>
+  <span class="sep">|</span>
+  <span id="conn-status" class="val-yellow">connecting</span>
+  <span class="sep">|</span>
+  <span id="expiry" class="label"></span>
 </div>
-<div id="messages"></div>
+
+<!-- Terminal output -->
+<div id="output"></div>
+
+<!-- Input -->
 <div id="input-area">
-  <textarea id="prompt" rows="1" placeholder="Type a message..." ${mode === "view" ? "disabled" : ""}></textarea>
+  <span class="prompt-icon">></span>
+  <textarea id="prompt" rows="1" placeholder="${mode === "view" ? "view-only mode" : "Send a message..."}" ${mode === "view" ? "disabled" : ""}></textarea>
   <button id="send" ${mode === "view" ? "disabled" : ""}>Send</button>
 </div>
+
 <script>
-const WS_URL = "${wsUrl}";
+const BASE = "${baseUrl}";
+const TOKEN = "${token}";
+const STREAM = BASE + "/api/remote/stream/" + TOKEN;
+const SEND = BASE + "/api/remote/send/" + TOKEN;
 const EXPIRES = "${expiresAt}";
-let ws, currentAssistant = null, reconnectTimer = null;
+let evtSrc = null, curAsst = null, reconnTimer = null;
 
 function connect() {
-  document.getElementById("status").textContent = "connecting...";
-  document.getElementById("status").className = "connecting";
-  ws = new WebSocket(WS_URL);
-  ws.onopen = () => {
-    document.getElementById("status").textContent = "connected";
-    document.getElementById("status").className = "connected";
-    addMsg("system", "Connected to remote session");
-  };
-  ws.onclose = () => {
-    document.getElementById("status").textContent = "disconnected";
-    document.getElementById("status").className = "disconnected";
-    reconnectTimer = setTimeout(connect, 3000);
-  };
-  ws.onerror = () => {};
-  ws.onmessage = (e) => {
-    try {
-      const msg = JSON.parse(e.data);
-      if (msg.type === "stream" && msg.event_type === "text_delta") {
-        if (!currentAssistant) { currentAssistant = addMsg("assistant", ""); }
-        currentAssistant.textContent += msg.data?.text || "";
-        scrollBottom();
-      } else if (msg.type === "tool_use") {
-        addMsg("tool", "\\u2699 " + msg.name + " " + JSON.stringify(msg.input || {}).slice(0, 200));
-      } else if (msg.type === "response") {
-        currentAssistant = null;
-      } else if (msg.type === "error") {
-        addMsg("system", "\\u26a0 " + (msg.message || msg.error || "Error"));
-      }
-    } catch {}
+  if (reconnTimer) { clearTimeout(reconnTimer); reconnTimer = null; }
+  if (evtSrc) { try { evtSrc.close(); } catch {} }
+  setStatus("connecting", "yellow");
+  evtSrc = new EventSource(STREAM);
+  evtSrc.onopen = () => setStatus("connected", "green");
+  evtSrc.onerror = () => { setStatus("disconnected", "red"); evtSrc.close(); reconnTimer = setTimeout(connect, 3000); };
+  evtSrc.onmessage = (e) => {
+    try { handleMsg(JSON.parse(e.data)); } catch {}
   };
 }
 
-function addMsg(role, text) {
-  const el = document.createElement("div");
-  el.className = "msg " + role;
+function handleMsg(msg) {
+  if (msg.type === "stream" && msg.event_type === "text_delta") {
+    if (!curAsst) curAsst = addLine("assistant", "");
+    curAsst.textContent += msg.data?.text || "";
+    scroll();
+  } else if (msg.type === "tool_use") {
+    curAsst = null;
+    const inp = JSON.stringify(msg.input || {}).slice(0, 300);
+    addLine("tool-call", "[" + msg.name + "] " + inp);
+  } else if (msg.type === "tool_result") {
+    addLine("tool-result" + (msg.is_error ? " error" : ""), msg.is_error ? "[Error]" : "[Done]");
+  } else if (msg.type === "response") {
+    curAsst = null;
+  } else if (msg.type === "error") {
+    addLine("system-msg err", msg.message || msg.error || "Error");
+  } else if (msg.type === "permission_denied") {
+    addLine("system-msg err", "Permission denied: " + (msg.reason || "blocked"));
+  } else if (msg.type === "approval_pending") {
+    addLine("system-msg warn", "Waiting for host approval: " + (msg.toolName || "action") + "...");
+  } else if (msg.type === "approval_resolved") {
+    addLine("system-msg " + (msg.approved ? "ok" : "err"), msg.approved ? "Approved" : "Denied" + (msg.reason ? ": " + msg.reason : ""));
+  } else if (msg.type === "mode_changed") {
+    document.getElementById("mode-val").textContent = msg.mode;
+    addLine("system-msg", "mode -> " + msg.mode);
+    const v = msg.mode === "view";
+    document.getElementById("prompt").disabled = v;
+    document.getElementById("send").disabled = v;
+    document.getElementById("prompt").placeholder = v ? "view-only mode" : "Send a message...";
+  } else if (msg.type === "host_disconnected") {
+    addLine("system-msg warn", "Host disconnected. Waiting for reconnect...");
+    setStatus("host offline", "yellow");
+  } else if (msg.type === "host_reconnected") {
+    addLine("system-msg ok", "Host reconnected");
+    setStatus("connected", "green");
+  }
+}
+
+function setStatus(text, color) {
+  const el = document.getElementById("conn-status");
   el.textContent = text;
-  document.getElementById("messages").appendChild(el);
-  scrollBottom();
+  el.className = "val-" + color;
+}
+
+function addLine(cls, text) {
+  const el = document.createElement("div");
+  el.className = "line " + cls;
+  el.textContent = text;
+  document.getElementById("output").appendChild(el);
+  scroll();
   return el;
 }
 
-function scrollBottom() { const m = document.getElementById("messages"); m.scrollTop = m.scrollHeight; }
+function scroll() { const o = document.getElementById("output"); o.scrollTop = o.scrollHeight; }
 
 function send() {
   const input = document.getElementById("prompt");
   const text = input.value.trim();
-  if (!text || !ws || ws.readyState !== 1) return;
-  addMsg("user", text);
-  ws.send(JSON.stringify({ type: "message", content: text }));
+  if (!text) return;
+  addLine("user-prompt", text);
   input.value = "";
-  currentAssistant = null;
+  input.style.height = "auto";
+  curAsst = null;
+  fetch(SEND, { method: "POST", headers: {"Content-Type":"application/json"}, body: JSON.stringify({ type: "message", content: text }) }).catch(() => {});
 }
 
 document.getElementById("send").onclick = send;
 document.getElementById("prompt").onkeydown = (e) => {
   if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); send(); }
 };
+// Auto-resize textarea
+document.getElementById("prompt").oninput = function() {
+  this.style.height = "auto";
+  this.style.height = Math.min(this.scrollHeight, 120) + "px";
+};
 
-// Expiry countdown
 setInterval(() => {
   const left = new Date(EXPIRES) - new Date();
   if (left <= 0) { document.getElementById("expiry").textContent = "expired"; return; }
   const m = Math.floor(left / 60000);
-  document.getElementById("expiry").textContent = m + "m left";
+  document.getElementById("expiry").textContent = m + "m";
 }, 10000);
 
 connect();
@@ -642,10 +793,20 @@ server.on("upgrade", (req, socket, head) => {
   let buf = Buffer.alloc(0);
 
   if (role === "host") {
+    const isReconnect = session.hostDisconnectedAt !== null;
     session.hostWs = socket;
-    log(`Remote host connected: ${token.slice(0, 8)}...`);
+    session.hostDisconnectedAt = null;
+    log(`Remote host ${isReconnect ? "re" : ""}connected: ${token.slice(0, 8)}...`);
     // Send pending client count
     _wsSend(socket, { type: "remote_status", clients: session.clients.size });
+    // On reconnect, flush buffered messages
+    if (isReconnect && session.messageBuffer.length > 0) {
+      log(`Flushing ${session.messageBuffer.length} buffered messages to host`);
+      for (const buffered of session.messageBuffer) _wsSend(socket, buffered);
+      session.messageBuffer = [];
+      // Notify clients host is back
+      _broadcastToClients(session, { type: "host_reconnected" });
+    }
   } else {
     session.clients.add(socket);
     log(`Remote client connected: ${token.slice(0, 8)}... (${session.clients.size} client(s))`);
@@ -655,28 +816,40 @@ server.on("upgrade", (req, socket, head) => {
     socket._lastMessage = 0;
   }
 
+  // Keepalive ping every 25s to prevent Cloud Run / proxy idle timeout
+  const pingInterval = setInterval(() => _wsPing(socket), 25000);
+
   socket.on("data", (chunk) => {
     buf = Buffer.concat([buf, chunk]);
     buf = _wsParseFrames(buf, (text) => {
       if (role === "host") {
-        // Host → broadcast to all clients
-        for (const client of session.clients) _wsSend(client, text);
+        // Host → broadcast to all clients (WS + SSE)
+        _broadcastToClients(session, text);
       } else {
+        // Ignore application-level keepalive pings from browser clients
+        try { if (JSON.parse(text).type === "ping") return; } catch { /* not JSON */ }
         // Client → forward to host (rate limited: 1 msg/sec)
         const now = Date.now();
         if (now - (socket._lastMessage || 0) < 1000) return; // rate limit
         socket._lastMessage = now;
-        if (session.hostWs) _wsSend(session.hostWs, text);
+        if (session.hostWs) {
+          _wsSend(session.hostWs, text);
+        } else if (session.messageBuffer.length < 50) {
+          // Buffer messages while host is disconnected (max 50)
+          session.messageBuffer.push(text);
+        }
       }
-    });
+    }, socket);
   });
 
   socket.on("close", () => {
+    clearInterval(pingInterval);
     if (role === "host") {
       session.hostWs = null;
+      session.hostDisconnectedAt = new Date().toISOString();
       log(`Remote host disconnected: ${token.slice(0, 8)}...`);
-      // Notify clients
-      for (const client of session.clients) _wsSend(client, { type: "error", message: "Host disconnected" });
+      // Notify clients (not error — host may reconnect)
+      _broadcastToClients(session, { type: "host_disconnected" });
     } else {
       session.clients.delete(socket);
       log(`Remote client disconnected: ${token.slice(0, 8)}... (${session.clients.size} left)`);

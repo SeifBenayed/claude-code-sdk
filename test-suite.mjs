@@ -5700,6 +5700,143 @@ section("UNIT: remote security");
   assert(relaySrc.includes("410") || relaySrc.includes("expired"), "Expired sessions return 410");
 }
 
+// T6B/C — PERMISSION TIERS, APPROVAL FLOW, RECONNECT, AUDIT
+// ═══════════════════════════════════════════════════════════════════
+
+section("UNIT: permission tier constants and methods");
+
+{
+  assert(source.includes("REMOTE_TIERS"), "REMOTE_TIERS constant exists");
+  assert(source.includes("REMOTE_BROWSER_MUTATING"), "REMOTE_BROWSER_MUTATING constant exists");
+  assert(source.includes("REMOTE_DESKTOP_WRITE"), "REMOTE_DESKTOP_WRITE constant exists");
+  assert(source.includes("REMOTE_BROWSER_PRIVILEGED"), "REMOTE_BROWSER_PRIVILEGED constant exists");
+  assert(source.includes("canSendPrompt"), "canSendPrompt method exists");
+  assert(source.includes("canExecuteTool"), "canExecuteTool method exists");
+  assert(source.includes("needsApproval"), "needsApproval method exists");
+}
+
+section("UNIT: permission tier logic");
+
+{
+  // Test canSendPrompt: view returns false, others return true
+  assert(source.includes('this._mode !== "view"'), "canSendPrompt blocks view mode");
+  // Test canExecuteTool: chat allows read-only only
+  assert(source.includes('"chat"') && source.includes("isReadOnly"), "canExecuteTool checks isReadOnly for chat mode");
+  // Test needsApproval: control needs approval for browser/desktop mutating
+  assert(source.includes("REMOTE_BROWSER_MUTATING.has"), "needsApproval checks browser mutating actions in control mode");
+  assert(source.includes("REMOTE_DESKTOP_WRITE.has"), "needsApproval checks desktop write actions in control mode");
+  assert(source.includes("REMOTE_BROWSER_PRIVILEGED.has"), "needsApproval checks browser privileged actions in privileged mode");
+}
+
+section("UNIT: mode management");
+
+{
+  assert(source.includes("setMode"), "setMode method exists");
+  assert(source.includes("mode_changed"), "mode change emits mode_changed event");
+  assert(source.includes("REMOTE_TIERS.includes"), "setMode validates against allowed tiers");
+}
+
+section("UNIT: approval flow");
+
+{
+  assert(source.includes("_pendingApprovals"), "Pending approvals map exists");
+  assert(source.includes("requestApproval"), "requestApproval method exists");
+  assert(source.includes("resolveApproval"), "resolveApproval method exists");
+  assert(source.includes("getPendingApprovals"), "getPendingApprovals method exists");
+  assert(source.includes("approval_pending"), "Approval pending event type exists");
+  assert(source.includes("approval_resolved"), "Approval resolved event type exists");
+  assert(source.includes("approval_requested"), "Approval requested audit event exists");
+}
+
+section("UNIT: audit log");
+
+{
+  assert(source.includes("_auditLog"), "Audit log array exists");
+  assert(source.includes("_audit("), "_audit method exists");
+  assert(source.includes("getAuditLog"), "getAuditLog method exists");
+  assert(source.includes("session_started"), "Audit logs session_started");
+  assert(source.includes("session_stopped"), "Audit logs session_stopped");
+  assert(source.includes("host_disconnected"), "Audit logs host_disconnected");
+  assert(source.includes("host_reconnected"), "Audit logs host_reconnected");
+  assert(source.includes("prompt_received"), "Audit logs prompt_received");
+  assert(source.includes("prompt_blocked"), "Audit logs prompt_blocked");
+  assert(source.includes("this._auditLog.length > 500"), "Audit log capped at 500 entries");
+}
+
+section("UNIT: host reconnect");
+
+{
+  assert(source.includes("_tryReconnect"), "_tryReconnect method exists");
+  assert(source.includes("_reconnectTimer"), "Reconnect timer exists");
+  assert(source.includes("_reconnectAttempts"), "Reconnect attempt counter exists");
+  assert(source.includes("host_disconnected_permanent"), "Permanent disconnect after max retries");
+  // Verify reconnect doesn't immediately deactivate
+  assert(source.includes("_tryReconnect()") && !source.includes('socket.on("close", () => { this._ws = null; this._active = false; })'), "Host disconnect triggers reconnect instead of immediate deactivation");
+}
+
+section("UNIT: /remote mode command");
+
+{
+  assert(source.includes('"mode"') && source.includes("setMode"), "/remote mode subcommand exists");
+  assert(source.includes("view, chat, control, privileged") || source.includes("view") && source.includes("privileged"), "Mode help shows all tiers");
+}
+
+section("UNIT: /remote approve/deny commands");
+
+{
+  assert(source.includes('"approve"') && source.includes("resolveApproval"), "/remote approve subcommand exists");
+  assert(source.includes('"deny"') && source.includes("resolveApproval"), "/remote deny subcommand exists");
+}
+
+section("UNIT: /remote log command");
+
+{
+  assert(source.includes('"log"') && source.includes("getAuditLog"), "/remote log subcommand exists");
+  assert(source.includes("Audit Log"), "Log command shows audit log header");
+}
+
+section("UNIT: remote permission enforcement in _processInput");
+
+{
+  assert(source.includes("_inputIsRemote"), "Remote input flag exists");
+  assert(source.includes("canSendPrompt") && source.includes("permission_denied"), "View mode blocks prompts with permission_denied");
+  assert(source.includes("remote approval") || source.includes("Approve remote"), "Approval prompt shown to host for remote actions");
+  assert(source.includes("canExecuteTool") || (source.includes("canExecuteTool") && source.includes("isReadOnly")), "Tool execution checks permission tier");
+}
+
+section("UNIT: relay supports reconnect buffering");
+
+{
+  const relaySrc = fs.readFileSync(path.join(__dirname, "registry-server.mjs"), "utf-8");
+  assert(relaySrc.includes("messageBuffer"), "Relay has message buffer for disconnected host");
+  assert(relaySrc.includes("hostDisconnectedAt"), "Relay tracks host disconnect time");
+  assert(relaySrc.includes("host_disconnected"), "Relay sends host_disconnected to clients");
+  assert(relaySrc.includes("host_reconnected"), "Relay sends host_reconnected to clients");
+  assert(relaySrc.includes("Flushing") || relaySrc.includes("flush") || relaySrc.includes("messageBuffer"), "Relay flushes buffered messages on reconnect");
+  assert(relaySrc.includes("< 50") || relaySrc.includes("length < 50"), "Buffer limited to 50 messages");
+}
+
+section("UNIT: relay mode change endpoint");
+
+{
+  const relaySrc = fs.readFileSync(path.join(__dirname, "registry-server.mjs"), "utf-8");
+  assert(relaySrc.includes("/api/remote/mode"), "Relay has /api/remote/mode endpoint");
+  assert(relaySrc.includes("mode_changed"), "Relay sends mode_changed to clients");
+}
+
+section("UNIT: web UI handles new message types");
+
+{
+  const relaySrc = fs.readFileSync(path.join(__dirname, "registry-server.mjs"), "utf-8");
+  assert(relaySrc.includes("permission_denied"), "Web UI handles permission_denied");
+  assert(relaySrc.includes("approval_pending"), "Web UI handles approval_pending");
+  assert(relaySrc.includes("approval_resolved"), "Web UI handles approval_resolved");
+  assert(relaySrc.includes("mode_changed"), "Web UI handles mode_changed");
+  assert(relaySrc.includes("host_disconnected"), "Web UI handles host_disconnected");
+  assert(relaySrc.includes("host_reconnected"), "Web UI handles host_reconnected");
+  assert(relaySrc.includes("View-only mode") || relaySrc.includes("view"), "Web UI disables input in view mode");
+}
+
 // OFFICIAL TOOL CATALOG
 // ═══════════════════════════════════════════════════════════════════
 

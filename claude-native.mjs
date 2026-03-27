@@ -9040,14 +9040,25 @@ class SlashCommandRegistry {
 
 // ── Remote Session Manager ────────────────────────────────────────────────
 
+// Permission tier constants for remote sessions
+const REMOTE_TIERS = ["view", "chat", "control", "privileged"];
+const REMOTE_BROWSER_MUTATING = new Set(["Browser_click", "Browser_type", "Browser_fill", "Browser_select", "Browser_navigate", "Browser_submit", "Browser_upload"]);
+const REMOTE_DESKTOP_WRITE = new Set(["Write", "Edit", "Bash", "NotebookEdit"]);
+const REMOTE_BROWSER_PRIVILEGED = new Set(["Bash", "Write"]);
+
 class RemoteSessionManager {
   constructor() {
     this._relayUrl = process.env.CLOCLO_RELAY_URL || process.env.CLOCLO_REGISTRY_URL || "https://cloclo-registry-799190737906.europe-west1.run.app";
     this._token = null; this._url = null; this._expiresAt = null; this._mode = null;
     this._ws = null; this._active = false; this._clients = 0;
+    this._pendingApprovals = new Map(); // id → { resolve, reject, toolName, input, requestedAt }
+    this._auditLog = []; // { ts, event, ... }
+    this._inputIsRemote = false;
+    this._reconnectTimer = null;
+    this._reconnectAttempts = 0;
   }
 
-  async start(sessionId, mode = "chat", expiryMinutes = 60) {
+  async start(sessionId, mode = "control", expiryMinutes = 60) {
     // Register with relay
     const body = JSON.stringify({ session_id: sessionId, mode, expiry_minutes: expiryMinutes });
     const resp = await new Promise((resolve, reject) => {
@@ -9061,6 +9072,7 @@ class RemoteSessionManager {
     // Connect outbound WS to relay as host
     await this._connectRelay();
     this._active = true;
+    this._audit("session_started", { sessionId, mode, token: this._token.slice(0, 8) });
     return { token: this._token, url: this._url, expiresAt: this._expiresAt };
   }
 
@@ -9077,6 +9089,11 @@ class RemoteSessionManager {
       });
     } catch { /* best effort */ }
     if (this._ws) { try { this._ws.destroy(); } catch { /* already closed */ } this._ws = null; }
+    this._audit("session_stopped");
+    if (this._reconnectTimer) { clearTimeout(this._reconnectTimer); this._reconnectTimer = null; }
+    // Deny all pending approvals
+    for (const [id, p] of this._pendingApprovals) { p.resolve(false); }
+    this._pendingApprovals.clear();
     this._active = false; this._token = null; this._url = null;
   }
 
@@ -9101,6 +9118,77 @@ class RemoteSessionManager {
     try { this._ws.write(Buffer.concat([header, mask, masked])); } catch { /* ws dead */ }
   }
 
+  // ── Permission Tiers ──────────────────────────────────────────
+  canSendPrompt() { return this._mode !== "view"; }
+
+  canExecuteTool(toolName, isReadOnly = false) {
+    if (this._mode === "view") return false;
+    if (this._mode === "chat") return isReadOnly;
+    return true; // control and privileged can execute
+  }
+
+  needsApproval(toolName) {
+    if (this._mode === "control") {
+      return REMOTE_BROWSER_MUTATING.has(toolName) || REMOTE_DESKTOP_WRITE.has(toolName);
+    }
+    if (this._mode === "privileged") {
+      return REMOTE_BROWSER_PRIVILEGED.has(toolName);
+    }
+    return false;
+  }
+
+  setMode(mode) {
+    if (!REMOTE_TIERS.includes(mode)) return false;
+    const prev = this._mode;
+    this._mode = mode;
+    this._audit("mode_changed", { from: prev, to: mode });
+    this.emit({ type: "mode_changed", mode });
+    return true;
+  }
+
+  // ── Approval Flow ─────────────────────────────────────────────
+  requestApproval(toolName, input) {
+    const id = Math.random().toString(36).slice(2, 10);
+    this._audit("approval_requested", { id, toolName, mode: this._mode });
+    this.emit({ type: "approval_pending", id, toolName });
+    return new Promise((resolve, reject) => {
+      this._pendingApprovals.set(id, { resolve, reject, toolName, input, requestedAt: Date.now() });
+      // Auto-deny after 5 minutes
+      setTimeout(() => {
+        if (this._pendingApprovals.has(id)) {
+          this._pendingApprovals.delete(id);
+          this._audit("approval_resolved", { id, approved: false, reason: "timeout" });
+          this.emit({ type: "approval_resolved", id, approved: false, reason: "Approval timed out" });
+          resolve(false);
+        }
+      }, 300000);
+    });
+  }
+
+  resolveApproval(id, approved, reason = "") {
+    const pending = this._pendingApprovals.get(id);
+    if (!pending) return false;
+    this._pendingApprovals.delete(id);
+    this._audit("approval_resolved", { id, approved, reason });
+    this.emit({ type: "approval_resolved", id, approved, reason });
+    pending.resolve(approved);
+    return true;
+  }
+
+  getPendingApprovals() {
+    return Array.from(this._pendingApprovals.entries()).map(([id, p]) => ({ id, toolName: p.toolName, requestedAt: p.requestedAt }));
+  }
+
+  // ── Audit Log ─────────────────────────────────────────────────
+  _audit(event, details = {}) {
+    this._auditLog.push({ ts: new Date().toISOString(), event, ...details });
+    if (this._auditLog.length > 500) this._auditLog = this._auditLog.slice(-500);
+  }
+
+  getAuditLog(count = 20) {
+    return this._auditLog.slice(-count);
+  }
+
   _connectRelay() {
     return new Promise((resolve, reject) => {
       const wsUrl = this._relayUrl.replace(/^http/, "ws") + "/ws/remote/" + this._token;
@@ -9114,19 +9202,36 @@ class RemoteSessionManager {
         socket.on("data", (chunk) => {
           buf = Buffer.concat([buf, chunk]);
           while (buf.length >= 2) {
+            const opcode = buf[0] & 0x0f;
             const pLen = buf[1] & 0x7f; let off = 2, len = pLen;
             if (pLen === 126) { if (buf.length < 4) break; len = buf.readUInt16BE(2); off = 4; }
             else if (pLen === 127) { if (buf.length < 10) break; len = Number(buf.readBigUInt64BE(2)); off = 10; }
             if (buf.length < off + len) break;
-            const payload = buf.slice(off, off + len).toString("utf-8"); buf = buf.slice(off + len);
+            const payload = buf.slice(off, off + len); buf = buf.slice(off + len);
+            if (opcode === 0x9) { // ping → respond with masked pong
+              const pongMask = Buffer.from([0,0,0,0]);
+              const pong = Buffer.alloc(6); pong[0] = 0x8a; pong[1] = 0x80;
+              pong.set(pongMask, 2);
+              try { socket.write(pong); } catch { /* socket dead */ }
+              continue;
+            }
+            if (opcode === 0xa || opcode === 0x8) continue; // pong or close
             try {
-              const msg = JSON.parse(payload);
+              const msg = JSON.parse(payload.toString("utf-8"));
               if (msg.type === "remote_status") { this._clients = msg.clients; }
               else if (this._onRemoteMessage) { this._onRemoteMessage(msg); }
             } catch { /* non-JSON */ }
           }
         });
-        socket.on("close", () => { this._ws = null; this._active = false; });
+        socket.on("close", () => {
+          this._ws = null;
+          this._audit("host_disconnected");
+          // Grace period: try to reconnect instead of deactivating immediately
+          if (this._active && this._token) {
+            this._reconnectAttempts = 0;
+            this._tryReconnect();
+          }
+        });
         socket.on("error", () => { this._ws = null; });
         resolve();
       });
@@ -9134,6 +9239,27 @@ class RemoteSessionManager {
       req.setTimeout(10000, () => { req.destroy(); reject(new Error("WS relay timeout")); });
       req.end();
     });
+  }
+
+  _tryReconnect() {
+    if (!this._token || !this._active) return;
+    if (this._reconnectAttempts >= 6) { // ~5 min with backoff
+      this._active = false;
+      this._audit("host_disconnected_permanent");
+      return;
+    }
+    const delay = Math.min(5000 * Math.pow(1.5, this._reconnectAttempts), 60000);
+    this._reconnectTimer = setTimeout(async () => {
+      this._reconnectAttempts++;
+      try {
+        await this._connectRelay();
+        this._reconnectAttempts = 0;
+        this._audit("host_reconnected");
+        this.emit({ type: "host_reconnected" });
+      } catch {
+        this._tryReconnect();
+      }
+    }, delay);
   }
 
   _onRemoteMessage = null; // set by InteractiveMode
@@ -9774,7 +9900,7 @@ class InteractiveMode {
       handler: async (args) => { await toolCatalog(args.join(" ") || "*"); } });
 
     // Remote session
-    s.register({ name: "remote", description: "Remote session access", argumentHint: "[status|stop|renew]",
+    s.register({ name: "remote", description: "Remote session access", argumentHint: "[status|stop|renew|mode|approve|deny|log]",
       handler: async (args) => {
         const sub = args[0];
         const mgr = _getRemoteManager();
@@ -9784,8 +9910,24 @@ class InteractiveMode {
             const sessionId = self.sessionManager?.currentSessionId() || "session-" + Date.now();
             const result = await mgr.start(sessionId);
             // Wire remote input to processInput
-            mgr._onRemoteMessage = (msg) => { if (msg.type === "message" && msg.content) { process.stderr.write(`\n\x1b[36m[remote]\x1b[0m ${msg.content.slice(0, 80)}\n`); self._processInput(msg.content); } };
-            process.stderr.write(`\n  \x1b[32mRemote session ready\x1b[0m\n  Link:    ${result.url}\n  Mode:    chat\n  Expires: ${new Date(result.expiresAt).toLocaleTimeString()}\n\n`);
+            mgr._onRemoteMessage = (msg) => {
+              if (msg.type === "message" && msg.content) {
+                if (!mgr.canSendPrompt()) {
+                  mgr._audit("prompt_blocked", { reason: "view mode" });
+                  mgr.emit({ type: "permission_denied", reason: "View mode: prompts are read-only" });
+                  return;
+                }
+                mgr._audit("prompt_received", { prompt: msg.content.slice(0, 100) });
+                mgr._inputIsRemote = true;
+                process.stderr.write(`\n\x1b[36m[remote]\x1b[0m ${msg.content.slice(0, 80)}\n`);
+                self._processInput(msg.content).finally(() => { mgr._inputIsRemote = false; });
+              } else if (msg.type === "remote_status") {
+                mgr._clients = msg.clients;
+                mgr._audit(msg.clients > (mgr._prevClients || 0) ? "client_connected" : "client_disconnected", { count: msg.clients });
+                mgr._prevClients = msg.clients;
+              }
+            };
+            process.stderr.write(`\n  \x1b[32mRemote session ready\x1b[0m\n  Link:    ${result.url}\n  Mode:    ${mgr._mode}\n  Expires: ${new Date(result.expiresAt).toLocaleTimeString()}\n\n`);
           } catch (e) { process.stderr.write(`\x1b[31mRemote failed:\x1b[0m ${e.message}\n`); }
         } else if (sub === "status") {
           const s = await mgr.status();
@@ -9799,9 +9941,65 @@ class InteractiveMode {
           await mgr.stop();
           const sessionId = self.sessionManager?.currentSessionId() || "session-" + Date.now();
           const result = await mgr.start(sessionId);
-          mgr._onRemoteMessage = (msg) => { if (msg.type === "message" && msg.content) { process.stderr.write(`\n\x1b[36m[remote]\x1b[0m ${msg.content.slice(0, 80)}\n`); self._processInput(msg.content); } };
+          mgr._onRemoteMessage = (msg) => {
+              if (msg.type === "message" && msg.content) {
+                if (!mgr.canSendPrompt()) {
+                  mgr._audit("prompt_blocked", { reason: "view mode" });
+                  mgr.emit({ type: "permission_denied", reason: "View mode: prompts are read-only" });
+                  return;
+                }
+                mgr._audit("prompt_received", { prompt: msg.content.slice(0, 100) });
+                mgr._inputIsRemote = true;
+                process.stderr.write(`\n\x1b[36m[remote]\x1b[0m ${msg.content.slice(0, 80)}\n`);
+                self._processInput(msg.content).finally(() => { mgr._inputIsRemote = false; });
+              } else if (msg.type === "remote_status") {
+                mgr._clients = msg.clients;
+                mgr._audit(msg.clients > (mgr._prevClients || 0) ? "client_connected" : "client_disconnected", { count: msg.clients });
+                mgr._prevClients = msg.clients;
+              }
+            };
           process.stderr.write(`\n  \x1b[32mRemote renewed\x1b[0m\n  Link:    ${result.url}\n  Expires: ${new Date(result.expiresAt).toLocaleTimeString()}\n\n`);
-        } else { process.stderr.write("Usage: /remote [status|stop|renew]\n"); }
+        } else if (sub === "mode") {
+          if (!mgr.isActive()) { process.stderr.write("  No active remote session.\n"); return; }
+          const tier = args[1];
+          if (!tier) { process.stderr.write(`  Current mode: ${mgr._mode}\n  Tiers: view, chat, control, privileged\n`); return; }
+          if (mgr.setMode(tier)) {
+            process.stderr.write(`  Mode changed to: ${tier}\n`);
+          } else {
+            process.stderr.write(`  Invalid mode. Use: view, chat, control, privileged\n`);
+          }
+        } else if (sub === "approve") {
+          const pending = mgr.getPendingApprovals();
+          if (pending.length === 0) { process.stderr.write("  No pending approvals.\n"); return; }
+          const id = args[1] || pending[0].id;
+          if (mgr.resolveApproval(id, true)) {
+            process.stderr.write(`  Approved: ${id}\n`);
+          } else {
+            process.stderr.write(`  Approval not found: ${id}\n`);
+          }
+        } else if (sub === "deny") {
+          const pending = mgr.getPendingApprovals();
+          if (pending.length === 0) { process.stderr.write("  No pending approvals.\n"); return; }
+          const id = args[1] || pending[0].id;
+          const reason = args.slice(2).join(" ") || "denied by host";
+          if (mgr.resolveApproval(id, false, reason)) {
+            process.stderr.write(`  Denied: ${id}\n`);
+          } else {
+            process.stderr.write(`  Approval not found: ${id}\n`);
+          }
+        } else if (sub === "log") {
+          if (!mgr.isActive()) { process.stderr.write("  No active remote session.\n"); return; }
+          const count = parseInt(args[1], 10) || 20;
+          const events = mgr.getAuditLog(count);
+          if (events.length === 0) { process.stderr.write("  No audit events.\n"); return; }
+          process.stderr.write(`\n  \x1b[1mAudit Log (last ${events.length})\x1b[0m\n`);
+          for (const e of events) {
+            const ts = e.ts.slice(11, 19);
+            const details = Object.entries(e).filter(([k]) => k !== "ts" && k !== "event").map(([k, v]) => `${k}=${v}`).join(" ");
+            process.stderr.write(`  \x1b[2m${ts}\x1b[0m ${e.event} ${details}\n`);
+          }
+          process.stderr.write("\n");
+        } else { process.stderr.write("Usage: /remote [status|stop|renew|mode|approve|deny|log]\n"); }
       } });
 
     // Doctor — basic installation health check
@@ -10318,6 +10516,30 @@ class InteractiveMode {
       },
       onInteractivePermission: (block, message) => {
         return new Promise((resolve) => {
+          // Remote permission enforcement: if input came from remote, check tier
+          if (remote && remote._inputIsRemote) {
+            const isReadOnly = block.name === "Read" || block.name === "Glob" || block.name === "Grep" || block.name === "WebSearch" || block.name === "WebFetch";
+            if (!remote.canExecuteTool(block.name, isReadOnly)) {
+              remote._audit("prompt_blocked", { reason: `${remote._mode} mode cannot execute ${block.name}` });
+              remote.emit({ type: "permission_denied", reason: `${block.name} blocked in ${remote._mode} mode` });
+              resolve(false);
+              return;
+            }
+            if (remote.needsApproval(block.name)) {
+              process.stderr.write(`\n\x1b[33m[remote approval] ${block.name} in ${remote._mode} mode\x1b[0m\n`);
+              process.stderr.write(`\x1b[33mApprove remote action? (y/n): \x1b[0m`);
+              const rl = createInterface({ input: process.stdin, output: process.stderr });
+              rl.question("", (answer) => {
+                rl.close();
+                const a = answer.trim().toLowerCase();
+                const approved = a === "y" || a === "yes";
+                remote._audit("approval_resolved", { toolName: block.name, approved });
+                if (!approved) remote.emit({ type: "permission_denied", reason: `${block.name} denied by host` });
+                resolve(approved);
+              });
+              return;
+            }
+          }
           const inputStr = JSON.stringify(block.input).substring(0, 100);
           process.stderr.write(`\n\x1b[33m${message}\x1b[0m\n`);
           process.stderr.write(`\x1b[2m  ${block.name}: ${inputStr}\x1b[0m\n`);
