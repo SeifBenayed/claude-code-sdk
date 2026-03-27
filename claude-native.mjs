@@ -127,7 +127,8 @@ async function parseArgs(argv = process.argv.slice(2)) {
     else if (sub === "test") { cfg._subcommand = "tool-test"; cfg._toolTestName = argv[2]; if (!cfg._toolTestName) { process.stderr.write("Error: tool test requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
     else if (sub === "install") { cfg._subcommand = "tool-install"; cfg._toolInstallSource = argv[2]; if (!cfg._toolInstallSource) { process.stderr.write("Error: tool install requires a path\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
     else if (sub === "remove") { cfg._subcommand = "tool-remove"; cfg._toolRemoveName = argv[2]; if (!cfg._toolRemoveName) { process.stderr.write("Error: tool remove requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
-    else { process.stderr.write(`Error: Unknown tool subcommand "${sub || ""}"\n  Available: list, info, enable, disable, test, install, remove\n`); process.exit(EXIT.BAD_ARGS); }
+    else if (sub === "catalog") { cfg._subcommand = "tool-catalog"; cfg._toolCatalogQuery = argv.slice(2).join(" ") || "*"; cfg.interactive = false; return cfg; }
+    else { process.stderr.write(`Error: Unknown tool subcommand "${sub || ""}"\n  Available: list, info, enable, disable, test, install, remove, catalog\n`); process.exit(EXIT.BAD_ARGS); }
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -1805,6 +1806,30 @@ function toolInfo(cfg, registry, name) {
   if (PROTECTED_TOOLS.has(name)) process.stderr.write(`  Protected:   yes (cannot be disabled)\n`);
   if (name.startsWith("mcp__")) { const parts = name.split("__"); process.stderr.write(`  MCP server:  ${parts[1]}\n`); }
   if (tool.definition.input_schema?.properties) { const params = Object.keys(tool.definition.input_schema.properties); const required = tool.definition.input_schema.required || []; process.stderr.write(`  Parameters:  ${params.map(p => required.includes(p) ? p : p + "?").join(", ")}\n`); }
+  // Type-specific fields from TOOL.json on disk
+  try {
+    const toolJsonPath = path.join(CUSTOM_TOOLS_DIR, name, "TOOL.json");
+    if (fs.existsSync(toolJsonPath)) {
+      const td = JSON.parse(fs.readFileSync(toolJsonPath, "utf-8"));
+      if (td.type === "cli") {
+        process.stderr.write(`  Binary:      ${td.binary}\n`);
+        if (td.parse_mode) process.stderr.write(`  Parse mode:  ${td.parse_mode}\n`);
+        if (td.read_only !== undefined) process.stderr.write(`  Read-only:   ${td.read_only ? "yes" : "no"}\n`);
+        if (Array.isArray(td.env) && td.env.length > 0) process.stderr.write(`  Env required:${td.env.map(v => " " + v + (process.env[v] ? " ✓" : " ✗")).join(",")}\n`);
+        if (td.healthcheck) process.stderr.write(`  Healthcheck: ${td.healthcheck.join(" ")}\n`);
+        if (td.install_hint) process.stderr.write(`  Install:     ${td.install_hint}\n`);
+      }
+      if (td.type === "http") {
+        process.stderr.write(`  URL:         ${td.url}\n`);
+        process.stderr.write(`  Method:      ${td.method}\n`);
+        if (td.timeout) process.stderr.write(`  Timeout:     ${td.timeout}ms\n`);
+        if (td.auth_env) process.stderr.write(`  Auth env:    ${td.auth_env}${process.env[td.auth_env] ? " ✓" : " ✗"}\n`);
+        if (td.healthcheck_url) process.stderr.write(`  Healthcheck: ${td.healthcheck_url}\n`);
+        if (td.error_map) process.stderr.write(`  Error map:   ${Object.keys(td.error_map).join(", ")}\n`);
+        if (td.read_only !== undefined) process.stderr.write(`  Read-only:   ${td.read_only ? "yes" : "no"}\n`);
+      }
+    }
+  } catch { /* no TOOL.json on disk — skip type-specific fields */ }
   if (entry.source) process.stderr.write(`  Source:      ${entry.source}\n`);
   if (entry.backend) process.stderr.write(`  Backend:     ${entry.backend}\n`);
   if (entry.model) process.stderr.write(`  Model:       ${entry.model}\n`);
@@ -1833,6 +1858,63 @@ async function toolTest(cfg, registry, name) {
   if (!name) { process.stderr.write("Usage: cloclo tool test <name>\n"); return; } if (!registry?.has(name)) { process.stderr.write(`Tool not found: ${name}\n`); return; }
   const tool = registry._tools.get(name); process.stderr.write(`Testing ${name}...\n`);
   if (!tool.executor) { process.stderr.write(`  \x1b[32m✓\x1b[0m Registered${name.startsWith("mcp__") ? ` (MCP: ${name.split("__")[1]})` : " (external)"}\n`); return; }
+
+  // Type-specific testing for custom tools
+  try {
+    const toolJsonPath = path.join(CUSTOM_TOOLS_DIR, name, "TOOL.json");
+    if (fs.existsSync(toolJsonPath)) {
+      const td = JSON.parse(fs.readFileSync(toolJsonPath, "utf-8"));
+
+      if (td.type === "cli") {
+        // 1. Check binary — auto-install if missing
+        const toolDir = path.join(CUSTOM_TOOLS_DIR, name);
+        const installResult = await _autoInstallBinary(td.binary, td.install_hint, toolDir, registry);
+        if (installResult.error) { process.stderr.write(`  \x1b[31m✗\x1b[0m ${installResult.error}\n`); return; }
+        process.stderr.write(`  \x1b[32m✓\x1b[0m Binary found: ${installResult.path}${installResult.installed ? " (just installed)" : ""}\n`);
+        // 2. Check env vars
+        const missing = _checkRequiredEnvVars(td);
+        if (missing.length > 0) { process.stderr.write(`  \x1b[33m!\x1b[0m Missing env vars: ${missing.join(", ")}\n`); }
+        else if (Array.isArray(td.env) && td.env.length > 0) { process.stderr.write(`  \x1b[32m✓\x1b[0m Env vars present\n`); }
+        // 3. Healthcheck
+        if (td.healthcheck) {
+          try { execSync(td.healthcheck.join(" "), { encoding: "utf-8", timeout: 5000, stdio: "pipe" }); process.stderr.write(`  \x1b[32m✓\x1b[0m Healthcheck passed: ${td.healthcheck.join(" ")}\n`); }
+          catch (e) { process.stderr.write(`  \x1b[31m✗\x1b[0m Healthcheck failed: ${(e.stderr || e.message).trim().slice(0, 100)}\n`); }
+        }
+        return;
+      }
+
+      if (td.type === "http") {
+        // 1. Check env vars
+        const missing = _checkRequiredEnvVars(td);
+        if (missing.length > 0) { process.stderr.write(`  \x1b[33m!\x1b[0m Missing env vars: ${missing.join(", ")}\n`); }
+        else { process.stderr.write(`  \x1b[32m✓\x1b[0m Env vars OK\n`); }
+        // 2. Healthcheck URL
+        if (td.healthcheck_url) {
+          try {
+            await new Promise((resolve, reject) => {
+              const parsed = new URL(td.healthcheck_url);
+              const mod = parsed.protocol === "https:" ? _https : _http;
+              const req = mod.get(td.healthcheck_url, { timeout: 5000, headers: { "User-Agent": "cloclo-tool-test/1.0" } }, (res) => {
+                res.resume();
+                if (res.statusCode < 500) { process.stderr.write(`  \x1b[32m✓\x1b[0m Healthcheck reachable: ${td.healthcheck_url} (${res.statusCode})\n`); resolve(); }
+                else { process.stderr.write(`  \x1b[31m✗\x1b[0m Healthcheck error: ${td.healthcheck_url} (${res.statusCode})\n`); resolve(); }
+              });
+              req.on("error", (e) => {
+                if (e.code === "ECONNREFUSED") process.stderr.write(`  \x1b[31m✗\x1b[0m Healthcheck unreachable: ${td.healthcheck_url} (connection refused)\n`);
+                else if (e.code === "ENOTFOUND") process.stderr.write(`  \x1b[31m✗\x1b[0m Healthcheck unreachable: ${td.healthcheck_url} (DNS not found)\n`);
+                else process.stderr.write(`  \x1b[31m✗\x1b[0m Healthcheck error: ${e.message}\n`);
+                resolve();
+              });
+              req.on("timeout", () => { req.destroy(); process.stderr.write(`  \x1b[31m✗\x1b[0m Healthcheck timed out: ${td.healthcheck_url}\n`); resolve(); });
+            });
+          } catch { /* handled above */ }
+        } else { process.stderr.write(`  \x1b[2m○\x1b[0m No healthcheck_url configured\n`); }
+        return;
+      }
+    }
+  } catch { /* not a custom tool with TOOL.json — fall through to generic test */ }
+
+  // Generic test for builtins
   const testInputs = { Bash: { command: "echo ok", timeout: 5000 }, Read: { file_path: "/dev/null" }, Glob: { pattern: "*.nonexistent-cloclo-test" }, Grep: { pattern: "cloclo-nonexistent-test", path: "/dev/null" }, WebFetch: null, WebSearch: null };
   const input = testInputs[name]; if (input === null) { process.stderr.write(`  \x1b[32m✓\x1b[0m Registered\n  \x1b[2m○\x1b[0m Skipped (requires external input)\n`); return; }
   if (input === undefined && !tool.deferred) { process.stderr.write(`  \x1b[32m✓\x1b[0m Registered\n  \x1b[2m○\x1b[0m No safe test input defined\n`); return; }
@@ -1852,9 +1934,14 @@ function _validateToolJson(toolDef) {
   if (!toolDef.name || typeof toolDef.name !== "string") errors.push("'name' is required (string)");
   if (toolDef.name && !/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(toolDef.name)) errors.push("'name' must start with letter, alphanumeric/hyphens/underscores");
   if (!toolDef.description) errors.push("'description' is required");
-  if (!["shell", "http", "ai"].includes(toolDef.type)) errors.push("'type' must be one of: shell, http, ai");
+  if (!["shell", "cli", "http", "ai"].includes(toolDef.type)) errors.push("'type' must be one of: shell, cli, http, ai");
   if (!toolDef.input_schema || typeof toolDef.input_schema !== "object") errors.push("'input_schema' is required (object)");
   if (toolDef.type === "shell") { if (!toolDef.command) errors.push("shell tools require 'command'"); if (toolDef.read_only === undefined) errors.push("shell tools must declare 'read_only' (true/false)"); }
+  if (toolDef.type === "cli") {
+    if (!toolDef.binary) errors.push("cli tools require 'binary' (path to executable)");
+    if (!["json", "text", "lines"].includes(toolDef.parse_mode || "text")) errors.push("cli parse_mode must be one of: json, text, lines");
+    if (toolDef.read_only === undefined) errors.push("cli tools must declare 'read_only' (true/false)");
+  }
   if (toolDef.type === "http") { if (!toolDef.url) errors.push("http tools require 'url'"); if (!toolDef.method) errors.push("http tools require 'method'"); if (!toolDef.timeout) errors.push("http tools require 'timeout'"); }
   if (toolDef.type === "ai") { if (!toolDef.task) errors.push("ai tools require 'task'"); if (!toolDef.model) errors.push("ai tools require 'model'");
     const validBackends = ["provider", "ollama", "openai-compatible", "transformers"];
@@ -1866,9 +1953,194 @@ function _validateToolJson(toolDef) {
   return errors;
 }
 
+// ── Env var interpolation for tool definitions ────────────────
+function _interpolateEnvVars(str) {
+  if (typeof str !== "string") return str;
+  return str.replace(/\$\{([A-Z_][A-Z0-9_]*)\}/g, (_, name) => {
+    const val = process.env[name];
+    if (val === undefined) throw new Error(`Required env var ${name} is not set`);
+    return val;
+  });
+}
+
+function _checkRequiredEnvVars(toolDef) {
+  const missing = [];
+  // Check env array (cli tools)
+  if (Array.isArray(toolDef.env)) { for (const v of toolDef.env) { if (!process.env[v]) missing.push(v); } }
+  // Check auth_env (http tools)
+  if (toolDef.auth_env && !process.env[toolDef.auth_env]) missing.push(toolDef.auth_env);
+  // Check ${VAR} in headers
+  if (toolDef.headers) { for (const val of Object.values(toolDef.headers)) { const matches = String(val).match(/\$\{([A-Z_][A-Z0-9_]*)\}/g) || []; for (const m of matches) { const name = m.slice(2, -1); if (!process.env[name]) missing.push(name); } } }
+  return missing;
+}
+
+function _resolveBinary(binary, toolDir) {
+  // Relative paths (./script.sh) resolve from the tool's directory
+  if (binary.startsWith("./") || binary.startsWith("../")) {
+    if (binary.includes("..")) throw new Error(`Binary path must not escape tool directory: ${binary}`);
+    const resolved = toolDir ? path.resolve(toolDir, binary) : path.resolve(binary);
+    return resolved;
+  }
+  // Absolute paths used as-is
+  if (path.isAbsolute(binary)) return binary;
+  // Bare names: resolve via PATH
+  try { return execSync(`which ${binary}`, { encoding: "utf-8", timeout: 5000 }).trim(); } catch { return null; }
+}
+
+// ── Binary auto-install + discovery ───────────────────────────
+
+// ── Binary auto-install via discovery ─────────────────────────
+// Flow: which → install_hint → WebSearch discovery → install → verify
+
+async function _discoverInstallCommand(binary, registry) {
+  // Use WebSearch (if available in registry) to find the install command dynamically
+  const platform = process.platform === "darwin" ? "macOS" : process.platform === "linux" ? "Linux" : process.platform;
+  const query = `install ${binary} CLI ${platform} terminal command`;
+  // Try WebSearch tool if registry is available
+  if (registry?.has("WebSearch")) {
+    try {
+      const result = await registry.execute("WebSearch", { query, max_results: 3 });
+      if (result && !result.is_error && result.content) {
+        // Extract install command from search results
+        const text = typeof result.content === "string" ? result.content : JSON.stringify(result.content);
+        // Look for common install patterns
+        const patterns = [
+          /(?:^|\n)\s*(brew install\s+\S+)/m,
+          /(?:^|\n)\s*(npm install -g\s+\S+)/m,
+          /(?:^|\n)\s*(pip install\s+\S+)/m,
+          /(?:^|\n)\s*(sudo apt(?:-get)? install(?:\s+-y)?\s+\S+)/m,
+          /(?:^|\n)\s*(curl\s+-[fsSL]+\s+\S+\s*\|\s*(?:ba)?sh)/m,
+          /(?:^|\n)\s*(cargo install\s+\S+)/m,
+          /(?:^|\n)\s*(go install\s+\S+)/m,
+        ];
+        for (const pat of patterns) {
+          const m = text.match(pat);
+          if (m) return m[1].trim();
+        }
+      }
+    } catch { /* WebSearch not available or failed */ }
+  }
+  // Fallback: try common package managers directly (fast, no network)
+  if (process.platform === "darwin") {
+    try { execSync(`brew info ${binary} 2>/dev/null`, { encoding: "utf-8", timeout: 8000, stdio: "pipe" }); return `brew install ${binary}`; } catch { /* not in brew */ }
+  }
+  try { execSync(`npm view ${binary} name 2>/dev/null`, { encoding: "utf-8", timeout: 8000, stdio: "pipe" }); return `npm install -g ${binary}`; } catch { /* not in npm */ }
+  return null;
+}
+
+async function _autoInstallBinary(binary, installHint, toolDir, registry) {
+  // 1. Already installed?
+  const existing = _resolveBinary(binary, toolDir);
+  if (existing && fs.existsSync(existing)) return { installed: false, path: existing };
+
+  // 2. Determine install command: hint > discovery
+  const installCmd = installHint || await _discoverInstallCommand(binary, registry);
+  if (!installCmd) return { installed: false, path: null, error: `Binary not found: ${binary}. No install_hint provided and discovery found nothing. Add "install_hint" to TOOL.json.` };
+
+  // 3. Install
+  process.stderr.write(`  \x1b[33m↓\x1b[0m Binary "${binary}" not found. Installing via: ${installCmd}\n`);
+  try {
+    execSync(installCmd, { encoding: "utf-8", timeout: 120000, stdio: ["pipe", "pipe", "pipe"] });
+  } catch (e) {
+    return { installed: false, path: null, error: `Install failed: ${installCmd}\n${(e.stderr || e.message).slice(0, 300)}` };
+  }
+
+  // 4. Verify
+  const resolved = _resolveBinary(binary, toolDir);
+  if (resolved && fs.existsSync(resolved)) {
+    process.stderr.write(`  \x1b[32m✓\x1b[0m Installed: ${resolved}\n`);
+    return { installed: true, path: resolved };
+  }
+  return { installed: false, path: null, error: `Install ran but binary still not found: ${binary}` };
+}
+
 function _createShellExecutor(toolDef) { const timeout = toolDef.timeout || 30000; return async (input) => { let cmd = toolDef.command; cmd = cmd.replace(/\$INPUT_JSON/g, JSON.stringify(input)); for (const [k, v] of Object.entries(input || {})) cmd = cmd.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), String(v)); try { return { content: execSync(cmd, { encoding: "utf-8", timeout, cwd: toolDef.cwd || process.cwd(), env: { ...process.env, ...(toolDef.env || {}) }, maxBuffer: 10 * 1024 * 1024 }), is_error: false }; } catch (e) { return { content: e.stderr || e.message, is_error: true }; } }; }
 
-function _createHttpExecutor(toolDef) { const timeout = toolDef.timeout || 10000; return async (input) => { const url = toolDef.url.replace(/\$INPUT_JSON/g, encodeURIComponent(JSON.stringify(input))); const body = ["POST","PUT","PATCH"].includes(toolDef.method?.toUpperCase()) ? JSON.stringify(input) : null; const headers = { "Content-Type": "application/json", ...(toolDef.headers || {}) }; return new Promise((resolve) => { const parsed = new URL(url); const mod = parsed.protocol === "https:" ? _https : _http; const req = mod.request({ hostname: parsed.hostname, port: parsed.port, path: parsed.pathname + parsed.search, method: toolDef.method?.toUpperCase() || "GET", headers, timeout }, (res) => { let d = ""; res.on("data", c => d += c); res.on("end", () => resolve(res.statusCode < 400 ? { content: d, is_error: false } : { content: `HTTP ${res.statusCode}: ${d}`, is_error: true })); }); req.on("error", e => resolve({ content: e.message, is_error: true })); req.on("timeout", () => { req.destroy(); resolve({ content: "Request timed out", is_error: true }); }); if (body) req.write(body); req.end(); }); }; }
+// ── CLI executor (type: "cli") ────────────────────────────────
+function _createCliExecutor(toolDef, toolDir) {
+  const timeout = toolDef.timeout || 30000;
+  const parseMode = toolDef.parse_mode || "text";
+  const successCodes = new Set(toolDef.success_exit_codes || [0]);
+  return async (input) => {
+    // Check required env vars
+    const missing = _checkRequiredEnvVars(toolDef);
+    if (missing.length > 0) return { content: `Missing required env vars: ${missing.join(", ")}`, is_error: true };
+    // Resolve binary — auto-install if missing
+    const installResult = await _autoInstallBinary(toolDef.binary, toolDef.install_hint, toolDir, toolDef._registry);
+    if (installResult.error) return { content: installResult.error, is_error: true };
+    const binPath = installResult.path;
+    // Build args from template
+    const args = (toolDef.args_template || []).map(a => {
+      let s = a.replace(/\$INPUT_JSON/g, JSON.stringify(input));
+      for (const [k, v] of Object.entries(input || {})) s = s.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), String(v));
+      return s;
+    });
+    return new Promise((resolve) => {
+      let stdout = "", stderr = "";
+      const child = spawn(binPath, args, { cwd: toolDef.cwd || process.cwd(), env: process.env, timeout, stdio: ["pipe", "pipe", "pipe"] });
+      child.stdout.on("data", c => stdout += c);
+      child.stderr.on("data", c => stderr += c);
+      // Pipe stdin if template defined
+      if (toolDef.stdin_template) {
+        let stdinData = toolDef.stdin_template.replace(/\$INPUT_JSON/g, JSON.stringify(input));
+        for (const [k, v] of Object.entries(input || {})) stdinData = stdinData.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), String(v));
+        child.stdin.write(stdinData);
+        child.stdin.end();
+      } else { child.stdin.end(); }
+      const timer = setTimeout(() => { try { child.kill("SIGTERM"); } catch { /* already dead */ } resolve({ content: `Timeout after ${timeout}ms`, is_error: true }); }, timeout);
+      child.on("close", (code) => {
+        clearTimeout(timer);
+        if (!successCodes.has(code || 0)) {
+          const mapped = toolDef.exit_code_map?.[String(code)];
+          resolve({ content: mapped || `Exit code ${code}${stderr ? ": " + stderr.trim() : ""}`, is_error: true });
+          return;
+        }
+        try {
+          if (parseMode === "json") resolve({ content: JSON.stringify(JSON.parse(stdout.trim()), null, 2), is_error: false });
+          else if (parseMode === "lines") resolve({ content: JSON.stringify(stdout.split("\n").filter(Boolean)), is_error: false });
+          else resolve({ content: stdout, is_error: false });
+        } catch (e) { resolve({ content: `Parse error (${parseMode}): ${e.message}\nRaw output: ${stdout.slice(0, 500)}`, is_error: true }); }
+      });
+      child.on("error", (e) => { clearTimeout(timer); resolve({ content: `Spawn error: ${e.message}`, is_error: true }); });
+    });
+  };
+}
+
+// ── HTTP executor (type: "http" — hardened) ───────────────────
+function _createHttpExecutor(toolDef) {
+  const timeout = toolDef.timeout || 10000;
+  return async (input) => {
+    // Check required env vars before request
+    const missing = _checkRequiredEnvVars(toolDef);
+    if (missing.length > 0) return { content: `Missing required env vars: ${missing.join(", ")}`, is_error: true };
+    // Interpolate ${ENV_VAR} in url and headers
+    let url;
+    try { url = _interpolateEnvVars(toolDef.url).replace(/\$INPUT_JSON/g, encodeURIComponent(JSON.stringify(input))); } catch (e) { return { content: e.message, is_error: true }; }
+    const body = ["POST", "PUT", "PATCH"].includes(toolDef.method?.toUpperCase()) ? JSON.stringify(input) : null;
+    let headers = { "Content-Type": "application/json" };
+    try { for (const [k, v] of Object.entries(toolDef.headers || {})) headers[k] = _interpolateEnvVars(v); } catch (e) { return { content: e.message, is_error: true }; }
+    return new Promise((resolve) => {
+      const parsed = new URL(url);
+      const mod = parsed.protocol === "https:" ? _https : _http;
+      const req = mod.request({ hostname: parsed.hostname, port: parsed.port, path: parsed.pathname + parsed.search, method: toolDef.method?.toUpperCase() || "GET", headers, timeout }, (res) => {
+        let d = ""; res.on("data", c => d += c);
+        res.on("end", () => {
+          if (res.statusCode < 400) { resolve({ content: d, is_error: false }); return; }
+          // Apply error_map if defined
+          const mapped = toolDef.error_map?.[String(res.statusCode)];
+          resolve({ content: mapped ? `HTTP ${res.statusCode}: ${mapped}` : `HTTP ${res.statusCode}: ${d.slice(0, 500)}`, is_error: true });
+        });
+      });
+      req.on("error", e => {
+        if (e.code === "ECONNREFUSED") resolve({ content: `Connection refused: ${url} — is the service running?`, is_error: true });
+        else resolve({ content: `Network error: ${e.message}`, is_error: true });
+      });
+      req.on("timeout", () => { req.destroy(); resolve({ content: `Request timed out after ${timeout}ms`, is_error: true }); });
+      if (body) req.write(body);
+      req.end();
+    });
+  };
+}
 
 function _aiToolRequest(url, body, timeout, extraHeaders) { return new Promise((resolve, reject) => { const parsed = new URL(url); const mod = parsed.protocol === "https:" ? _https : _http; const req = mod.request({ hostname: parsed.hostname, port: parsed.port, path: parsed.pathname + parsed.search, method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), ...(extraHeaders || {}) }, timeout }, (res) => { let d = ""; res.on("data", c => d += c); res.on("end", () => res.statusCode < 400 ? resolve(d) : reject(new Error(`HTTP ${res.statusCode}: ${d.slice(0, 200)}`))); }); req.on("error", reject); req.on("timeout", () => { req.destroy(); reject(new Error("AI tool timed out")); }); req.write(body); req.end(); }); }
 
@@ -1883,7 +2155,9 @@ function _createTransformersExecutor(toolDef) { const timeout = toolDef.timeout 
 
 function _registerCustomTool(registry, toolDef, cfg) {
   let executor;
+  const toolDir = path.join(CUSTOM_TOOLS_DIR, toolDef.name);
   if (toolDef.type === "shell") executor = _createShellExecutor(toolDef);
+  else if (toolDef.type === "cli") { toolDef._registry = registry; executor = _createCliExecutor(toolDef, toolDir); }
   else if (toolDef.type === "http") executor = _createHttpExecutor(toolDef);
   else if (toolDef.type === "ai" && toolDef.backend === "transformers") executor = _createTransformersExecutor(toolDef);
   else if (toolDef.type === "ai" && toolDef.backend === "ollama") executor = _createOllamaExecutor(toolDef);
@@ -1896,11 +2170,13 @@ function _registerCustomTool(registry, toolDef, cfg) {
 function scanCustomTools(registry, cfg) { try { for (const entry of fs.readdirSync(CUSTOM_TOOLS_DIR, { withFileTypes: true })) { if (!entry.isDirectory() || entry.name.startsWith(".")) continue; try { const raw = fs.readFileSync(path.join(CUSTOM_TOOLS_DIR, entry.name, "TOOL.json"), "utf-8"); const toolDef = JSON.parse(raw); if (_validateToolJson(toolDef).length === 0) { _registerCustomTool(registry, toolDef, cfg); log(`Loaded custom tool: ${toolDef.name}`); } } catch { /* skip */ } } } catch { /* no tools dir */ } }
 
 function toolInstall(cfg, source) {
-  if (!source) { process.stderr.write("Usage: cloclo tool install <path>\n"); return; }
+  if (!source) { process.stderr.write("Usage: cloclo tool install <path|official:name>\n"); return; }
+  // Handle official:<name> prefix
+  if (source.startsWith("official:")) { return _installOfficialTool(source.slice(9)); }
   let toolDef; const resolved = path.resolve(source);
   if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) { const jp = path.join(resolved, "TOOL.json"); if (!fs.existsSync(jp)) { process.stderr.write(`Error: No TOOL.json found in ${resolved}\n`); process.exit(EXIT.BAD_ARGS); } toolDef = JSON.parse(fs.readFileSync(jp, "utf-8")); }
   else if (fs.existsSync(resolved) && resolved.endsWith("TOOL.json")) { toolDef = JSON.parse(fs.readFileSync(resolved, "utf-8")); }
-  else { process.stderr.write(`Error: ${source} is not a valid path\n`); process.exit(EXIT.BAD_ARGS); }
+  else { process.stderr.write(`Error: ${source} is not a valid path\n  Tip: use "official:<name>" to install from the official catalog.\n`); process.exit(EXIT.BAD_ARGS); }
   const errors = _validateToolJson(toolDef); if (errors.length > 0) { process.stderr.write(`\x1b[31mInvalid TOOL.json:\x1b[0m\n`); for (const e of errors) process.stderr.write(`  - ${e}\n`); process.exit(EXIT.BAD_ARGS); }
   const targetDir = path.join(CUSTOM_TOOLS_DIR, toolDef.name); fs.mkdirSync(targetDir, { recursive: true });
   const srcDir = fs.statSync(resolved).isDirectory() ? resolved : path.dirname(resolved);
@@ -1914,6 +2190,151 @@ function toolRemove(cfg, name) {
   const toolDir = path.join(CUSTOM_TOOLS_DIR, name); if (!fs.existsSync(path.join(toolDir, "TOOL.json"))) { if (_classifyToolType(name) === "builtin") process.stderr.write(`Cannot remove ${name}: it's a built-in tool. Use 'tool disable' instead.\n`); else process.stderr.write(`Custom tool not found: ${name}\n`); return; }
   fs.rmSync(toolDir, { recursive: true, force: true }); const manifest = _loadToolManifest(); delete manifest.tools[name]; _saveToolManifest(manifest);
   process.stderr.write(`Removed tool: ${name}\n  Restart cloclo to fully unload.\n`);
+}
+
+// ── Official Tool Catalog ─────────────────────────────────────
+//
+// Static, curated catalog of vetted tool definitions. No backend needed.
+// Each entry is a complete TOOL.json. Install via: cloclo tool install official:<name>
+
+const _OFFICIAL_CATALOG = {
+  "github-pr-list": {
+    name: "github-pr-list", type: "cli", description: "List GitHub pull requests from the current repo",
+    binary: "gh", args_template: ["pr", "list", "--json", "number,title,state,author,url"], input_schema: { type: "object", properties: {} },
+    timeout: 15000, read_only: true, parse_mode: "json", healthcheck: ["gh", "--version"], install_hint: "brew install gh",
+    _meta: { category: "devops", author: "cloclo", env_required: [], auth_note: "Requires gh auth login" }
+  },
+  "github-pr-create": {
+    name: "github-pr-create", type: "cli", description: "Create a GitHub pull request",
+    binary: "gh", args_template: ["pr", "create", "--title", "$TITLE", "--body", "$BODY"], input_schema: { type: "object", properties: { title: { type: "string", description: "PR title" }, body: { type: "string", description: "PR description" } }, required: ["title"] },
+    timeout: 30000, read_only: false, parse_mode: "text", healthcheck: ["gh", "--version"], install_hint: "brew install gh",
+    _meta: { category: "devops", author: "cloclo", env_required: [], auth_note: "Requires gh auth login" }
+  },
+  "github-issue-list": {
+    name: "github-issue-list", type: "cli", description: "List GitHub issues from the current repo",
+    binary: "gh", args_template: ["issue", "list", "--json", "number,title,state,author,labels"], input_schema: { type: "object", properties: {} },
+    timeout: 15000, read_only: true, parse_mode: "json", healthcheck: ["gh", "--version"], install_hint: "brew install gh",
+    _meta: { category: "devops", author: "cloclo", env_required: [], auth_note: "Requires gh auth login" }
+  },
+  "docker-ps": {
+    name: "docker-ps", type: "cli", description: "List running Docker containers",
+    binary: "docker", args_template: ["ps", "--format", "json"], input_schema: { type: "object", properties: {} },
+    timeout: 10000, read_only: true, parse_mode: "lines", healthcheck: ["docker", "--version"], install_hint: "brew install docker",
+    _meta: { category: "devops", author: "cloclo", env_required: [], auth_note: "Docker daemon must be running" }
+  },
+  "docker-logs": {
+    name: "docker-logs", type: "cli", description: "Get logs from a Docker container",
+    binary: "docker", args_template: ["logs", "--tail", "100", "$CONTAINER"], input_schema: { type: "object", properties: { container: { type: "string", description: "Container name or ID" } }, required: ["container"] },
+    timeout: 10000, read_only: true, parse_mode: "text", healthcheck: ["docker", "--version"], install_hint: "brew install docker",
+    _meta: { category: "devops", author: "cloclo", env_required: [], auth_note: "Docker daemon must be running" }
+  },
+  "vercel-list": {
+    name: "vercel-list", type: "cli", description: "List Vercel deployments",
+    binary: "vercel", args_template: ["list", "--json"], input_schema: { type: "object", properties: {} },
+    timeout: 15000, read_only: true, parse_mode: "json", healthcheck: ["vercel", "--version"], install_hint: "npm install -g vercel",
+    _meta: { category: "deploy", author: "cloclo", env_required: ["VERCEL_TOKEN"], auth_note: "Set VERCEL_TOKEN or run vercel login" }
+  },
+  "kubectl-pods": {
+    name: "kubectl-pods", type: "cli", description: "List Kubernetes pods",
+    binary: "kubectl", args_template: ["get", "pods", "-o", "json"], input_schema: { type: "object", properties: { namespace: { type: "string", description: "Kubernetes namespace" } } },
+    timeout: 15000, read_only: true, parse_mode: "json", healthcheck: ["kubectl", "version", "--client", "--short"], install_hint: "brew install kubectl",
+    _meta: { category: "devops", author: "cloclo", env_required: [], auth_note: "Requires configured kubeconfig" }
+  },
+  "jq-transform": {
+    name: "jq-transform", type: "cli", description: "Transform JSON using jq expressions",
+    binary: "jq", args_template: ["$EXPRESSION"], stdin_template: "$INPUT_JSON", input_schema: { type: "object", properties: { expression: { type: "string", description: "jq expression (e.g. '.[] | .name')" }, data: { type: "object", description: "JSON data to transform" } }, required: ["expression"] },
+    timeout: 5000, read_only: true, parse_mode: "json", healthcheck: ["jq", "--version"], install_hint: "brew install jq",
+    _meta: { category: "data", author: "cloclo", env_required: [] }
+  },
+  "ripgrep-search": {
+    name: "ripgrep-search", type: "cli", description: "Fast regex search across files using ripgrep",
+    binary: "rg", args_template: ["--json", "$PATTERN"], input_schema: { type: "object", properties: { pattern: { type: "string", description: "Regex pattern to search" }, path: { type: "string", description: "Directory to search in" } }, required: ["pattern"] },
+    timeout: 15000, read_only: true, parse_mode: "lines", healthcheck: ["rg", "--version"], install_hint: "brew install ripgrep",
+    _meta: { category: "search", author: "cloclo", env_required: [] }
+  },
+  "hedi-fraud-check": {
+    name: "hedi-fraud-check", type: "http", description: "Check if a document is suspicious using Hedi fraud detection",
+    method: "POST", url: "https://api.hedi.ai/v1/fraud/check",
+    headers: { "Authorization": "Bearer ${HEDI_API_KEY}", "Content-Type": "application/json" },
+    timeout: 15000, read_only: true, healthcheck_url: "https://api.hedi.ai/health",
+    error_map: { "401": "Auth failed — set HEDI_API_KEY env var", "503": "Hedi service unavailable", "429": "Rate limit exceeded" },
+    input_schema: { type: "object", properties: { document_text: { type: "string", description: "Document text to analyze for fraud" } }, required: ["document_text"] },
+    _meta: { category: "enterprise", author: "hedi", env_required: ["HEDI_API_KEY"], auth_note: "Get API key from https://hedi.ai/dashboard" }
+  },
+  "slack-post": {
+    name: "slack-post", type: "http", description: "Post a message to a Slack channel via webhook",
+    method: "POST", url: "${SLACK_WEBHOOK_URL}",
+    headers: { "Content-Type": "application/json" },
+    timeout: 10000, read_only: false,
+    error_map: { "400": "Invalid payload — check message format", "403": "Webhook URL invalid or revoked", "404": "Webhook not found — check SLACK_WEBHOOK_URL" },
+    input_schema: { type: "object", properties: { text: { type: "string", description: "Message text" }, channel: { type: "string", description: "Channel override (optional)" } }, required: ["text"] },
+    _meta: { category: "communication", author: "cloclo", env_required: ["SLACK_WEBHOOK_URL"], auth_note: "Create webhook at https://api.slack.com/messaging/webhooks" }
+  },
+  "system-info": {
+    name: "system-info", type: "cli", description: "Get system information (OS, architecture, hostname)",
+    binary: "uname", args_template: ["-a"], input_schema: { type: "object", properties: {} },
+    timeout: 5000, read_only: true, parse_mode: "text", healthcheck: ["uname", "-s"],
+    _meta: { category: "system", author: "cloclo", env_required: [] }
+  },
+  "ffmpeg-info": {
+    name: "ffmpeg-info", type: "cli", description: "Get media file information using ffprobe",
+    binary: "ffprobe", args_template: ["-v", "quiet", "-print_format", "json", "-show_format", "-show_streams", "$FILE_PATH"],
+    input_schema: { type: "object", properties: { file_path: { type: "string", description: "Path to media file" } }, required: ["file_path"] },
+    timeout: 15000, read_only: true, parse_mode: "json", healthcheck: ["ffprobe", "-version"], install_hint: "brew install ffmpeg",
+    _meta: { category: "media", author: "cloclo", env_required: [] }
+  },
+};
+
+function toolCatalog(query) {
+  const q = (query || "*").toLowerCase();
+  const all = Object.values(_OFFICIAL_CATALOG);
+  const results = q === "*" ? all : all.filter(t => {
+    const searchable = `${t.name} ${t.description} ${t.type} ${t._meta?.category || ""} ${t._meta?.author || ""}`.toLowerCase();
+    return q.split(/\s+/).every(term => searchable.includes(term));
+  });
+  if (results.length === 0) { process.stderr.write(`No tools found matching: "${query}"\n  Available categories: devops, deploy, data, search, enterprise, communication, system, media\n`); return; }
+  const nameW = Math.max(20, ...results.map(t => t.name.length)) + 2;
+  process.stderr.write(`\n  ${"Name".padEnd(nameW)}${"Type".padEnd(8)}${"Category".padEnd(14)}Description\n  ${"─".repeat(nameW)}${"─".repeat(8)}${"─".repeat(14)}${"─".repeat(35)}\n`);
+  for (const t of results) {
+    const tc = t.type === "cli" ? "33" : t.type === "http" ? "35" : "36";
+    process.stderr.write(`  ${t.name.padEnd(nameW)}\x1b[${tc}m${t.type.padEnd(8)}\x1b[0m${(t._meta?.category || "").padEnd(14)}${t.description.slice(0, 50)}\n`);
+  }
+  process.stderr.write(`\n  ${results.length} tool(s) found. Install with: cloclo tool install official:<name>\n\n`);
+}
+
+function _installOfficialTool(name) {
+  const toolDef = _OFFICIAL_CATALOG[name];
+  if (!toolDef) {
+    process.stderr.write(`\x1b[31mOfficial tool not found: ${name}\x1b[0m\n`);
+    // Suggest close matches
+    const suggestions = Object.keys(_OFFICIAL_CATALOG).filter(k => k.includes(name) || name.includes(k.split("-")[0]));
+    if (suggestions.length > 0) process.stderr.write(`  Did you mean: ${suggestions.join(", ")}?\n`);
+    process.stderr.write(`  Run "cloclo tool search ${name}" to browse the catalog.\n`);
+    return;
+  }
+  // Show safety-relevant metadata before installing
+  process.stderr.write(`\n  \x1b[1m${toolDef.name}\x1b[0m — ${toolDef.description}\n`);
+  process.stderr.write(`  Type:       ${toolDef.type}\n`);
+  process.stderr.write(`  Read-only:  ${toolDef.read_only ? "\x1b[32myes\x1b[0m" : "\x1b[33mno (mutating)\x1b[0m"}\n`);
+  if (toolDef.type === "cli") process.stderr.write(`  Binary:     ${toolDef.binary}\n`);
+  if (toolDef.type === "http") process.stderr.write(`  URL:        ${toolDef.url}\n`);
+  if (toolDef._meta?.env_required?.length > 0) process.stderr.write(`  Env needed: ${toolDef._meta.env_required.join(", ")}\n`);
+  if (toolDef._meta?.auth_note) process.stderr.write(`  Auth:       ${toolDef._meta.auth_note}\n`);
+  process.stderr.write(`  Author:     ${toolDef._meta?.author || "cloclo"}\n`);
+  // Check if already installed
+  const targetDir = path.join(CUSTOM_TOOLS_DIR, toolDef.name);
+  if (fs.existsSync(path.join(targetDir, "TOOL.json"))) {
+    process.stderr.write(`  \x1b[33mAlready installed — overwriting.\x1b[0m\n`);
+  }
+  // Strip _meta before writing (internal field)
+  const cleanDef = { ...toolDef }; delete cleanDef._meta;
+  fs.mkdirSync(targetDir, { recursive: true });
+  fs.writeFileSync(path.join(targetDir, "TOOL.json"), JSON.stringify(cleanDef, null, 2));
+  // Update manifest
+  const manifest = _loadToolManifest();
+  manifest.tools[toolDef.name] = { name: toolDef.name, type: toolDef.type, source: "official", installedAt: manifest.tools[toolDef.name]?.installedAt || new Date().toISOString(), updatedAt: new Date().toISOString(), disabled: false };
+  _saveToolManifest(manifest);
+  process.stderr.write(`\n  \x1b[32mInstalled: ${toolDef.name}\x1b[0m\n  Restart cloclo or use /tool list to see it.\n\n`);
 }
 
 // ── Browser Tool Pack (CDP-native, enterprise) ────────────────────────────
@@ -8427,7 +8848,8 @@ class InteractiveMode {
         else if (sub === "test") await toolTest(self.cfg, self.registry, args[1]);
         else if (sub === "install") { toolInstall(self.cfg, args.slice(1).join(" ")); scanCustomTools(self.registry, self.cfg); }
         else if (sub === "remove") { toolRemove(self.cfg, args[1]); if (args[1] && self.registry.has(args[1])) self.registry.unregister(args[1]); }
-        else process.stderr.write("Usage: /tool <subcommand>\n  list, info, enable, disable, test, install, remove\n");
+        else if (sub === "catalog") { toolCatalog(args.slice(1).join(" ") || "*"); }
+        else process.stderr.write("Usage: /tool <subcommand>\n  list, info, enable, disable, test, install, remove, catalog\n");
       } });
 
     // Doctor — basic installation health check
@@ -9635,6 +10057,7 @@ async function main() {
   if (cfg._subcommand === "tool-test") { await toolTest(cfg, registry, cfg._toolTestName); mcpManager.shutdown(); process.exit(0); }
   if (cfg._subcommand === "tool-install") { toolInstall(cfg, cfg._toolInstallSource); process.exit(0); }
   if (cfg._subcommand === "tool-remove") { toolRemove(cfg, cfg._toolRemoveName); process.exit(0); }
+  if (cfg._subcommand === "tool-catalog") { toolCatalog(cfg._toolCatalogQuery); process.exit(0); }
 
   // Mode dispatch
   if (cfg.ndjson) {

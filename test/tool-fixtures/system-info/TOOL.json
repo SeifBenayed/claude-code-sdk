@@ -1,0 +1,12 @@
+{
+  "name": "system-info",
+  "type": "cli",
+  "description": "Get system information",
+  "binary": "uname",
+  "args_template": ["-a"],
+  "input_schema": { "type": "object", "properties": {} },
+  "timeout": 5000,
+  "read_only": true,
+  "parse_mode": "text",
+  "healthcheck": ["uname", "-s"]
+}

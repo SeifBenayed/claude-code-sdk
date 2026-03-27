@@ -1,0 +1,25 @@
+{
+  "name": "hedi-fraud-check",
+  "type": "http",
+  "description": "Check if a document is suspicious using Hedi fraud detection",
+  "method": "POST",
+  "url": "https://hedi.internal/api/fraud/check",
+  "headers": {
+    "Authorization": "Bearer ${HEDI_TOKEN}",
+    "Content-Type": "application/json"
+  },
+  "timeout": 10000,
+  "read_only": true,
+  "healthcheck_url": "https://hedi.internal/health",
+  "error_map": {
+    "401": "Auth failed — set HEDI_TOKEN env var",
+    "503": "Hedi service unavailable"
+  },
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "document_text": { "type": "string", "description": "Document text to analyze" }
+    },
+    "required": ["document_text"]
+  }
+}

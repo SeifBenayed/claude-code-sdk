@@ -1,0 +1,18 @@
+{
+  "name": "claude-code",
+  "type": "cli",
+  "description": "Run Claude Code CLI for AI-assisted coding tasks",
+  "binary": "claude",
+  "args_template": ["--print", "-p", "$PROMPT"],
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "prompt": { "type": "string", "description": "Prompt to send to Claude Code" }
+    },
+    "required": ["prompt"]
+  },
+  "timeout": 60000,
+  "read_only": true,
+  "parse_mode": "text",
+  "healthcheck": ["claude", "--version"]
+}

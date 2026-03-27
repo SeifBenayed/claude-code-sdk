@@ -1,0 +1,18 @@
+{
+  "name": "ramp-cli",
+  "type": "cli",
+  "description": "Ramp CLI for expense management and card controls",
+  "binary": "ramp",
+  "args_template": ["transactions", "list", "--format", "json"],
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "limit": { "type": "integer", "description": "Max transactions to return" }
+    }
+  },
+  "timeout": 15000,
+  "read_only": true,
+  "parse_mode": "json",
+  "env": ["RAMP_API_KEY"],
+  "healthcheck": ["ramp", "--version"]
+}

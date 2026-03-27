@@ -1,0 +1,16 @@
+{
+  "name": "json-echo",
+  "type": "cli",
+  "description": "Echo input as JSON (test fixture)",
+  "binary": "./json-echo.sh",
+  "args_template": ["$INPUT_JSON"],
+  "input_schema": {
+    "type": "object",
+    "properties": {
+      "message": { "type": "string" }
+    }
+  },
+  "timeout": 5000,
+  "read_only": true,
+  "parse_mode": "json"
+}

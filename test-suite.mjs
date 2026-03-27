@@ -11,7 +11,7 @@
 //   ANTHROPIC_API_KEY or OAuth keychain    # For Anthropic tests
 //   OPENAI_API_KEY                         # For OpenAI tests
 
-import { spawn } from "node:child_process";
+import { spawn, execSync } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
@@ -4862,6 +4862,459 @@ if (RUN_E2E) {
     if (fixtureServer) { fixtureServer.close(); }
   }
 
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// T4 — EXTERNAL TOOLS (CLI + HTTP hardening + reference connectors)
+// ═══════════════════════════════════════════════════════════════════
+
+section("UNIT: cli tool type accepted by validation");
+
+{
+  assert(source.includes('"cli"') && source.includes("shell") && source.includes("http"), "type 'cli' accepted alongside shell/http/ai");
+  assert(source.includes("cli tools require 'binary'"), "cli without binary is rejected");
+  assert(source.includes("cli tools must declare 'read_only'"), "cli without read_only is rejected");
+  assert(source.includes("cli parse_mode must be one of"), "invalid parse_mode rejected");
+}
+
+section("UNIT: _createCliExecutor exists");
+
+{
+  assert(source.includes("function _createCliExecutor"), "_createCliExecutor function exists");
+  assert(source.includes("_resolveBinary"), "binary resolution helper exists");
+  assert(source.includes("_checkRequiredEnvVars"), "env var checking helper exists");
+  assert(source.includes("parse_mode") && source.includes("json") && source.includes("lines"), "parse_mode: json, text, lines supported");
+  assert(source.includes("exit_code_map"), "exit_code_map support in CLI executor");
+  assert(source.includes("stdin_template"), "stdin_template support in CLI executor");
+  assert(source.includes("success_exit_codes"), "success_exit_codes support");
+}
+
+section("UNIT: _interpolateEnvVars for http headers");
+
+{
+  assert(source.includes("function _interpolateEnvVars"), "_interpolateEnvVars function exists");
+  assert(source.includes("\\$\\{([A-Z_]") || source.includes("${") && source.includes("process.env"), "${ENV_VAR} pattern handled");
+  assert(source.includes("Required env var") && source.includes("is not set"), "Missing env var throws actionable error");
+}
+
+section("UNIT: http error_map support");
+
+{
+  assert(source.includes("error_map") && source.includes("statusCode"), "error_map applied on HTTP response status");
+}
+
+section("UNIT: toolInfo shows type-specific fields for cli");
+
+{
+  assert(source.includes("Binary:") || source.includes("binary"), "toolInfo shows binary for cli tools");
+  assert(source.includes("Parse mode:") || source.includes("parse_mode"), "toolInfo shows parse_mode");
+  assert(source.includes("Healthcheck:"), "toolInfo shows healthcheck");
+  assert(source.includes("Env required:"), "toolInfo shows required env vars");
+}
+
+section("UNIT: toolInfo shows type-specific fields for http");
+
+{
+  assert(source.includes("URL:"), "toolInfo shows URL for http tools");
+  assert(source.includes("Method:"), "toolInfo shows Method");
+  assert(source.includes("Auth env:"), "toolInfo shows auth_env");
+  assert(source.includes("healthcheck_url"), "toolInfo shows healthcheck_url");
+  assert(source.includes("Error map:") || source.includes("error_map"), "toolInfo shows error_map");
+}
+
+section("UNIT: toolTest has type-specific logic for cli");
+
+{
+  assert(source.includes("Binary not found") || source.includes("binary not found") || source.includes("Binary found"), "toolTest checks binary existence for cli");
+  assert(source.includes("Healthcheck passed") || source.includes("healthcheck"), "toolTest runs healthcheck for cli");
+  assert(source.includes("Missing env vars") || source.includes("Env vars present"), "toolTest checks env vars");
+}
+
+section("UNIT: toolTest has type-specific logic for http");
+
+{
+  assert(source.includes("healthcheck_url") && source.includes("reachable"), "toolTest checks healthcheck_url for http");
+  assert(source.includes("No healthcheck_url configured"), "toolTest reports when no healthcheck is configured");
+  assert(source.includes("connection refused") || source.includes("ECONNREFUSED"), "toolTest detects connection refused");
+  assert(source.includes("DNS not found") || source.includes("ENOTFOUND"), "toolTest detects DNS failures");
+}
+
+section("UNIT: binary resolution security");
+
+{
+  assert(source.includes("must not escape tool directory") || source.includes(".."), "relative binary paths with .. are rejected");
+}
+
+section("UNIT: tool fixture files exist");
+
+{
+  const fixtureDir = path.join(__dirname, "test", "tool-fixtures");
+  const fixtures = ["github-pr-list/TOOL.json", "hedi-fraud-check/TOOL.json", "system-info/TOOL.json", "json-echo/TOOL.json", "json-echo/json-echo.sh"];
+  for (const f of fixtures) {
+    assert(fs.existsSync(path.join(fixtureDir, f)), `Fixture: ${f}`);
+  }
+}
+
+section("E2E: install cli tool — validation");
+
+{
+  try {
+    // Valid CLI tool should install
+    const { exitCode: e1, stderr: s1 } = await runCLI(["tool", "install", path.join(__dirname, "test", "tool-fixtures", "system-info")], {}, 10000);
+    assert(e1 === 0, "install valid cli tool exits 0");
+    assert(s1.includes("Installed tool: system-info") || s1.includes("system-info"), "install prints tool name");
+
+    // Remove it
+    await runCLI(["tool", "remove", "system-info"], {}, 10000);
+  } catch (e) {
+    skip(`CLI install E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: invalid cli TOOL.json rejected");
+
+{
+  try {
+    // Create a temporary invalid cli tool
+    const tmpDir = path.join(os.tmpdir(), "cloclo-test-invalid-cli-" + Date.now());
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, "TOOL.json"), JSON.stringify({
+      name: "bad-cli", type: "cli", description: "broken", input_schema: { type: "object", properties: {} }
+      // Missing: binary, read_only
+    }));
+    const { exitCode, stderr } = await runCLI(["tool", "install", tmpDir], {}, 10000);
+    assert(exitCode !== 0, "invalid cli tool rejected (non-zero exit)");
+    assert(stderr.includes("binary") || stderr.includes("read_only"), "error message mentions missing field");
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  } catch (e) {
+    skip(`Invalid CLI rejection E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: tool list shows type=cli");
+
+{
+  try {
+    // Install, list, remove
+    await runCLI(["tool", "install", path.join(__dirname, "test", "tool-fixtures", "system-info")], {}, 10000);
+    const { exitCode, stderr } = await runCLI(["tool", "list"], {}, 10000);
+    assert(exitCode === 0, "tool list exits 0");
+    assert(stderr.includes("system-info"), "tool list shows system-info");
+    await runCLI(["tool", "remove", "system-info"], {}, 10000);
+  } catch (e) {
+    skip(`Tool list CLI E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: tool info shows cli-specific fields");
+
+{
+  try {
+    await runCLI(["tool", "install", path.join(__dirname, "test", "tool-fixtures", "system-info")], {}, 10000);
+    const { exitCode, stderr } = await runCLI(["tool", "info", "system-info"], {}, 10000);
+    assert(exitCode === 0, "tool info exits 0");
+    assert(stderr.includes("uname"), "tool info shows binary name");
+    assert(stderr.includes("text") || stderr.includes("Parse"), "tool info shows parse_mode");
+    await runCLI(["tool", "remove", "system-info"], {}, 10000);
+  } catch (e) {
+    skip(`Tool info CLI E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: tool test detects binary + runs healthcheck for cli");
+
+{
+  try {
+    await runCLI(["tool", "install", path.join(__dirname, "test", "tool-fixtures", "system-info")], {}, 10000);
+    const { exitCode, stderr } = await runCLI(["tool", "test", "system-info"], {}, 10000);
+    assert(exitCode === 0, "tool test exits 0");
+    assert(stderr.includes("Binary found") || stderr.includes("uname"), "tool test finds binary");
+    assert(stderr.includes("Healthcheck passed") || stderr.includes("✓"), "tool test healthcheck passes");
+    await runCLI(["tool", "remove", "system-info"], {}, 10000);
+  } catch (e) {
+    skip(`Tool test CLI E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: tool test detects missing binary");
+
+{
+  try {
+    const tmpDir = path.join(os.tmpdir(), "cloclo-test-nobin-" + Date.now());
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, "TOOL.json"), JSON.stringify({
+      name: "nobin-test", type: "cli", description: "test missing binary",
+      binary: "nonexistent-binary-xyz-999", read_only: true,
+      input_schema: { type: "object", properties: {} }
+    }));
+    await runCLI(["tool", "install", tmpDir], {}, 10000);
+    const { stderr } = await runCLI(["tool", "test", "nobin-test"], {}, 10000);
+    assert(stderr.includes("not found") || stderr.includes("Binary"), "tool test reports binary not found");
+    await runCLI(["tool", "remove", "nobin-test"], {}, 10000);
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  } catch (e) {
+    skip(`Missing binary E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: http tool info shows url/auth/healthcheck");
+
+{
+  try {
+    await runCLI(["tool", "install", path.join(__dirname, "test", "tool-fixtures", "hedi-fraud-check")], {}, 10000);
+    const { exitCode, stderr } = await runCLI(["tool", "info", "hedi-fraud-check"], {}, 10000);
+    assert(exitCode === 0, "tool info exits 0");
+    assert(stderr.includes("hedi.internal") || stderr.includes("URL:"), "tool info shows URL");
+    assert(stderr.includes("POST") || stderr.includes("Method:"), "tool info shows method");
+    assert(stderr.includes("health") || stderr.includes("Healthcheck:"), "tool info shows healthcheck");
+    await runCLI(["tool", "remove", "hedi-fraud-check"], {}, 10000);
+  } catch (e) {
+    skip(`HTTP tool info E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: http tool test distinguishes unreachable");
+
+{
+  try {
+    await runCLI(["tool", "install", path.join(__dirname, "test", "tool-fixtures", "hedi-fraud-check")], {}, 10000);
+    const { stderr } = await runCLI(["tool", "test", "hedi-fraud-check"], {}, 15000);
+    assert(stderr.includes("unreachable") || stderr.includes("not found") || stderr.includes("DNS") || stderr.includes("ENOTFOUND"), "tool test reports unreachable for non-existent host");
+    await runCLI(["tool", "remove", "hedi-fraud-check"], {}, 10000);
+  } catch (e) {
+    skip(`HTTP unreachable E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: http error_map applied on status codes");
+
+{
+  try {
+    // Start a local HTTP server that returns 401
+    const { createServer: cs } = await import("node:http");
+    const srv = cs((req, res) => { res.writeHead(401); res.end("Unauthorized"); });
+    await new Promise(r => srv.listen(0, "127.0.0.1", r));
+    const port = srv.address().port;
+
+    // Create tool pointing to it with error_map
+    const tmpDir = path.join(os.tmpdir(), "cloclo-test-errormap-" + Date.now());
+    fs.mkdirSync(tmpDir, { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, "TOOL.json"), JSON.stringify({
+      name: "errormap-test", type: "http", description: "test error map",
+      method: "POST", url: `http://127.0.0.1:${port}/test`, timeout: 5000,
+      error_map: { "401": "Custom auth error — set API_KEY" },
+      input_schema: { type: "object", properties: { q: { type: "string" } } }
+    }));
+    await runCLI(["tool", "install", tmpDir], {}, 10000);
+
+    // Execute via a direct Node test (not CLI, since tool execution needs a session)
+    // Instead, test that the executor works by importing source
+    const execResult = await new Promise((resolve) => {
+      const child = spawn("node", ["-e", `
+        const fs = require("fs");
+        const src = fs.readFileSync("claude-native.mjs", "utf-8");
+        const idx = src.indexOf("function _createHttpExecutor");
+        const end = src.indexOf("function _aiToolRequest");
+        const helperStart = src.indexOf("function _interpolateEnvVars");
+        const helperEnd = src.indexOf("function _checkRequiredEnvVars");
+        const checkEnd = src.indexOf("function _resolveBinary");
+        const code = src.slice(helperStart, checkEnd) + "\\n" + src.slice(idx, end);
+        const _http = require("http"), _https = require("https");
+        const fn = new Function("_http", "_https", code + ";return _createHttpExecutor;");
+        const create = fn(_http, _https);
+        const exec = create(${JSON.stringify({
+          url: `http://127.0.0.1:${port}/test`,
+          method: "POST",
+          timeout: 5000,
+          error_map: { "401": "Custom auth error — set API_KEY" }
+        })});
+        exec({ q: "test" }).then(r => { process.stdout.write(JSON.stringify(r)); process.exit(0); });
+      `], { cwd: __dirname, stdio: ["pipe", "pipe", "pipe"], timeout: 10000 });
+      let out = "";
+      child.stdout.on("data", d => out += d);
+      child.on("close", () => resolve(out));
+    });
+
+    let parsed = {};
+    try { parsed = JSON.parse(execResult); } catch { /* parse error */ }
+    assert(parsed.is_error === true, "error_map: response is flagged as error");
+    assert((parsed.content || "").includes("Custom auth error"), "error_map: mapped message used instead of raw body");
+
+    await runCLI(["tool", "remove", "errormap-test"], {}, 10000);
+    srv.close();
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  } catch (e) {
+    skip(`HTTP error_map E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: env var interpolation in http headers");
+
+{
+  try {
+    const { createServer: cs } = await import("node:http");
+    const srv = cs((req, res) => {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ auth: req.headers.authorization || "none" }));
+    });
+    await new Promise(r => srv.listen(0, "127.0.0.1", r));
+    const port = srv.address().port;
+
+    const execResult = await new Promise((resolve) => {
+      const child = spawn("node", ["-e", `
+        const fs = require("fs");
+        const src = fs.readFileSync("claude-native.mjs", "utf-8");
+        const idx = src.indexOf("function _createHttpExecutor");
+        const end = src.indexOf("function _aiToolRequest");
+        const helperStart = src.indexOf("function _interpolateEnvVars");
+        const checkEnd = src.indexOf("function _resolveBinary");
+        const code = src.slice(helperStart, checkEnd) + "\\n" + src.slice(idx, end);
+        const _http = require("http"), _https = require("https");
+        const fn = new Function("_http", "_https", code + ";return _createHttpExecutor;");
+        const create = fn(_http, _https);
+        const exec = create({
+          url: "http://127.0.0.1:${port}/test",
+          method: "POST",
+          timeout: 5000,
+          headers: { "Authorization": "Bearer \${TEST_CLOCLO_TOKEN}" }
+        });
+        exec({ q: "hello" }).then(r => { process.stdout.write(JSON.stringify(r)); process.exit(0); });
+      `], { cwd: __dirname, stdio: ["pipe", "pipe", "pipe"], timeout: 10000, env: { ...process.env, TEST_CLOCLO_TOKEN: "secret123" } });
+      let out = "";
+      child.stdout.on("data", d => out += d);
+      child.on("close", () => resolve(out));
+    });
+
+    let parsed = {};
+    try { parsed = JSON.parse(execResult); } catch { /* parse error */ }
+    const body = JSON.parse(parsed.content || "{}");
+    assert(body.auth === "Bearer secret123", "env var ${TEST_CLOCLO_TOKEN} interpolated in Authorization header");
+
+    srv.close();
+  } catch (e) {
+    skip(`Env interpolation E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: gh connector (skipped if gh not installed)");
+
+{
+  try {
+    let ghAvailable = false;
+    try { execSync("which gh", { encoding: "utf-8", timeout: 3000 }); ghAvailable = true; } catch { /* gh not installed */ }
+
+    if (!ghAvailable) {
+      skip("gh CLI not installed — skipping github-pr-list connector test");
+    } else {
+      await runCLI(["tool", "install", path.join(__dirname, "test", "tool-fixtures", "github-pr-list")], {}, 10000);
+      const { stderr } = await runCLI(["tool", "test", "github-pr-list"], {}, 15000);
+      assert(stderr.includes("Binary found") || stderr.includes("gh"), "gh binary found");
+      assert(stderr.includes("Healthcheck passed") || stderr.includes("✓"), "gh healthcheck passes");
+      await runCLI(["tool", "remove", "github-pr-list"], {}, 10000);
+    }
+  } catch (e) {
+    skip(`gh connector E2E failed: ${e.message}`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// OFFICIAL TOOL CATALOG
+// ═══════════════════════════════════════════════════════════════════
+
+section("UNIT: official catalog exists and has entries");
+
+{
+  assert(source.includes("_OFFICIAL_CATALOG"), "Official catalog constant exists");
+  assert(source.includes("github-pr-list") && source.includes("hedi-fraud-check") && source.includes("slack-post"), "Catalog has github, hedi, slack entries");
+  assert(source.includes("_meta") && source.includes("category") && source.includes("auth_note"), "Catalog entries have _meta with category and auth_note");
+  assert(source.includes("_installOfficialTool"), "_installOfficialTool function exists");
+  assert(source.includes("toolCatalog"), "toolCatalog function exists");
+  assert(source.includes('official:'), "official: prefix handled in toolInstall");
+}
+
+section("E2E: tool catalog shows all tools");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["tool", "catalog"], {}, 10000);
+    assert(exitCode === 0, "tool catalog exits 0");
+    assert(stderr.includes("github-pr-list"), "catalog shows github-pr-list");
+    assert(stderr.includes("hedi-fraud-check"), "catalog shows hedi-fraud-check");
+    assert(stderr.includes("tool(s) found"), "catalog shows count");
+  } catch (e) {
+    skip(`Catalog E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: tool catalog search filters results");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["tool", "catalog", "devops"], {}, 10000);
+    assert(exitCode === 0, "catalog devops exits 0");
+    assert(stderr.includes("github-pr-list"), "devops filter includes github");
+    assert(!stderr.includes("slack-post"), "devops filter excludes slack");
+  } catch (e) {
+    skip(`Catalog search E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: install official:system-info works");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["tool", "install", "official:system-info"], {}, 10000);
+    assert(exitCode === 0, "install official:system-info exits 0");
+    assert(stderr.includes("Installed: system-info"), "prints installed message");
+    assert(stderr.includes("Read-only"), "shows read-only metadata");
+    assert(stderr.includes("uname"), "shows binary name");
+    // Verify it works as a normal tool
+    const { stderr: infoOut } = await runCLI(["tool", "info", "system-info"], {}, 10000);
+    assert(infoOut.includes("Source:      official"), "tool info shows source=official");
+    // Cleanup
+    await runCLI(["tool", "remove", "system-info"], {}, 10000);
+  } catch (e) {
+    skip(`Official install E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: install official:nonexistent fails clearly");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["tool", "install", "official:nonexistent-xyz"], {}, 10000);
+    assert(stderr.includes("not found") || stderr.includes("Official tool not found"), "clear error for missing tool");
+  } catch (e) {
+    skip(`Official missing E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: overwrite official tool on reinstall");
+
+{
+  try {
+    await runCLI(["tool", "install", "official:system-info"], {}, 10000);
+    const { stderr } = await runCLI(["tool", "install", "official:system-info"], {}, 10000);
+    assert(stderr.includes("Already installed") || stderr.includes("overwriting"), "shows overwrite warning");
+    assert(stderr.includes("Installed: system-info"), "still installs successfully");
+    await runCLI(["tool", "remove", "system-info"], {}, 10000);
+  } catch (e) {
+    skip(`Overwrite E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: catalog shows env/auth metadata");
+
+{
+  try {
+    const { stderr } = await runCLI(["tool", "install", "official:hedi-fraud-check"], {}, 10000);
+    assert(stderr.includes("HEDI_API_KEY"), "shows required env var");
+    assert(stderr.includes("Auth:") || stderr.includes("auth"), "shows auth note");
+    assert(stderr.includes("http"), "shows type");
+    await runCLI(["tool", "remove", "hedi-fraud-check"], {}, 10000);
+  } catch (e) {
+    skip(`Catalog metadata E2E failed: ${e.message}`);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════

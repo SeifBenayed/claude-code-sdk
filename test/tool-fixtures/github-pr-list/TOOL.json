@@ -1,0 +1,13 @@
+{
+  "name": "github-pr-list",
+  "type": "cli",
+  "description": "List pull requests from the current GitHub repo",
+  "binary": "gh",
+  "args_template": ["pr", "list", "--json", "number,title,state,author"],
+  "input_schema": { "type": "object", "properties": {} },
+  "timeout": 10000,
+  "read_only": true,
+  "parse_mode": "json",
+  "healthcheck": ["gh", "--version"],
+  "install_hint": "brew install gh"
+}

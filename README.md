@@ -234,6 +234,85 @@ cloclo --mcp-config mcp-servers.json
 }
 ```
 
+## External Tools
+
+Connect external CLIs and HTTP services as first-class tools.
+
+### Installing a tool
+
+```bash
+cloclo tool install ./my-tool/          # directory with TOOL.json
+cloclo tool list                        # shows name, type, state
+cloclo tool info my-tool                # type-specific details
+cloclo tool test my-tool                # binary check + healthcheck
+cloclo tool remove my-tool
+```
+
+### CLI tool (`type: "cli"`)
+
+For real CLI products (gh, vercel, ramp, etc.):
+
+```json
+{
+  "name": "github-pr-list",
+  "type": "cli",
+  "description": "List GitHub pull requests",
+  "binary": "gh",
+  "args_template": ["pr", "list", "--json", "number,title,state"],
+  "input_schema": { "type": "object", "properties": {} },
+  "timeout": 10000,
+  "read_only": true,
+  "parse_mode": "json",
+  "env": ["GITHUB_TOKEN"],
+  "healthcheck": ["gh", "--version"]
+}
+```
+
+**Fields:** `binary` (required), `args_template`, `parse_mode` (json/text/lines), `read_only` (required), `env` (required env vars), `healthcheck` (verify command), `stdin_template`, `exit_code_map`, `success_exit_codes`, `cwd`, `timeout`.
+
+`tool test` checks: binary exists → env vars present → healthcheck passes.
+
+### HTTP service (`type: "http"`)
+
+For REST APIs and enterprise services:
+
+```json
+{
+  "name": "hedi-fraud-check",
+  "type": "http",
+  "description": "Check if a document is suspicious",
+  "method": "POST",
+  "url": "https://hedi.internal/api/fraud/check",
+  "headers": { "Authorization": "Bearer ${HEDI_TOKEN}" },
+  "timeout": 10000,
+  "read_only": true,
+  "healthcheck_url": "https://hedi.internal/health",
+  "error_map": { "401": "Auth failed — set HEDI_TOKEN", "503": "Service down" },
+  "input_schema": {
+    "type": "object",
+    "properties": { "document_text": { "type": "string" } },
+    "required": ["document_text"]
+  }
+}
+```
+
+**Enterprise features:**
+- `${ENV_VAR}` interpolation in headers and URL — missing vars fail loudly
+- `error_map` — map HTTP status codes to actionable messages
+- `healthcheck_url` — reachability check via `tool test`
+- `auth_env` — declare which env var holds the auth token
+
+`tool test` checks: env vars → healthcheck_url reachability (or "No healthcheck configured").
+
+### Conventions
+
+| Product type | Tool type | Example |
+|---|---|---|
+| CLI binary | `cli` | gh, vercel, ramp, kubectl |
+| REST API / service | `http` | Hedi fraud check, KYC, Slack webhook |
+| AI capability | `ai` | sentiment analysis, OCR, summarization |
+| Shell one-liner | `shell` | `grep`, `jq`, custom scripts |
+
 ## Testing
 
 ```bash
