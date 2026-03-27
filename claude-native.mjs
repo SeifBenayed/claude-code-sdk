@@ -8935,6 +8935,10 @@ class InteractiveMode {
         else process.stderr.write("Usage: /tool <subcommand>\n  list, info, enable, disable, test, install, remove, catalog, publish\n");
       } });
 
+    // Catalog shortcut — /catalog [query]
+    s.register({ name: "catalog", description: "Browse the tool marketplace", argumentHint: "[query]",
+      handler: async (args) => { await toolCatalog(args.join(" ") || "*"); } });
+
     // Doctor — basic installation health check
     s.register({ name: "doctor", description: "Diagnose installation and connectivity", immediate: true,
       handler: async () => {
