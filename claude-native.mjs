@@ -128,7 +128,8 @@ async function parseArgs(argv = process.argv.slice(2)) {
     else if (sub === "install") { cfg._subcommand = "tool-install"; cfg._toolInstallSource = argv[2]; if (!cfg._toolInstallSource) { process.stderr.write("Error: tool install requires a path\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
     else if (sub === "remove") { cfg._subcommand = "tool-remove"; cfg._toolRemoveName = argv[2]; if (!cfg._toolRemoveName) { process.stderr.write("Error: tool remove requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
     else if (sub === "catalog") { cfg._subcommand = "tool-catalog"; cfg._toolCatalogQuery = argv.slice(2).join(" ") || "*"; cfg.interactive = false; return cfg; }
-    else { process.stderr.write(`Error: Unknown tool subcommand "${sub || ""}"\n  Available: list, info, enable, disable, test, install, remove, catalog\n`); process.exit(EXIT.BAD_ARGS); }
+    else if (sub === "publish") { cfg._subcommand = "tool-publish"; cfg._toolPublishName = argv[2]; if (!cfg._toolPublishName) { process.stderr.write("Error: tool publish requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
+    else { process.stderr.write(`Error: Unknown tool subcommand "${sub || ""}"\n  Available: list, info, enable, disable, test, install, remove, catalog, publish\n`); process.exit(EXIT.BAD_ARGS); }
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -2169,10 +2170,10 @@ function _registerCustomTool(registry, toolDef, cfg) {
 
 function scanCustomTools(registry, cfg) { try { for (const entry of fs.readdirSync(CUSTOM_TOOLS_DIR, { withFileTypes: true })) { if (!entry.isDirectory() || entry.name.startsWith(".")) continue; try { const raw = fs.readFileSync(path.join(CUSTOM_TOOLS_DIR, entry.name, "TOOL.json"), "utf-8"); const toolDef = JSON.parse(raw); if (_validateToolJson(toolDef).length === 0) { _registerCustomTool(registry, toolDef, cfg); log(`Loaded custom tool: ${toolDef.name}`); } } catch { /* skip */ } } } catch { /* no tools dir */ } }
 
-function toolInstall(cfg, source) {
+async function toolInstall(cfg, source) {
   if (!source) { process.stderr.write("Usage: cloclo tool install <path|official:name>\n"); return; }
   // Handle official:<name> prefix
-  if (source.startsWith("official:")) { return _installOfficialTool(source.slice(9)); }
+  if (source.startsWith("official:")) { return await _installOfficialTool(source.slice(9)); }
   let toolDef; const resolved = path.resolve(source);
   if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) { const jp = path.join(resolved, "TOOL.json"); if (!fs.existsSync(jp)) { process.stderr.write(`Error: No TOOL.json found in ${resolved}\n`); process.exit(EXIT.BAD_ARGS); } toolDef = JSON.parse(fs.readFileSync(jp, "utf-8")); }
   else if (fs.existsSync(resolved) && resolved.endsWith("TOOL.json")) { toolDef = JSON.parse(fs.readFileSync(resolved, "utf-8")); }
@@ -2194,8 +2195,9 @@ function toolRemove(cfg, name) {
 
 // ── Official Tool Catalog ─────────────────────────────────────
 //
-// Static, curated catalog of vetted tool definitions. No backend needed.
-// Each entry is a complete TOOL.json. Install via: cloclo tool install official:<name>
+// Uses the same registry server as skills (CLOCLO_REGISTRY_URL).
+// Falls back to a static embedded catalog if registry is unreachable.
+// Install via: cloclo tool install official:<name>
 
 const _OFFICIAL_CATALOG = {
   "github-pr-list": {
@@ -2285,34 +2287,60 @@ const _OFFICIAL_CATALOG = {
   },
 };
 
-function toolCatalog(query) {
+async function toolCatalog(query) {
   const q = (query || "*").toLowerCase();
-  const all = Object.values(_OFFICIAL_CATALOG);
-  const results = q === "*" ? all : all.filter(t => {
-    const searchable = `${t.name} ${t.description} ${t.type} ${t._meta?.category || ""} ${t._meta?.author || ""}`.toLowerCase();
-    return q.split(/\s+/).every(term => searchable.includes(term));
-  });
-  if (results.length === 0) { process.stderr.write(`No tools found matching: "${query}"\n  Available categories: devops, deploy, data, search, enterprise, communication, system, media\n`); return; }
+  let results = [];
+  let fromRegistry = false;
+  // Try registry first (same server as skills)
+  try {
+    const registryUrl = process.env.CLOCLO_REGISTRY_URL || "https://cloclo-registry-799190737906.europe-west1.run.app";
+    const endpoint = q === "*" ? "/api/tools" : `/api/tools/search?q=${encodeURIComponent(q)}`;
+    process.stderr.write(`\x1b[2mSearching ${registryUrl}...\x1b[0m\n`);
+    const resp = await _httpGet(`${registryUrl}${endpoint}`, { Accept: "application/json" });
+    const data = JSON.parse(resp);
+    results = (data.tools || []).map(t => ({ ...t, _meta: { category: t.category || "", author: t.author || "registry" } }));
+    fromRegistry = true;
+  } catch { /* registry unreachable — fall back to static catalog */ }
+  // Fallback to static catalog
+  if (!fromRegistry) {
+    process.stderr.write(`\x1b[2mRegistry unreachable — showing built-in catalog\x1b[0m\n`);
+    const all = Object.values(_OFFICIAL_CATALOG);
+    results = q === "*" ? all : all.filter(t => {
+      const searchable = `${t.name} ${t.description} ${t.type} ${t._meta?.category || ""} ${t._meta?.author || ""}`.toLowerCase();
+      return q.split(/\s+/).every(term => searchable.includes(term));
+    });
+  }
+  if (results.length === 0) { process.stderr.write(`No tools found matching: "${query}"\n`); return; }
   const nameW = Math.max(20, ...results.map(t => t.name.length)) + 2;
   process.stderr.write(`\n  ${"Name".padEnd(nameW)}${"Type".padEnd(8)}${"Category".padEnd(14)}Description\n  ${"─".repeat(nameW)}${"─".repeat(8)}${"─".repeat(14)}${"─".repeat(35)}\n`);
   for (const t of results) {
     const tc = t.type === "cli" ? "33" : t.type === "http" ? "35" : "36";
-    process.stderr.write(`  ${t.name.padEnd(nameW)}\x1b[${tc}m${t.type.padEnd(8)}\x1b[0m${(t._meta?.category || "").padEnd(14)}${t.description.slice(0, 50)}\n`);
+    process.stderr.write(`  ${t.name.padEnd(nameW)}\x1b[${tc}m${(t.type || "?").padEnd(8)}\x1b[0m${(t._meta?.category || t.category || "").padEnd(14)}${(t.description || "").slice(0, 50)}\n`);
   }
-  process.stderr.write(`\n  ${results.length} tool(s) found. Install with: cloclo tool install official:<name>\n\n`);
+  process.stderr.write(`\n  ${results.length} tool(s) found${fromRegistry ? " (from registry)" : " (built-in)"}. Install with: cloclo tool install official:<name>\n\n`);
 }
 
-function _installOfficialTool(name) {
-  const toolDef = _OFFICIAL_CATALOG[name];
+async function _installOfficialTool(name) {
+  let toolDef = null;
+  let source = "official";
+  // Try registry first
+  try {
+    const registryUrl = process.env.CLOCLO_REGISTRY_URL || "https://cloclo-registry-799190737906.europe-west1.run.app";
+    process.stderr.write(`\x1b[2mFetching ${name} from ${registryUrl}...\x1b[0m\n`);
+    const resp = await _httpGet(`${registryUrl}/api/tools/${name}`, { Accept: "application/json" });
+    const pkg = JSON.parse(resp);
+    if (pkg.toolJson) { toolDef = typeof pkg.toolJson === "string" ? JSON.parse(pkg.toolJson) : pkg.toolJson; toolDef._meta = { category: pkg.category, author: pkg.author, env_required: toolDef.env || [], auth_note: toolDef._meta?.auth_note }; source = "registry"; }
+  } catch { /* registry miss or unreachable */ }
+  // Fallback to static catalog
+  if (!toolDef) { toolDef = _OFFICIAL_CATALOG[name]; }
   if (!toolDef) {
-    process.stderr.write(`\x1b[31mOfficial tool not found: ${name}\x1b[0m\n`);
-    // Suggest close matches
+    process.stderr.write(`\x1b[31mTool not found: ${name}\x1b[0m\n`);
     const suggestions = Object.keys(_OFFICIAL_CATALOG).filter(k => k.includes(name) || name.includes(k.split("-")[0]));
     if (suggestions.length > 0) process.stderr.write(`  Did you mean: ${suggestions.join(", ")}?\n`);
-    process.stderr.write(`  Run "cloclo tool search ${name}" to browse the catalog.\n`);
+    process.stderr.write(`  Run "cloclo tool catalog ${name}" to browse.\n`);
     return;
   }
-  // Show safety-relevant metadata before installing
+  // Show safety-relevant metadata
   process.stderr.write(`\n  \x1b[1m${toolDef.name}\x1b[0m — ${toolDef.description}\n`);
   process.stderr.write(`  Type:       ${toolDef.type}\n`);
   process.stderr.write(`  Read-only:  ${toolDef.read_only ? "\x1b[32myes\x1b[0m" : "\x1b[33mno (mutating)\x1b[0m"}\n`);
@@ -2321,20 +2349,40 @@ function _installOfficialTool(name) {
   if (toolDef._meta?.env_required?.length > 0) process.stderr.write(`  Env needed: ${toolDef._meta.env_required.join(", ")}\n`);
   if (toolDef._meta?.auth_note) process.stderr.write(`  Auth:       ${toolDef._meta.auth_note}\n`);
   process.stderr.write(`  Author:     ${toolDef._meta?.author || "cloclo"}\n`);
-  // Check if already installed
+  process.stderr.write(`  Source:     ${source}\n`);
   const targetDir = path.join(CUSTOM_TOOLS_DIR, toolDef.name);
-  if (fs.existsSync(path.join(targetDir, "TOOL.json"))) {
-    process.stderr.write(`  \x1b[33mAlready installed — overwriting.\x1b[0m\n`);
-  }
-  // Strip _meta before writing (internal field)
+  if (fs.existsSync(path.join(targetDir, "TOOL.json"))) process.stderr.write(`  \x1b[33mAlready installed — overwriting.\x1b[0m\n`);
   const cleanDef = { ...toolDef }; delete cleanDef._meta;
   fs.mkdirSync(targetDir, { recursive: true });
   fs.writeFileSync(path.join(targetDir, "TOOL.json"), JSON.stringify(cleanDef, null, 2));
-  // Update manifest
   const manifest = _loadToolManifest();
-  manifest.tools[toolDef.name] = { name: toolDef.name, type: toolDef.type, source: "official", installedAt: manifest.tools[toolDef.name]?.installedAt || new Date().toISOString(), updatedAt: new Date().toISOString(), disabled: false };
+  manifest.tools[toolDef.name] = { name: toolDef.name, type: toolDef.type, source, installedAt: manifest.tools[toolDef.name]?.installedAt || new Date().toISOString(), updatedAt: new Date().toISOString(), disabled: false };
   _saveToolManifest(manifest);
   process.stderr.write(`\n  \x1b[32mInstalled: ${toolDef.name}\x1b[0m\n  Restart cloclo or use /tool list to see it.\n\n`);
+}
+
+async function toolPublish(cfg, name) {
+  if (!name) { process.stderr.write("Usage: cloclo tool publish <name>\n"); return; }
+  const token = process.env.CLOCLO_REGISTRY_TOKEN;
+  if (!token) { process.stderr.write("Error: Set CLOCLO_REGISTRY_TOKEN to publish tools.\n"); return; }
+  const toolDir = path.join(CUSTOM_TOOLS_DIR, name);
+  const toolJsonPath = path.join(toolDir, "TOOL.json");
+  if (!fs.existsSync(toolJsonPath)) { process.stderr.write(`Tool not found: ${name}\n  Install it first, then publish.\n`); return; }
+  const toolDef = JSON.parse(fs.readFileSync(toolJsonPath, "utf-8"));
+  const errors = _validateToolJson(toolDef); if (errors.length > 0) { process.stderr.write(`\x1b[31mInvalid TOOL.json — fix before publishing:\x1b[0m\n`); for (const e of errors) process.stderr.write(`  - ${e}\n`); return; }
+  const registryUrl = process.env.CLOCLO_REGISTRY_URL || "https://cloclo-registry-799190737906.europe-west1.run.app";
+  process.stderr.write(`\x1b[2mPublishing ${name} to ${registryUrl}...\x1b[0m\n`);
+  const body = JSON.stringify({ name: toolDef.name, description: toolDef.description, type: toolDef.type, category: toolDef._meta?.category || "", version: toolDef.version || "1.0.0", toolJson: toolDef });
+  try {
+    const resp = await new Promise((resolve, reject) => {
+      const parsed = new URL(`${registryUrl}/api/tools/publish`);
+      const mod = parsed.protocol === "https:" ? _https : _http;
+      const req = mod.request({ hostname: parsed.hostname, port: parsed.port, path: parsed.pathname, method: "POST", headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "Content-Length": Buffer.byteLength(body) }, timeout: 15000 }, (res) => { let d = ""; res.on("data", c => d += c); res.on("end", () => res.statusCode < 400 ? resolve(d) : reject(new Error(`HTTP ${res.statusCode}: ${d.slice(0, 200)}`))); });
+      req.on("error", reject); req.on("timeout", () => { req.destroy(); reject(new Error("Timed out")); }); req.write(body); req.end();
+    });
+    const result = JSON.parse(resp);
+    process.stderr.write(`\x1b[32mPublished: ${name}\x1b[0m (${result.version || "1.0.0"})\n  Install: cloclo tool install official:${name}\n`);
+  } catch (e) { process.stderr.write(`\x1b[31mPublish failed:\x1b[0m ${e.message}\n`); }
 }
 
 // ── Browser Tool Pack (CDP-native, enterprise) ────────────────────────────
@@ -8846,10 +8894,11 @@ class InteractiveMode {
         else if (sub === "enable") toolEnable(self.cfg, self.registry, args[1]);
         else if (sub === "disable") toolDisable(self.cfg, self.registry, args[1]);
         else if (sub === "test") await toolTest(self.cfg, self.registry, args[1]);
-        else if (sub === "install") { toolInstall(self.cfg, args.slice(1).join(" ")); scanCustomTools(self.registry, self.cfg); }
+        else if (sub === "install") { await toolInstall(self.cfg, args.slice(1).join(" ")); scanCustomTools(self.registry, self.cfg); }
         else if (sub === "remove") { toolRemove(self.cfg, args[1]); if (args[1] && self.registry.has(args[1])) self.registry.unregister(args[1]); }
-        else if (sub === "catalog") { toolCatalog(args.slice(1).join(" ") || "*"); }
-        else process.stderr.write("Usage: /tool <subcommand>\n  list, info, enable, disable, test, install, remove, catalog\n");
+        else if (sub === "catalog") { await toolCatalog(args.slice(1).join(" ") || "*"); }
+        else if (sub === "publish") { await toolPublish(self.cfg, args[1]); }
+        else process.stderr.write("Usage: /tool <subcommand>\n  list, info, enable, disable, test, install, remove, catalog, publish\n");
       } });
 
     // Doctor — basic installation health check
@@ -10055,9 +10104,10 @@ async function main() {
   if (cfg._subcommand === "tool-enable") { toolEnable(cfg, registry, cfg._toolEnableName); mcpManager.shutdown(); process.exit(0); }
   if (cfg._subcommand === "tool-disable") { toolDisable(cfg, registry, cfg._toolDisableName); mcpManager.shutdown(); process.exit(0); }
   if (cfg._subcommand === "tool-test") { await toolTest(cfg, registry, cfg._toolTestName); mcpManager.shutdown(); process.exit(0); }
-  if (cfg._subcommand === "tool-install") { toolInstall(cfg, cfg._toolInstallSource); process.exit(0); }
+  if (cfg._subcommand === "tool-install") { await toolInstall(cfg, cfg._toolInstallSource); process.exit(0); }
   if (cfg._subcommand === "tool-remove") { toolRemove(cfg, cfg._toolRemoveName); process.exit(0); }
-  if (cfg._subcommand === "tool-catalog") { toolCatalog(cfg._toolCatalogQuery); process.exit(0); }
+  if (cfg._subcommand === "tool-catalog") { await toolCatalog(cfg._toolCatalogQuery); process.exit(0); }
+  if (cfg._subcommand === "tool-publish") { await toolPublish(cfg, cfg._toolPublishName); process.exit(0); }
 
   // Mode dispatch
   if (cfg.ndjson) {
