@@ -5240,7 +5240,7 @@ section("E2E: tool catalog shows all tools");
     assert(exitCode === 0, "tool catalog exits 0");
     assert(stderr.includes("github-pr-list"), "catalog shows github-pr-list");
     assert(stderr.includes("hedi-fraud-check"), "catalog shows hedi-fraud-check");
-    assert(stderr.includes("tool(s) found"), "catalog shows count");
+    assert(stderr.includes("tool(s) available") || stderr.includes("tool(s) found"), "catalog shows count");
   } catch (e) {
     skip(`Catalog E2E failed: ${e.message}`);
   }

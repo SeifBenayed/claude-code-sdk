@@ -2295,7 +2295,6 @@ async function toolCatalog(query) {
   try {
     const registryUrl = process.env.CLOCLO_REGISTRY_URL || "https://cloclo-registry-799190737906.europe-west1.run.app";
     const endpoint = q === "*" ? "/api/tools" : `/api/tools/search?q=${encodeURIComponent(q)}`;
-    process.stderr.write(`\x1b[2mSearching ${registryUrl}...\x1b[0m\n`);
     const resp = await _httpGet(`${registryUrl}${endpoint}`, { Accept: "application/json" });
     const data = JSON.parse(resp);
     results = (data.tools || []).map(t => ({ ...t, _meta: { category: t.category || "", author: t.author || "registry" } }));
@@ -2303,21 +2302,53 @@ async function toolCatalog(query) {
   } catch { /* registry unreachable — fall back to static catalog */ }
   // Fallback to static catalog
   if (!fromRegistry) {
-    process.stderr.write(`\x1b[2mRegistry unreachable — showing built-in catalog\x1b[0m\n`);
     const all = Object.values(_OFFICIAL_CATALOG);
     results = q === "*" ? all : all.filter(t => {
       const searchable = `${t.name} ${t.description} ${t.type} ${t._meta?.category || ""} ${t._meta?.author || ""}`.toLowerCase();
       return q.split(/\s+/).every(term => searchable.includes(term));
     });
   }
-  if (results.length === 0) { process.stderr.write(`No tools found matching: "${query}"\n`); return; }
-  const nameW = Math.max(20, ...results.map(t => t.name.length)) + 2;
-  process.stderr.write(`\n  ${"Name".padEnd(nameW)}${"Type".padEnd(8)}${"Category".padEnd(14)}Description\n  ${"─".repeat(nameW)}${"─".repeat(8)}${"─".repeat(14)}${"─".repeat(35)}\n`);
+  // Group by category
+  const byCategory = {};
   for (const t of results) {
-    const tc = t.type === "cli" ? "33" : t.type === "http" ? "35" : "36";
-    process.stderr.write(`  ${t.name.padEnd(nameW)}\x1b[${tc}m${(t.type || "?").padEnd(8)}\x1b[0m${(t._meta?.category || t.category || "").padEnd(14)}${(t.description || "").slice(0, 50)}\n`);
+    const cat = t._meta?.category || t.category || "other";
+    if (!byCategory[cat]) byCategory[cat] = [];
+    byCategory[cat].push(t);
   }
-  process.stderr.write(`\n  ${results.length} tool(s) found${fromRegistry ? " (from registry)" : " (built-in)"}. Install with: cloclo tool install official:<name>\n\n`);
+  const installed = new Set();
+  try { const m = _loadToolManifest(); for (const k of Object.keys(m.tools || {})) installed.add(k); } catch { /* no manifest */ }
+  // Render marketplace
+  const w = process.stderr.columns || 80;
+  process.stderr.write(`\n\x1b[1m  ${"═".repeat(w - 4)}\x1b[0m\n`);
+  process.stderr.write(`\x1b[1m  TOOL MARKETPLACE\x1b[0m${fromRegistry ? "  \x1b[2m(registry)\x1b[0m" : "  \x1b[2m(built-in)\x1b[0m"}${q !== "*" ? `  \x1b[2mfilter: ${q}\x1b[0m` : ""}\n`);
+  process.stderr.write(`\x1b[1m  ${"═".repeat(w - 4)}\x1b[0m\n`);
+  if (results.length === 0) { process.stderr.write(`\n  No tools found${q !== "*" ? ` matching "${q}"` : ""}.\n\n`); return; }
+  const categoryIcons = { devops: "\u2699", deploy: "\u2601", data: "\u2630", search: "\u2315", enterprise: "\u2302", communication: "\u2709", system: "\u2318", media: "\u266B", other: "\u2022" };
+  const categoryColors = { devops: "36", deploy: "34", data: "32", search: "33", enterprise: "35", communication: "31", system: "37", media: "36", other: "2" };
+  for (const [cat, tools] of Object.entries(byCategory).sort(([a], [b]) => a.localeCompare(b))) {
+    const icon = categoryIcons[cat] || "\u2022";
+    const cc = categoryColors[cat] || "2";
+    process.stderr.write(`\n  \x1b[${cc};1m${icon} ${cat.toUpperCase()}\x1b[0m\n`);
+    for (const t of tools) {
+      const isInstalled = installed.has(t.name);
+      const badge = isInstalled ? " \x1b[32m[installed]\x1b[0m" : "";
+      const typeBadge = t.type === "cli" ? "\x1b[33mcli\x1b[0m" : t.type === "http" ? "\x1b[35mhttp\x1b[0m" : `\x1b[36m${t.type || "?"}\x1b[0m`;
+      const ro = t.read_only === false ? " \x1b[33mmutating\x1b[0m" : "";
+      process.stderr.write(`    \x1b[1m${t.name}\x1b[0m  ${typeBadge}${ro}${badge}\n`);
+      process.stderr.write(`    \x1b[2m${(t.description || "").slice(0, w - 8)}\x1b[0m\n`);
+      const details = [];
+      if (t.binary) details.push(`binary: ${t.binary}`);
+      if (t.url) details.push(`url: ${(t.url || "").slice(0, 40)}`);
+      if (t._meta?.author && t._meta.author !== "cloclo") details.push(`by ${t._meta.author}`);
+      if (t._meta?.env_required?.length > 0) details.push(`env: ${t._meta.env_required.join(", ")}`);
+      if (t.downloads) details.push(`${t.downloads} installs`);
+      if (details.length > 0) process.stderr.write(`    \x1b[2m${details.join("  \u00B7  ")}\x1b[0m\n`);
+    }
+  }
+  process.stderr.write(`\n\x1b[1m  ${"─".repeat(w - 4)}\x1b[0m\n`);
+  process.stderr.write(`  ${results.length} tool(s) available\n`);
+  process.stderr.write(`  Install:  \x1b[1mcloclo tool install official:<name>\x1b[0m\n`);
+  process.stderr.write(`  Publish:  \x1b[1mcloclo tool publish <name>\x1b[0m\n\n`);
 }
 
 async function _installOfficialTool(name) {
