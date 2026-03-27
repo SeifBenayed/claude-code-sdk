@@ -99,6 +99,261 @@ function OutputArea({ lines }) {
   );
 }
 
+// ── Marketplace View ──────────────────────────────────────────
+
+function MarketplaceView({ skills, installed, onInstall, onClose }) {
+  const [cursor, setCursor] = useState(0);
+  const [search, setSearch] = useState("");
+  const [selected, setSelected] = useState(new Set());
+  const [detailIdx, setDetailIdx] = useState(null);
+  const [installing, setInstalling] = useState(null);
+  const { stdout } = useStdout();
+  const maxVisible = Math.max(3, (stdout?.rows || 24) - 10);
+
+  const filtered = search
+    ? skills.filter(s =>
+        s.name.toLowerCase().includes(search.toLowerCase()) ||
+        (s.description || "").toLowerCase().includes(search.toLowerCase()) ||
+        (s.author || "").toLowerCase().includes(search.toLowerCase())
+      )
+    : skills;
+
+  // Clamp cursor
+  useEffect(() => {
+    if (cursor >= filtered.length) setCursor(Math.max(0, filtered.length - 1));
+  }, [filtered.length, cursor]);
+
+  useInput((ch, key) => {
+    if (installing) return;
+
+    // Detail view
+    if (detailIdx !== null) {
+      if (key.escape || key.return) setDetailIdx(null);
+      return;
+    }
+
+    if (key.escape) {
+      if (search) { setSearch(""); setCursor(0); }
+      else onClose();
+      return;
+    }
+    if (key.upArrow) { setCursor(i => Math.max(0, i - 1)); return; }
+    if (key.downArrow) { setCursor(i => Math.min(filtered.length - 1, i + 1)); return; }
+    if (key.return && filtered.length > 0) {
+      setDetailIdx(cursor);
+      return;
+    }
+    if (ch === " " && filtered.length > 0) {
+      const s = filtered[cursor];
+      if (installed.has(s.name)) return; // already installed
+      setInstalling(s.name);
+      onInstall(s.name).then(() => {
+        setInstalling(null);
+        installed.add(s.name);
+        setSelected(prev => { const n = new Set(prev); n.add(s.name); return n; });
+      }).catch(() => setInstalling(null));
+      return;
+    }
+    // Typing → search
+    if (ch && !key.ctrl && !key.meta && ch.length === 1 && ch !== " ") {
+      setSearch(prev => prev + ch);
+      setCursor(0);
+      return;
+    }
+    if (key.backspace || key.delete) {
+      setSearch(prev => prev.slice(0, -1));
+      setCursor(0);
+      return;
+    }
+  });
+
+  // Detail view
+  if (detailIdx !== null && filtered[detailIdx]) {
+    const s = filtered[detailIdx];
+    const isInst = installed.has(s.name) || selected.has(s.name);
+    return React.createElement(Box, { flexDirection: "column", borderStyle: "round", borderColor: "cyan", paddingX: 1, paddingY: 0 },
+      React.createElement(Text, { bold: true, color: "cyan" }, "  " + s.name),
+      React.createElement(Text, {}, ""),
+      s.description ? React.createElement(Text, { wrap: "wrap" }, "  " + s.description) : null,
+      React.createElement(Text, {}, ""),
+      s.author ? React.createElement(Text, { dimColor: true }, "  Author:    " + s.author) : null,
+      s.version ? React.createElement(Text, { dimColor: true }, "  Version:   " + s.version) : null,
+      s.downloads !== undefined ? React.createElement(Text, { dimColor: true }, "  Downloads: " + s.downloads) : null,
+      React.createElement(Text, { dimColor: true }, "  Status:    " + (isInst ? "✓ installed" : "not installed")),
+      React.createElement(Text, {}, ""),
+      React.createElement(Text, { dimColor: true }, "  Esc/Enter to go back" + (!isInst ? " · Space to install" : "")),
+    );
+  }
+
+  // Scroll window
+  const scrollStart = Math.max(0, Math.min(cursor - Math.floor(maxVisible / 2), filtered.length - maxVisible));
+  const visible = filtered.slice(scrollStart, scrollStart + maxVisible);
+  const hasMore = scrollStart + maxVisible < filtered.length;
+  const hasLess = scrollStart > 0;
+
+  return React.createElement(Box, { flexDirection: "column" },
+    // Header
+    React.createElement(Box, { borderStyle: "round", borderColor: "cyan", paddingX: 1 },
+      React.createElement(Text, { bold: true, color: "cyan" }, "Skill Marketplace"),
+      React.createElement(Text, { dimColor: true }, "  " + filtered.length + "/" + skills.length + " skills"),
+    ),
+    // Search
+    React.createElement(Box, { paddingX: 1 },
+      React.createElement(Text, { dimColor: true }, "  🔍 "),
+      React.createElement(Text, {}, search || React.createElement(Text, { dimColor: true }, "type to search")),
+    ),
+    React.createElement(Text, {}, ""),
+    // Scroll indicator top
+    hasLess ? React.createElement(Text, { dimColor: true }, "   ↑ more above") : null,
+    // List
+    ...visible.map((s, i) => {
+      const realIdx = scrollStart + i;
+      const isCursor = realIdx === cursor;
+      const isInst = installed.has(s.name) || selected.has(s.name);
+      const icon = isInst ? "◉" : "◯";
+      const iconColor = isInst ? "green" : (isCursor ? "cyan" : "gray");
+      const desc = (s.description || "").length > 50 ? (s.description || "").slice(0, 47) + "..." : (s.description || "");
+
+      return React.createElement(Box, { key: s.name, flexDirection: "column", paddingLeft: 2 },
+        React.createElement(Box, {},
+          React.createElement(Text, { color: iconColor }, (isCursor ? "▸ " : "  ") + icon + " "),
+          React.createElement(Text, { bold: isCursor, color: isCursor ? "cyan" : undefined }, s.name),
+          s.author ? React.createElement(Text, { dimColor: true }, " · " + s.author) : null,
+        ),
+        React.createElement(Text, { dimColor: true }, "      " + desc),
+        React.createElement(Text, {}, ""),
+      );
+    }),
+    // Scroll indicator bottom
+    hasMore ? React.createElement(Text, { dimColor: true }, "   ↓ more below") : null,
+    // Installing indicator
+    installing ? React.createElement(Box, { paddingX: 1 },
+      React.createElement(Text, { color: "yellow" }, "  Installing " + installing + "..."),
+    ) : null,
+    // Footer
+    React.createElement(Text, {}, ""),
+    React.createElement(Box, { paddingX: 1 },
+      React.createElement(Text, { dimColor: true }, "  type to search · Space to install · Enter to details · Esc to back"),
+    ),
+  );
+}
+
+// ── Tool Catalog View ─────────────────────────────────────────
+
+function ToolCatalogView({ tools, installed, onInstall, onClose }) {
+  const [cursor, setCursor] = useState(0);
+  const [search, setSearch] = useState("");
+  const [detailIdx, setDetailIdx] = useState(null);
+  const [installing, setInstalling] = useState(null);
+  const { stdout } = useStdout();
+  const maxVisible = Math.max(3, (stdout?.rows || 24) - 10);
+
+  const filtered = search
+    ? tools.filter(t =>
+        t.name.toLowerCase().includes(search.toLowerCase()) ||
+        (t.description || "").toLowerCase().includes(search.toLowerCase()) ||
+        (t.type || "").toLowerCase().includes(search.toLowerCase()) ||
+        (t.category || "").toLowerCase().includes(search.toLowerCase())
+      )
+    : tools;
+
+  useEffect(() => {
+    if (cursor >= filtered.length) setCursor(Math.max(0, filtered.length - 1));
+  }, [filtered.length, cursor]);
+
+  useInput((ch, key) => {
+    if (installing) return;
+    if (detailIdx !== null) { if (key.escape || key.return) setDetailIdx(null); return; }
+    if (key.escape) { if (search) { setSearch(""); setCursor(0); } else onClose(); return; }
+    if (key.upArrow) { setCursor(i => Math.max(0, i - 1)); return; }
+    if (key.downArrow) { setCursor(i => Math.min(filtered.length - 1, i + 1)); return; }
+    if (key.return && filtered.length > 0) { setDetailIdx(cursor); return; }
+    if (ch === " " && filtered.length > 0) {
+      const t = filtered[cursor];
+      if (installed.has(t.name)) return;
+      setInstalling(t.name);
+      onInstall(t.name).then(() => { setInstalling(null); installed.add(t.name); }).catch(() => setInstalling(null));
+      return;
+    }
+    if (ch && !key.ctrl && !key.meta && ch.length === 1 && ch !== " ") { setSearch(prev => prev + ch); setCursor(0); return; }
+    if (key.backspace || key.delete) { setSearch(prev => prev.slice(0, -1)); setCursor(0); return; }
+  });
+
+  // Detail view
+  if (detailIdx !== null && filtered[detailIdx]) {
+    const t = filtered[detailIdx];
+    const isInst = installed.has(t.name);
+    return React.createElement(Box, { flexDirection: "column", borderStyle: "round", borderColor: "yellow", paddingX: 1, paddingY: 0 },
+      React.createElement(Text, { bold: true, color: "yellow" }, "  " + t.name),
+      React.createElement(Text, {}, ""),
+      t.description ? React.createElement(Text, { wrap: "wrap" }, "  " + t.description) : null,
+      React.createElement(Text, {}, ""),
+      React.createElement(Text, { dimColor: true }, "  Type:      " + (t.type || "?")),
+      t.binary ? React.createElement(Text, { dimColor: true }, "  Binary:    " + t.binary) : null,
+      t.url ? React.createElement(Text, { dimColor: true }, "  URL:       " + (t.url || "").slice(0, 60)) : null,
+      t.category ? React.createElement(Text, { dimColor: true }, "  Category:  " + t.category) : null,
+      t.author ? React.createElement(Text, { dimColor: true }, "  Author:    " + t.author) : null,
+      t.read_only !== undefined ? React.createElement(Text, { dimColor: true }, "  Read-only: " + (t.read_only ? "yes" : "no (mutating)")) : null,
+      t.env_required?.length > 0 ? React.createElement(Text, { dimColor: true }, "  Env:       " + t.env_required.join(", ")) : null,
+      t.auth_note ? React.createElement(Text, { dimColor: true }, "  Auth:      " + t.auth_note) : null,
+      t.downloads !== undefined ? React.createElement(Text, { dimColor: true }, "  Downloads: " + t.downloads) : null,
+      React.createElement(Text, { dimColor: true }, "  Status:    " + (isInst ? "\u2713 installed" : "not installed")),
+      React.createElement(Text, {}, ""),
+      React.createElement(Text, { dimColor: true }, "  Esc/Enter to go back" + (!isInst ? " \u00B7 Space to install" : "")),
+    );
+  }
+
+  const scrollStart = Math.max(0, Math.min(cursor - Math.floor(maxVisible / 2), filtered.length - maxVisible));
+  const visible = filtered.slice(scrollStart, scrollStart + maxVisible);
+  const hasMore = scrollStart + maxVisible < filtered.length;
+  const hasLess = scrollStart > 0;
+
+  const categoryIcons = { devops: "\u2699", deploy: "\u2601", data: "\u2630", search: "\u2315", enterprise: "\u2302", communication: "\u2709", system: "\u2318", media: "\u266B" };
+
+  return React.createElement(Box, { flexDirection: "column" },
+    React.createElement(Box, { borderStyle: "round", borderColor: "yellow", paddingX: 1 },
+      React.createElement(Text, { bold: true, color: "yellow" }, "Tool Marketplace"),
+      React.createElement(Text, { dimColor: true }, "  " + filtered.length + "/" + tools.length + " tools"),
+    ),
+    React.createElement(Box, { paddingX: 1 },
+      React.createElement(Text, { dimColor: true }, "  \uD83D\uDD0D "),
+      React.createElement(Text, {}, search || React.createElement(Text, { dimColor: true }, "type to search")),
+    ),
+    React.createElement(Text, {}, ""),
+    hasLess ? React.createElement(Text, { dimColor: true }, "   \u2191 more above") : null,
+    ...visible.map((t, i) => {
+      const realIdx = scrollStart + i;
+      const isCursor = realIdx === cursor;
+      const isInst = installed.has(t.name);
+      const icon = isInst ? "\u25C9" : "\u25EF";
+      const iconColor = isInst ? "green" : (isCursor ? "yellow" : "gray");
+      const typeColor = t.type === "cli" ? "yellow" : t.type === "http" ? "magenta" : "cyan";
+      const catIcon = categoryIcons[t.category] || "\u2022";
+      const desc = (t.description || "").length > 50 ? (t.description || "").slice(0, 47) + "..." : (t.description || "");
+
+      return React.createElement(Box, { key: t.name, flexDirection: "column", paddingLeft: 2 },
+        React.createElement(Box, {},
+          React.createElement(Text, { color: iconColor }, (isCursor ? "\u25B8 " : "  ") + icon + " "),
+          React.createElement(Text, { bold: isCursor, color: isCursor ? "yellow" : undefined }, t.name),
+          React.createElement(Text, { color: typeColor }, "  " + (t.type || "?")),
+          React.createElement(Text, { dimColor: true }, "  " + catIcon + " " + (t.category || "")),
+          t.read_only === false ? React.createElement(Text, { color: "yellow" }, " mutating") : null,
+        ),
+        React.createElement(Text, { dimColor: true }, "      " + desc),
+        React.createElement(Text, {}, ""),
+      );
+    }),
+    hasMore ? React.createElement(Text, { dimColor: true }, "   \u2193 more below") : null,
+    installing ? React.createElement(Box, { paddingX: 1 },
+      React.createElement(Text, { color: "yellow" }, "  Installing " + installing + "..."),
+    ) : null,
+    React.createElement(Text, {}, ""),
+    React.createElement(Box, { paddingX: 1 },
+      React.createElement(Text, { dimColor: true }, "  type to search \u00B7 Space to install \u00B7 Enter to details \u00B7 Esc to back"),
+    ),
+  );
+}
+
 // ── App (root component) ───────────────────────────────────────
 
 function App({ interactiveMode, onSubmit, onExit }) {
@@ -108,6 +363,8 @@ function App({ interactiveMode, onSubmit, onExit }) {
   const [menuIndex, setMenuIndex] = useState(0);
   const [menuCommands, setMenuCommands] = useState([]);
   const [isProcessing, setIsProcessing] = useState(false);
+  const [marketplaceData, setMarketplaceData] = useState(null); // { skills, installed }
+  const [catalogData, setCatalogData] = useState(null); // { tools, installed }
   const { exit } = useApp();
 
   const im = interactiveMode;
@@ -183,6 +440,121 @@ function App({ interactiveMode, onSubmit, onExit }) {
       return;
     }
 
+    // Marketplace — intercept before general handler to set UI state
+    if (trimmed === "/marketplace" || trimmed.startsWith("/marketplace ")) {
+      addOutput("\x1b[36m> " + trimmed + "\x1b[0m");
+      addOutput("\x1b[2mFetching from registry...\x1b[0m");
+      setIsProcessing(true);
+      try {
+        const origWrite = process.stderr.write.bind(process.stderr);
+        let registryUrl = "";
+        // Extract SKILL_REGISTRY_URL from the handler's scope
+        process.stderr.write = (data) => { registryUrl += data; return true; };
+        const cmd = im.slashCommands.get("marketplace");
+        // We need to fetch directly — use the registry URL from the env or default
+        process.stderr.write = origWrite;
+
+        const _https = await import("node:https");
+        const _http = await import("node:http");
+        const regUrl = process.env.CLOCLO_REGISTRY_URL || "https://cloclo-registry-799190737906.europe-west1.run.app";
+        const query = trimmed.replace(/^\/marketplace\s*/, "");
+        const endpoint = query && query !== "install" ? `/api/skills/search?q=${encodeURIComponent(query)}` : "/api/skills";
+        const fetchUrl = regUrl + endpoint;
+
+        const resp = await new Promise((resolve, reject) => {
+          const mod = fetchUrl.startsWith("https") ? _https.default : _http.default;
+          mod.get(fetchUrl, { headers: { "User-Agent": "cloclo/1.0", Accept: "application/json" } }, (res) => {
+            if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+              mod.get(res.headers.location, { headers: { "User-Agent": "cloclo/1.0", Accept: "application/json" } }, (r2) => {
+                let d = ""; r2.on("data", c => d += c); r2.on("end", () => resolve(d));
+              }).on("error", reject);
+              return;
+            }
+            let d = ""; res.on("data", c => d += c); res.on("end", () => resolve(d));
+          }).on("error", reject);
+        });
+
+        const data = JSON.parse(resp);
+        const skills = data.skills || [];
+        const installedSet = new Set((im.cfg._skillLoader?.list() || []).map(s => s.name));
+
+        if (skills.length === 0) {
+          addOutput(query ? `No skills found matching "${query}".` : "Registry is empty.");
+        } else {
+          setMarketplaceData({ skills, installed: installedSet });
+        }
+      } catch (e) {
+        addOutput("\x1b[31mRegistry unavailable: " + e.message + "\x1b[0m");
+      }
+      setIsProcessing(false);
+      return;
+    }
+
+    // Catalog — intercept /catalog to show tool marketplace UI
+    if (trimmed === "/catalog" || trimmed.startsWith("/catalog ") || trimmed === "/tool catalog" || trimmed.startsWith("/tool catalog ")) {
+      addOutput("\x1b[33m> " + trimmed + "\x1b[0m");
+      addOutput("\x1b[2mFetching tool catalog...\x1b[0m");
+      setIsProcessing(true);
+      try {
+        const _https = await import("node:https");
+        const _http = await import("node:http");
+        const regUrl = process.env.CLOCLO_REGISTRY_URL || "https://cloclo-registry-799190737906.europe-west1.run.app";
+        const query = trimmed.replace(/^\/(tool\s+)?catalog\s*/, "").trim();
+        const endpoint = query ? `/api/tools/search?q=${encodeURIComponent(query)}` : "/api/tools";
+        let tools = [];
+        // Try registry
+        try {
+          const resp = await new Promise((resolve, reject) => {
+            const mod = regUrl.startsWith("https") ? _https.default : _http.default;
+            mod.get(regUrl + endpoint, { headers: { "User-Agent": "cloclo/1.0", Accept: "application/json" }, timeout: 5000 }, (res) => {
+              let d = ""; res.on("data", c => d += c); res.on("end", () => resolve(d));
+            }).on("error", reject);
+          });
+          tools = (JSON.parse(resp).tools || []).map(t => ({ ...t, category: t.category || "" }));
+        } catch { /* registry unavailable */ }
+        // Fallback: use the static catalog via the /tool catalog handler output
+        if (tools.length === 0) {
+          // Invoke toolCatalog and parse — but we need the raw data. Read _OFFICIAL_CATALOG from source.
+          // Simpler: call the tool handler and suppress output, or just use a hardcoded fallback fetch
+          try {
+            const origWrite = process.stderr.write.bind(process.stderr);
+            let captured = "";
+            process.stderr.write = (data) => { captured += data; return true; };
+            const cmd = im.slashCommands.get("catalog");
+            if (cmd?.handler) await cmd.handler(query ? [query] : []);
+            process.stderr.write = origWrite;
+            // Parse the text output back — not ideal but works
+            // Better: just show an error and suggest CLI
+            if (captured.includes("tool(s) available")) {
+              addOutput("\x1b[2mRegistry empty — use CLI: cloclo catalog\x1b[0m");
+              setIsProcessing(false);
+              return;
+            }
+          } catch { /* fallback failed */ }
+        }
+        // Get installed tools
+        const manifest = {};
+        try {
+          const fs = await import("node:fs");
+          const path = await import("node:path");
+          const mp = path.default.join(os.homedir(), ".claude", "tools", ".cloclo-tools.json");
+          const raw = fs.default.readFileSync(mp, "utf-8");
+          Object.assign(manifest, JSON.parse(raw));
+        } catch { /* no manifest */ }
+        const installedSet = new Set(Object.keys(manifest.tools || {}));
+
+        if (tools.length === 0) {
+          addOutput(query ? `No tools found matching "${query}".` : "Catalog is empty. Publish tools with: cloclo tool publish <name>");
+        } else {
+          setCatalogData({ tools, installed: installedSet });
+        }
+      } catch (e) {
+        addOutput("\x1b[31mCatalog error: " + e.message + "\x1b[0m");
+      }
+      setIsProcessing(false);
+      return;
+    }
+
     setIsProcessing(true);
     addOutput("\x1b[36m> " + trimmed + "\x1b[0m");
 
@@ -194,6 +566,40 @@ function App({ interactiveMode, onSubmit, onExit }) {
 
     setIsProcessing(false);
   }, [menuVisible, menuCommands, menuIndex, onSubmit, addOutput]);
+
+  // Marketplace mode — full-screen overlay (skills)
+  if (marketplaceData) {
+    return React.createElement(MarketplaceView, {
+      skills: marketplaceData.skills,
+      installed: marketplaceData.installed,
+      onInstall: async (name) => {
+        const origWrite = process.stderr.write.bind(process.stderr);
+        process.stderr.write = () => true;
+        try {
+          const cmd = im.slashCommands.get("skill");
+          if (cmd?.handler) { await cmd.handler(["import", `registry:${name}`]); }
+        } finally { process.stderr.write = origWrite; }
+      },
+      onClose: () => setMarketplaceData(null),
+    });
+  }
+
+  // Catalog mode — full-screen overlay (tools)
+  if (catalogData) {
+    return React.createElement(ToolCatalogView, {
+      tools: catalogData.tools,
+      installed: catalogData.installed,
+      onInstall: async (name) => {
+        const origWrite = process.stderr.write.bind(process.stderr);
+        process.stderr.write = () => true;
+        try {
+          const cmd = im.slashCommands.get("tool");
+          if (cmd?.handler) { await cmd.handler(["install", `official:${name}`]); }
+        } finally { process.stderr.write = origWrite; }
+      },
+      onClose: () => setCatalogData(null),
+    });
+  }
 
   return React.createElement(Box, { flexDirection: "column", height: "100%" },
     // Output area
