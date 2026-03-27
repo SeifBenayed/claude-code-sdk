@@ -2442,21 +2442,27 @@ function _docError(msg) { return { content: msg, is_error: true }; }
 
 // ── Spreadsheet Tool (xlsx) ──────────────────────────────────────────────
 
-const SPREADSHEET_READ_ACTIONS = new Set(["inspect", "list_sheets", "get_sheet_info", "read_range", "find_text", "inspect_formulas", "export_csv"]);
-const SPREADSHEET_WRITE_ACTIONS = new Set(["write_range", "append_rows"]);
+const SPREADSHEET_READ_ACTIONS = new Set(["inspect", "list_sheets", "get_sheet_info", "read_range", "find_text", "inspect_formulas", "check_errors", "export_csv"]);
+const SPREADSHEET_WRITE_ACTIONS = new Set(["write_range", "append_rows", "set_cell", "format_cells", "set_column_width", "create", "add_sheet"]);
 
 function registerSpreadsheetTools(registry) {
   registry.register("Spreadsheet", {
-    description: "Spreadsheet operations on .xlsx/.xls/.csv files. Actions: inspect, list_sheets, get_sheet_info, read_range, write_range, append_rows, find_text, inspect_formulas, export_csv. Use read_range to get structured data, write_range/append_rows to modify.",
+    description: "Spreadsheet operations on .xlsx/.xls/.csv files. Actions: inspect, list_sheets, get_sheet_info, read_range, write_range, append_rows, set_cell, find_text, inspect_formulas, check_errors, format_cells, set_column_width, create, add_sheet, export_csv. Use read_range for data, write_range/set_cell to modify, check_errors to validate formulas, format_cells for styling.",
     input_schema: { type: "object", properties: {
-      action: { type: "string", enum: ["inspect", "list_sheets", "get_sheet_info", "read_range", "write_range", "append_rows", "find_text", "inspect_formulas", "export_csv"], description: "Spreadsheet action" },
+      action: { type: "string", enum: ["inspect", "list_sheets", "get_sheet_info", "read_range", "write_range", "append_rows", "set_cell", "find_text", "inspect_formulas", "check_errors", "format_cells", "set_column_width", "create", "add_sheet", "export_csv"], description: "Spreadsheet action" },
       file_path: { type: "string", description: "Path to .xlsx/.xls/.csv file" },
       sheet: { type: "string", description: "Sheet name (defaults to first sheet)" },
       range: { type: "string", description: "Cell range e.g. 'A1:D10'" },
+      cell: { type: "string", description: "Cell reference for set_cell e.g. 'A1'" },
+      value: { type: "string", description: "Value or formula for set_cell (formulas start with =)" },
       values: { type: "array", description: "2D array of values for write_range, e.g. [[1,2],[3,4]]" },
       rows: { type: "array", description: "Array of row arrays for append_rows" },
       query: { type: "string", description: "Search text for find_text" },
       output_path: { type: "string", description: "Output file path for export_csv/write" },
+      sheets: { type: "array", description: "Sheet names for create (e.g. ['Summary','Data'])" },
+      format: { type: "object", description: "Format options for format_cells: {bold, italic, color, fill, numFmt, alignment}" },
+      width: { type: "number", description: "Column width for set_column_width" },
+      column: { type: "string", description: "Column letter for set_column_width (e.g. 'A')" },
     }, required: ["action", "file_path"] }
   }, async (input) => {
     let XLSX;
@@ -2570,6 +2576,142 @@ function registerSpreadsheetTools(registry) {
         const out = input.output_path ? path.resolve(input.output_path) : vp.resolved.replace(/\.[^.]+$/, ".csv");
         fs.writeFileSync(out, csv);
         return { content: `Exported ${sheetName} to ${out}`, is_error: false };
+      }
+      // ── check_errors — scan for #REF!, #DIV/0!, #VALUE!, #N/A, #NAME?, #NULL! ──
+      if (a === "check_errors") {
+        const wb = XLSX.readFile(vp.resolved);
+        const excelErrors = ["#REF!", "#DIV/0!", "#VALUE!", "#N/A", "#NAME?", "#NULL!"];
+        const errorDetails = {}; for (const e of excelErrors) errorDetails[e] = [];
+        let totalErrors = 0;
+        for (const sheetName of wb.SheetNames) {
+          const ws = wb.Sheets[sheetName]; if (!ws["!ref"]) continue;
+          const r = XLSX.utils.decode_range(ws["!ref"]);
+          for (let row = r.s.r; row <= r.e.r; row++) {
+            for (let col = r.s.c; col <= r.e.c; col++) {
+              const addr = XLSX.utils.encode_cell({ r: row, c: col });
+              const cell = ws[addr];
+              if (cell && typeof cell.v === "string") {
+                for (const err of excelErrors) {
+                  if (cell.v.includes(err)) { errorDetails[err].push(`${sheetName}!${addr}`); totalErrors++; break; }
+                }
+              }
+              // Also check cell.w (formatted value) for errors
+              if (cell && cell.w && typeof cell.w === "string") {
+                for (const err of excelErrors) {
+                  if (cell.w.includes(err) && !errorDetails[err].includes(`${sheetName}!${addr}`)) { errorDetails[err].push(`${sheetName}!${addr}`); totalErrors++; break; }
+                }
+              }
+            }
+          }
+        }
+        const summary = {};
+        for (const [errType, locations] of Object.entries(errorDetails)) {
+          if (locations.length > 0) summary[errType] = { count: locations.length, locations: locations.slice(0, 20) };
+        }
+        // Count formulas
+        let formulaCount = 0;
+        for (const sheetName of wb.SheetNames) {
+          const ws = wb.Sheets[sheetName]; if (!ws["!ref"]) continue;
+          const r = XLSX.utils.decode_range(ws["!ref"]);
+          for (let row = r.s.r; row <= r.e.r; row++) { for (let col = r.s.c; col <= r.e.c; col++) { const cell = ws[XLSX.utils.encode_cell({ r: row, c: col })]; if (cell?.f) formulaCount++; } }
+        }
+        return _docResult({ status: totalErrors === 0 ? "success" : "errors_found", totalErrors, formulaCount, errorSummary: summary });
+      }
+      // ── set_cell — set a single cell value or formula ──
+      if (a === "set_cell") {
+        if (!input.cell) return _docError("set_cell requires 'cell' (e.g. 'A1')");
+        if (input.value === undefined) return _docError("set_cell requires 'value'");
+        const filePath = vp.resolved || path.resolve(input.file_path);
+        const wb = fs.existsSync(filePath) ? XLSX.readFile(filePath) : XLSX.utils.book_new();
+        const sheetName = input.sheet || wb.SheetNames[0] || "Sheet1";
+        let ws = wb.Sheets[sheetName];
+        if (!ws) { ws = XLSX.utils.aoa_to_sheet([]); XLSX.utils.book_append_sheet(wb, ws, sheetName); }
+        const cellRef = input.cell.toUpperCase();
+        if (String(input.value).startsWith("=")) {
+          // Formula
+          ws[cellRef] = { f: input.value.slice(1), t: "n" };
+        } else {
+          const numVal = Number(input.value);
+          ws[cellRef] = isNaN(numVal) || input.value === "" ? { v: input.value, t: "s" } : { v: numVal, t: "n" };
+        }
+        // Update sheet range
+        if (!ws["!ref"]) ws["!ref"] = `${cellRef}:${cellRef}`;
+        else {
+          const existing = XLSX.utils.decode_range(ws["!ref"]);
+          const newCell = XLSX.utils.decode_cell(cellRef);
+          if (newCell.r > existing.e.r) existing.e.r = newCell.r;
+          if (newCell.c > existing.e.c) existing.e.c = newCell.c;
+          ws["!ref"] = XLSX.utils.encode_range(existing);
+        }
+        const out = input.output_path ? path.resolve(input.output_path) : filePath;
+        XLSX.writeFile(wb, out);
+        return { content: `Set ${sheetName}!${cellRef} = ${input.value} → ${out}`, is_error: false };
+      }
+      // ── format_cells — apply formatting to a range ──
+      if (a === "format_cells") {
+        if (!input.range) return _docError("format_cells requires 'range'");
+        if (!input.format) return _docError("format_cells requires 'format' object");
+        const filePath = vp.resolved || path.resolve(input.file_path);
+        const wb = XLSX.readFile(filePath);
+        const sheetName = input.sheet || wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        if (!ws) return _docError(`Sheet not found: ${sheetName}`);
+        const rng = XLSX.utils.decode_range(input.range);
+        let count = 0;
+        for (let row = rng.s.r; row <= rng.e.r; row++) {
+          for (let col = rng.s.c; col <= rng.e.c; col++) {
+            const addr = XLSX.utils.encode_cell({ r: row, c: col });
+            if (!ws[addr]) ws[addr] = { v: "", t: "s" };
+            if (!ws[addr].s) ws[addr].s = {};
+            const fmt = input.format;
+            if (fmt.bold !== undefined) { if (!ws[addr].s.font) ws[addr].s.font = {}; ws[addr].s.font.bold = fmt.bold; }
+            if (fmt.italic !== undefined) { if (!ws[addr].s.font) ws[addr].s.font = {}; ws[addr].s.font.italic = fmt.italic; }
+            if (fmt.color) { if (!ws[addr].s.font) ws[addr].s.font = {}; ws[addr].s.font.color = { rgb: fmt.color.replace("#", "") }; }
+            if (fmt.fill) { ws[addr].s.fill = { fgColor: { rgb: fmt.fill.replace("#", "") } }; }
+            if (fmt.numFmt) ws[addr].z = fmt.numFmt;
+            if (fmt.alignment) { ws[addr].s.alignment = fmt.alignment; }
+            count++;
+          }
+        }
+        const out = input.output_path ? path.resolve(input.output_path) : filePath;
+        XLSX.writeFile(wb, out);
+        return { content: `Formatted ${count} cell(s) in ${sheetName}!${input.range} → ${out}`, is_error: false };
+      }
+      // ── set_column_width ──
+      if (a === "set_column_width") {
+        if (!input.column || !input.width) return _docError("set_column_width requires 'column' and 'width'");
+        const filePath = vp.resolved || path.resolve(input.file_path);
+        const wb = XLSX.readFile(filePath);
+        const sheetName = input.sheet || wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        if (!ws) return _docError(`Sheet not found: ${sheetName}`);
+        if (!ws["!cols"]) ws["!cols"] = [];
+        const colIdx = XLSX.utils.decode_col(input.column.toUpperCase());
+        while (ws["!cols"].length <= colIdx) ws["!cols"].push({});
+        ws["!cols"][colIdx] = { wch: input.width };
+        const out = input.output_path ? path.resolve(input.output_path) : filePath;
+        XLSX.writeFile(wb, out);
+        return { content: `Set column ${input.column} width to ${input.width} in ${sheetName} → ${out}`, is_error: false };
+      }
+      // ── create — create a new workbook ──
+      if (a === "create") {
+        const filePath = path.resolve(input.file_path);
+        const wb = XLSX.utils.book_new();
+        const sheetNames = input.sheets || ["Sheet1"];
+        for (const name of sheetNames) { XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([]), name); }
+        XLSX.writeFile(wb, filePath);
+        return { content: `Created ${filePath} with sheets: ${sheetNames.join(", ")}`, is_error: false };
+      }
+      // ── add_sheet — add a new sheet to existing workbook ──
+      if (a === "add_sheet") {
+        if (!input.sheet) return _docError("add_sheet requires 'sheet' (sheet name)");
+        const filePath = vp.resolved || path.resolve(input.file_path);
+        const wb = fs.existsSync(filePath) ? XLSX.readFile(filePath) : XLSX.utils.book_new();
+        if (wb.SheetNames.includes(input.sheet)) return _docError(`Sheet already exists: ${input.sheet}`);
+        XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet([]), input.sheet);
+        const out = input.output_path ? path.resolve(input.output_path) : filePath;
+        XLSX.writeFile(wb, out);
+        return { content: `Added sheet "${input.sheet}" → ${out}`, is_error: false };
       }
       return _docError(`Unknown action: ${a}`);
     } catch (e) { return _docError(`Spreadsheet error: ${e.message}`); }
