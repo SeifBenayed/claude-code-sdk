@@ -2747,6 +2747,263 @@ function registerDocumentTools(registry) {
   }, { deferred: true });
 }
 
+// ── Presentation Tool (PowerPoint .pptx — read-only v1) ─────────────────
+
+const PRESENTATION_READ_ACTIONS = new Set(["inspect", "list_slides", "extract_text", "read_notes", "export_text_outline"]);
+
+function registerPresentationTools(registry) {
+  registry.register("Presentation", {
+    description: "PowerPoint presentation operations on .pptx files. Actions: inspect, list_slides, extract_text, read_notes, export_text_outline. Read-only in v1 — use for reading and extracting content from presentations.",
+    input_schema: { type: "object", properties: {
+      action: { type: "string", enum: ["inspect", "list_slides", "extract_text", "read_notes", "export_text_outline"], description: "Presentation action" },
+      file_path: { type: "string", description: "Path to .pptx file" },
+      slide_index: { type: "integer", description: "1-based slide index for specific slide operations" },
+      output_path: { type: "string", description: "Output file path for export" },
+    }, required: ["action", "file_path"] }
+  }, async (input) => {
+    const a = input.action;
+    const vp = _validateDocPath(input.file_path, [".pptx"]);
+    if (vp.error) return _docError(vp.error);
+    try {
+      const JSZip = (await import("jszip")).default;
+      const buf = fs.readFileSync(vp.resolved);
+      const zip = await JSZip.loadAsync(buf);
+      // Discover slides
+      const slideFiles = Object.keys(zip.files).filter(f => /^ppt\/slides\/slide\d+\.xml$/.test(f)).sort((a, b) => {
+        const na = parseInt(a.match(/slide(\d+)/)[1]); const nb = parseInt(b.match(/slide(\d+)/)[1]); return na - nb;
+      });
+      // Helper: extract text from slide XML
+      const extractSlideText = async (slideFile) => {
+        const xml = await zip.file(slideFile).async("string");
+        const texts = []; const re = /<a:t>(.*?)<\/a:t>/g; let m;
+        while ((m = re.exec(xml)) !== null) texts.push(m[1]);
+        return texts;
+      };
+      // Helper: extract notes from slide XML
+      const extractSlideNotes = async (slideFile) => {
+        const xml = await zip.file(slideFile).async("string");
+        const notesMatch = xml.match(/<p:notes>([\s\S]*?)<\/p:notes>/);
+        if (!notesMatch) return null;
+        const texts = []; const re = /<a:t>(.*?)<\/a:t>/g; let m;
+        while ((m = re.exec(notesMatch[1])) !== null) texts.push(m[1]);
+        return texts.length > 0 ? texts.join(" ") : null;
+      };
+
+      if (a === "inspect") {
+        return _docResult({ file: path.basename(vp.resolved), slides: slideFiles.length, sizeKB: Math.round(buf.length / 1024), hasNotes: false });
+      }
+      if (a === "list_slides") {
+        const slides = [];
+        for (let i = 0; i < slideFiles.length; i++) {
+          const texts = await extractSlideText(slideFiles[i]);
+          const title = texts[0] || "(untitled)";
+          const bodyPreview = texts.slice(1).join(" ").slice(0, 100);
+          slides.push({ index: i + 1, title, bodyPreview, textCount: texts.length });
+        }
+        return _docResult(slides);
+      }
+      if (a === "extract_text") {
+        if (input.slide_index) {
+          const idx = input.slide_index - 1;
+          if (idx < 0 || idx >= slideFiles.length) return _docError(`Slide ${input.slide_index} out of range (1-${slideFiles.length})`);
+          const texts = await extractSlideText(slideFiles[idx]);
+          return _docResult({ slide: input.slide_index, texts });
+        }
+        const allSlides = [];
+        for (let i = 0; i < slideFiles.length; i++) {
+          const texts = await extractSlideText(slideFiles[i]);
+          allSlides.push({ slide: i + 1, texts });
+        }
+        return _docResult(allSlides);
+      }
+      if (a === "read_notes") {
+        const notes = [];
+        for (let i = 0; i < slideFiles.length; i++) {
+          const note = await extractSlideNotes(slideFiles[i]);
+          if (note) notes.push({ slide: i + 1, notes: note });
+        }
+        return _docResult(notes.length > 0 ? notes : []);
+      }
+      if (a === "export_text_outline") {
+        const lines = [];
+        for (let i = 0; i < slideFiles.length; i++) {
+          const texts = await extractSlideText(slideFiles[i]);
+          lines.push(`## Slide ${i + 1}: ${texts[0] || "(untitled)"}`);
+          for (const t of texts.slice(1)) lines.push(`- ${t}`);
+          const note = await extractSlideNotes(slideFiles[i]);
+          if (note) lines.push(`  [Notes: ${note}]`);
+          lines.push("");
+        }
+        const outline = lines.join("\n");
+        if (input.output_path) { const out = path.resolve(input.output_path); fs.writeFileSync(out, outline); return { content: `Exported outline → ${out}`, is_error: false }; }
+        return { content: outline, is_error: false };
+      }
+      return _docError(`Unknown action: ${a}`);
+    } catch (e) { return _docError(`Presentation error: ${e.message}`); }
+  }, { deferred: true });
+}
+
+// ── Desktop Tool (macOS accessibility) ────────────────────────────────────
+
+const DESKTOP_READ_ACTIONS = new Set(["list_windows", "get_tree", "screenshot", "get_focused"]);
+const DESKTOP_WRITE_ACTIONS = new Set(["focus_window", "click_element", "type_text", "send_keys", "open_app", "close_window"]);
+
+function _osascript(script) {
+  return new Promise((resolve) => {
+    try {
+      const result = execSync(`osascript -e '${script.replace(/'/g, "'\\''")}'`, { encoding: "utf-8", timeout: 10000, stdio: ["pipe", "pipe", "pipe"] });
+      resolve({ content: result.trim(), is_error: false });
+    } catch (e) { resolve({ content: e.stderr?.trim() || e.message, is_error: true }); }
+  });
+}
+
+function registerDesktopTools(registry) {
+  if (process.platform !== "darwin") return; // macOS only for now
+
+  registry.register("Desktop", {
+    description: "Desktop automation via macOS accessibility. Actions: list_windows, focus_window, get_tree, click_element, type_text, send_keys, screenshot, get_focused, open_app, close_window. Use list_windows first to see apps, get_tree to inspect UI elements, then interact.",
+    input_schema: { type: "object", properties: {
+      action: { type: "string", enum: ["list_windows", "focus_window", "get_tree", "click_element", "type_text", "send_keys", "screenshot", "get_focused", "open_app", "close_window"], description: "Desktop action" },
+      app: { type: "string", description: "Application name (e.g. 'Safari', 'Excel', 'Finder')" },
+      element_path: { type: "string", description: "Accessibility element path for click_element (e.g. 'button 1', 'text field 1')" },
+      text: { type: "string", description: "Text to type for type_text" },
+      keys: { type: "string", description: "Key combo for send_keys (e.g. 'command+s', 'return', 'tab')" },
+      output_path: { type: "string", description: "Output path for screenshot" },
+    }, required: ["action"] }
+  }, async (input) => {
+    const a = input.action;
+    try {
+      if (a === "list_windows") {
+        const result = await _osascript('tell application "System Events" to get {name, title of first window} of every process whose visible is true');
+        if (result.is_error) {
+          // Fallback: just list app names
+          const names = await _osascript('tell application "System Events" to get name of every process whose visible is true');
+          if (names.is_error) return names;
+          return _docResult(names.content.split(", ").map((name, i) => ({ index: i, app: name })));
+        }
+        return { content: result.content, is_error: false };
+      }
+
+      if (a === "get_focused") {
+        const result = await _osascript('tell application "System Events" to get name of first process whose frontmost is true');
+        return result;
+      }
+
+      if (a === "focus_window") {
+        if (!input.app) return _docError("focus_window requires 'app'");
+        const result = await _osascript(`tell application "${input.app}" to activate`);
+        if (result.is_error) return result;
+        return { content: `Focused: ${input.app}`, is_error: false };
+      }
+
+      if (a === "open_app") {
+        if (!input.app) return _docError("open_app requires 'app'");
+        const result = await _osascript(`tell application "${input.app}" to launch`);
+        if (result.is_error) return result;
+        await new Promise(r => setTimeout(r, 1000));
+        return { content: `Opened: ${input.app}`, is_error: false };
+      }
+
+      if (a === "close_window") {
+        if (!input.app) return _docError("close_window requires 'app'");
+        const result = await _osascript(`tell application "${input.app}" to close front window`);
+        if (result.is_error) return result;
+        return { content: `Closed front window of ${input.app}`, is_error: false };
+      }
+
+      if (a === "get_tree") {
+        if (!input.app) return _docError("get_tree requires 'app'");
+        // Get accessibility tree of the front window
+        const script = `tell application "System Events"
+          tell process "${input.app}"
+            set uiElements to {}
+            try
+              set frontWin to front window
+              set winName to name of frontWin
+              repeat with i from 1 to count of UI elements of frontWin
+                set el to UI element i of frontWin
+                set elRole to role of el
+                set elName to ""
+                try
+                  set elName to name of el
+                end try
+                set elDesc to ""
+                try
+                  set elDesc to description of el
+                end try
+                set elVal to ""
+                try
+                  set elVal to value of el as text
+                end try
+                set end of uiElements to "[" & i & "] " & elRole & " \\"" & elName & "\\"" & " desc=\\"" & elDesc & "\\"" & " val=\\"" & (text 1 thru (min of {80, length of elVal}) of (elVal & "")) & "\\""
+              end repeat
+              return "Window: " & winName & return & (uiElements as text)
+            on error errMsg
+              return "Error: " & errMsg
+            end try
+          end tell
+        end tell`;
+        const result = await _osascript(script);
+        return result;
+      }
+
+      if (a === "click_element") {
+        if (!input.app || !input.element_path) return _docError("click_element requires 'app' and 'element_path'");
+        const result = await _osascript(`tell application "System Events" to tell process "${input.app}" to click ${input.element_path} of front window`);
+        if (result.is_error) return result;
+        return { content: `Clicked: ${input.element_path} in ${input.app}`, is_error: false };
+      }
+
+      if (a === "type_text") {
+        if (!input.app || !input.text) return _docError("type_text requires 'app' and 'text'");
+        // Focus app then keystroke
+        await _osascript(`tell application "${input.app}" to activate`);
+        await new Promise(r => setTimeout(r, 200));
+        const result = await _osascript(`tell application "System Events" to keystroke "${input.text.replace(/"/g, '\\"')}"`);
+        if (result.is_error) return result;
+        return { content: `Typed "${input.text}" in ${input.app}`, is_error: false };
+      }
+
+      if (a === "send_keys") {
+        if (!input.keys) return _docError("send_keys requires 'keys'");
+        if (input.app) await _osascript(`tell application "${input.app}" to activate`);
+        await new Promise(r => setTimeout(r, 200));
+        // Parse key combo: "command+s" → key code s using command down
+        const parts = input.keys.split("+");
+        const key = parts.pop();
+        const modifiers = parts.map(m => m.trim().toLowerCase());
+        let modStr = "";
+        if (modifiers.length > 0) modStr = " using {" + modifiers.map(m => m === "cmd" || m === "command" ? "command down" : m === "shift" ? "shift down" : m === "alt" || m === "option" ? "option down" : m === "ctrl" || m === "control" ? "control down" : m + " down").join(", ") + "}";
+        // Named keys
+        const keyMap = { return: "return", enter: "return", tab: "tab", escape: "escape", space: "space", delete: "delete", backspace: "delete", up: "up arrow", down: "down arrow", left: "left arrow", right: "right arrow" };
+        const mappedKey = keyMap[key.toLowerCase()];
+        let script;
+        if (mappedKey) { script = `tell application "System Events" to key code ${key === "return" || key === "enter" ? 36 : key === "tab" ? 48 : key === "escape" ? 53 : key === "space" ? 49 : key === "delete" || key === "backspace" ? 51 : key === "up" ? 126 : key === "down" ? 125 : key === "left" ? 123 : key === "right" ? 124 : 0}${modStr}`; }
+        else { script = `tell application "System Events" to keystroke "${key}"${modStr}`; }
+        const result = await _osascript(script);
+        if (result.is_error) return result;
+        return { content: `Sent keys: ${input.keys}${input.app ? " to " + input.app : ""}`, is_error: false };
+      }
+
+      if (a === "screenshot") {
+        const dir = path.join(os.tmpdir(), "cloclo-screenshots");
+        fs.mkdirSync(dir, { recursive: true });
+        const fp = input.output_path || path.join(dir, `desktop-${Date.now()}.png`);
+        if (input.app) {
+          // Screenshot specific app window
+          execSync(`screencapture -l $(osascript -e 'tell application "System Events" to get id of first window of process "${input.app}"' 2>/dev/null || echo 0) "${fp}"`, { timeout: 10000, stdio: "pipe" });
+        } else {
+          execSync(`screencapture -x "${fp}"`, { timeout: 10000, stdio: "pipe" });
+        }
+        if (fs.existsSync(fp)) return { content: `Screenshot saved: ${fp} (${(fs.statSync(fp).size / 1024).toFixed(1)} KB)`, is_error: false };
+        return _docError("Screenshot failed");
+      }
+
+      return _docError(`Unknown action: ${a}`);
+    } catch (e) { return _docError(`Desktop error: ${e.message}`); }
+  }, { deferred: true });
+}
+
 // ── Browser Tool Pack (CDP-native, enterprise) ────────────────────────────
 
 const BROWSER_READ_ONLY_ACTIONS = new Set(["get_state","get_text","screenshot","pdf","cookies_get","list_tabs","list_sessions","list_frames","get_events","dropdown_options","extract","switch_tab","get_network_log"]);
@@ -10351,6 +10608,8 @@ async function main() {
   registerSpreadsheetTools(registry);
   registerPdfTools(registry);
   registerDocumentTools(registry);
+  registerPresentationTools(registry);
+  registerDesktopTools(registry);
   scanCustomTools(registry, cfg);
   cfg._officialToolCatalog = _OFFICIAL_CATALOG; // expose for ink-ui
   if (cfg.briefMode) registerBriefTools(registry, cfg);

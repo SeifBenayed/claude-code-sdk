@@ -5420,7 +5420,137 @@ section("E2E: Document read_text + extract_headings");
   } catch (e) { skip(`Document E2E: ${e.message}`); }
 }
 
-section("E2E: tool list shows document tools (deferred)");
+section("UNIT: Presentation tool actions (read-only v1)");
+
+{
+  assert(source.includes("registerPresentationTools"), "registerPresentationTools exists");
+  assert(source.includes('"list_slides"') && source.includes('"read_notes"') && source.includes('"export_text_outline"'), "Presentation has list_slides, read_notes, export_text_outline");
+  assert(source.includes("PRESENTATION_READ_ACTIONS"), "Presentation has read action classification");
+}
+
+section("UNIT: sample.pptx fixture exists");
+
+{
+  assert(fs.existsSync(path.join(__dirname, "test", "document-fixtures", "sample.pptx")), "Fixture: sample.pptx");
+}
+
+section("E2E: Presentation list_slides + extract_text");
+
+{
+  try {
+    const result = await new Promise((resolve) => {
+      const child = spawn("node", ["-e", `
+        const fs = require("fs");
+        async function run() {
+          const JSZip = (await import("jszip")).default;
+          const buf = fs.readFileSync("test/document-fixtures/sample.pptx");
+          const zip = await JSZip.loadAsync(buf);
+          const slideFiles = Object.keys(zip.files).filter(f => /^ppt\\/slides\\/slide\\d+\\.xml$/.test(f));
+          const slides = [];
+          for (const sf of slideFiles.sort()) {
+            const xml = await zip.file(sf).async("string");
+            const texts = []; const re = /<a:t>(.*?)<\\/a:t>/g; let m;
+            while ((m = re.exec(xml)) !== null) texts.push(m[1]);
+            slides.push({ texts });
+          }
+          console.log(JSON.stringify({ slideCount: slides.length, firstTitle: slides[0]?.texts[0], hasRevenue: slides[1]?.texts.some(t => t.includes("Revenue")) }));
+        }
+        run();
+      `], { cwd: __dirname, stdio: ["pipe", "pipe", "pipe"], timeout: 10000 });
+      let out = ""; child.stdout.on("data", d => out += d); child.on("close", () => resolve(out));
+    });
+    const data = JSON.parse(result);
+    assert(data.slideCount === 3, "PPTX has 3 slides");
+    assert(data.firstTitle === "Quarterly Report Q1 2026", "First slide title correct");
+    assert(data.hasRevenue, "Second slide contains Revenue text");
+  } catch (e) { skip(`Presentation E2E: ${e.message}`); }
+}
+
+section("E2E: Presentation read_notes");
+
+{
+  try {
+    const result = await new Promise((resolve) => {
+      const child = spawn("node", ["-e", `
+        const fs = require("fs");
+        async function run() {
+          const JSZip = (await import("jszip")).default;
+          const buf = fs.readFileSync("test/document-fixtures/sample.pptx");
+          const zip = await JSZip.loadAsync(buf);
+          const xml = await zip.file("ppt/slides/slide1.xml").async("string");
+          const notesMatch = xml.match(/<p:notes>([\\s\\S]*?)<\\/p:notes>/);
+          const texts = [];
+          if (notesMatch) { const re = /<a:t>(.*?)<\\/a:t>/g; let m; while ((m = re.exec(notesMatch[1])) !== null) texts.push(m[1]); }
+          console.log(JSON.stringify({ hasNotes: texts.length > 0, noteText: texts.join(" ") }));
+        }
+        run();
+      `], { cwd: __dirname, stdio: ["pipe", "pipe", "pipe"], timeout: 10000 });
+      let out = ""; child.stdout.on("data", d => out += d); child.on("close", () => resolve(out));
+    });
+    const data = JSON.parse(result);
+    assert(data.hasNotes, "Slide 1 has speaker notes");
+    assert(data.noteText.includes("quarterly"), "Notes contain 'quarterly'");
+  } catch (e) { skip(`Presentation notes E2E: ${e.message}`); }
+}
+
+section("UNIT: Desktop tool exists (macOS)");
+
+{
+  assert(source.includes("registerDesktopTools"), "registerDesktopTools exists");
+  assert(source.includes("DESKTOP_READ_ACTIONS") && source.includes("DESKTOP_WRITE_ACTIONS"), "Desktop has read/write action classification");
+  assert(source.includes('"list_windows"') && source.includes('"get_tree"') && source.includes('"focus_window"'), "Desktop has list_windows, get_tree, focus_window");
+  assert(source.includes('"click_element"') && source.includes('"type_text"') && source.includes('"send_keys"'), "Desktop has click_element, type_text, send_keys");
+  assert(source.includes('"screenshot"') && source.includes('"open_app"') && source.includes('"close_window"'), "Desktop has screenshot, open_app, close_window");
+  assert(source.includes("_osascript"), "Uses _osascript helper for AppleScript");
+  assert(source.includes('process.platform !== "darwin"'), "Desktop is macOS-only guarded");
+}
+
+section("E2E: Desktop list_windows (macOS only)");
+
+{
+  if (process.platform === "darwin") {
+    try {
+      const result = await new Promise((resolve) => {
+        const child = spawn("osascript", ["-e", 'tell application "System Events" to get name of every process whose visible is true'], { stdio: ["pipe", "pipe", "pipe"], timeout: 5000 });
+        let out = ""; child.stdout.on("data", d => out += d); child.on("close", () => resolve(out.trim()));
+      });
+      assert(result.length > 0, "macOS accessibility returns visible apps");
+      assert(result.includes("Finder") || result.includes("Terminal") || result.includes("Google Chrome"), "Known apps visible");
+    } catch (e) { skip(`Desktop list_windows E2E: ${e.message}`); }
+  } else {
+    skip("Desktop tests: macOS only");
+  }
+}
+
+section("E2E: Desktop get_focused (macOS only)");
+
+{
+  if (process.platform === "darwin") {
+    try {
+      const result = await new Promise((resolve) => {
+        const child = spawn("osascript", ["-e", 'tell application "System Events" to get name of first process whose frontmost is true'], { stdio: ["pipe", "pipe", "pipe"], timeout: 5000 });
+        let out = ""; child.stdout.on("data", d => out += d); child.on("close", () => resolve(out.trim()));
+      });
+      assert(result.length > 0, "get_focused returns a focused app name");
+    } catch (e) { skip(`Desktop get_focused E2E: ${e.message}`); }
+  } else { skip("Desktop tests: macOS only"); }
+}
+
+section("E2E: Desktop screenshot (macOS only)");
+
+{
+  if (process.platform === "darwin") {
+    try {
+      const tmpFile = path.join(os.tmpdir(), "cloclo-desktop-test-" + Date.now() + ".png");
+      execSync(`screencapture -x "${tmpFile}"`, { timeout: 5000, stdio: "pipe" });
+      assert(fs.existsSync(tmpFile), "screencapture creates PNG file");
+      assert(fs.statSync(tmpFile).size > 1000, "screenshot is non-trivial size");
+      fs.unlinkSync(tmpFile);
+    } catch (e) { skip(`Desktop screenshot E2E: ${e.message}`); }
+  } else { skip("Desktop tests: macOS only"); }
+}
+
+section("E2E: tool list shows document + desktop tools (deferred)");
 
 {
   try {
@@ -5429,6 +5559,8 @@ section("E2E: tool list shows document tools (deferred)");
     assert(stderr.includes("Spreadsheet"), "tool list shows Spreadsheet");
     assert(stderr.includes("Pdf"), "tool list shows Pdf");
     assert(stderr.includes("Document"), "tool list shows Document");
+    assert(stderr.includes("Presentation"), "tool list shows Presentation");
+    if (process.platform === "darwin") assert(stderr.includes("Desktop"), "tool list shows Desktop (macOS)");
   } catch (e) { skip(`Document tools list E2E: ${e.message}`); }
 }
 
