@@ -1,0 +1,15 @@
+<!DOCTYPE html>
+<html><head><title>Upload Test</title></head>
+<body>
+<h1>File Upload</h1>
+<input type="file" id="file-input" name="file">
+<div id="file-info" style="display:none"></div>
+<script>
+document.getElementById('file-input').addEventListener('change', function(e) {
+  var info = document.getElementById('file-info');
+  info.style.display = 'block';
+  var f = e.target.files[0];
+  info.textContent = f ? 'File: ' + f.name + ' (' + f.size + ' bytes)' : 'No file';
+});
+</script>
+</body></html>

@@ -1,0 +1,10 @@
+<!DOCTYPE html>
+<html><head><title>Dialog Test</title></head>
+<body>
+<h1>Dialogs</h1>
+<button id="alert-btn" onclick="alert('Hello alert')">Alert</button>
+<button id="confirm-btn" onclick="document.getElementById('confirm-result').textContent=confirm('OK?')?'yes':'no'">Confirm</button>
+<button id="prompt-btn" onclick="document.getElementById('prompt-result').textContent=prompt('Enter:','default')">Prompt</button>
+<div id="confirm-result"></div>
+<div id="prompt-result"></div>
+</body></html>

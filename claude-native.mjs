@@ -20,6 +20,9 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
+// Single source of truth for version — read from package.json
+const _VERSION = (() => { try { return JSON.parse(fs.readFileSync(new URL("./package.json", import.meta.url), "utf-8")).version; } catch { return "1.0.1"; } })();
+
 // ── ArgParser ───────────────────────────────────────────────────
 
 async function parseArgs(argv = process.argv.slice(2)) {
@@ -88,26 +91,43 @@ async function parseArgs(argv = process.argv.slice(2)) {
   const VALID_OUTPUT_FORMATS = new Set(["text", "json"]);
 
   // Subcommand prefix check (before flag parsing)
-  if (argv[0] === "skill" && argv[1] === "import") {
-    cfg._subcommand = "skill-import";
-    cfg._skillImportSource = argv[2];
-    if (!cfg._skillImportSource) {
-      process.stderr.write("Error: skill import requires a source\n  cloclo skill import <folder|SKILL.md|URL|github:owner/repo>\n");
-      process.exit(EXIT.BAD_ARGS);
-    }
-    cfg.interactive = false;
-    cfg._skillImportList = false;
-    cfg._skillImportPick = null;
-    cfg._skillImportFormat = null;
-    // Parse remaining flags
-    for (let j = 3; j < argv.length; j++) {
-      if (argv[j] === "--yes" || argv[j] === "-y") cfg.permissionMode = "bypassPermissions";
-      else if (argv[j] === "--verbose") cfg.verbose = true;
-      else if (argv[j] === "--list") cfg._skillImportList = true;
-      else if (argv[j] === "--pick" && j + 1 < argv.length) cfg._skillImportPick = argv[++j];
-      else if (argv[j] === "--format" && j + 1 < argv.length) cfg._skillImportFormat = argv[++j];
-    }
-    return cfg;
+  if (argv[0] === "skill") {
+    const sub = argv[1];
+    if (sub === "import") {
+      cfg._subcommand = "skill-import";
+      cfg._skillImportSource = argv[2];
+      if (!cfg._skillImportSource) { process.stderr.write("Error: skill import requires a source\n  cloclo skill import <folder|SKILL.md|URL|github:owner/repo>\n"); process.exit(EXIT.BAD_ARGS); }
+      cfg.interactive = false; cfg._skillImportList = false; cfg._skillImportPick = null; cfg._skillImportFormat = null;
+      for (let j = 3; j < argv.length; j++) {
+        if (argv[j] === "--yes" || argv[j] === "-y") cfg.permissionMode = "bypassPermissions";
+        else if (argv[j] === "--verbose") cfg.verbose = true;
+        else if (argv[j] === "--list") cfg._skillImportList = true;
+        else if (argv[j] === "--pick" && j + 1 < argv.length) cfg._skillImportPick = argv[++j];
+        else if (argv[j] === "--format" && j + 1 < argv.length) cfg._skillImportFormat = argv[++j];
+      }
+      return cfg;
+    } else if (sub === "list") { cfg._subcommand = "skill-list"; cfg.interactive = false; return cfg; }
+    else if (sub === "info") { cfg._subcommand = "skill-info"; cfg._skillInfoName = argv[2]; if (!cfg._skillInfoName) { process.stderr.write("Error: skill info requires a skill name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
+    else if (sub === "remove") { cfg._subcommand = "skill-remove"; cfg._skillRemoveName = argv[2]; if (!cfg._skillRemoveName) { process.stderr.write("Error: skill remove requires a skill name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; for (let j = 3; j < argv.length; j++) { if (argv[j] === "--yes" || argv[j] === "-y") cfg.permissionMode = "bypassPermissions"; } return cfg; }
+    else if (sub === "update") { cfg._subcommand = "skill-update"; cfg._skillUpdateName = argv[2] || null; cfg.interactive = false; for (let j = 3; j < argv.length; j++) { if (argv[j] === "--yes" || argv[j] === "-y") cfg.permissionMode = "bypassPermissions"; } return cfg; }
+    else if (sub === "export") { cfg._subcommand = "skill-export"; cfg._skillExportName = argv[2]; if (!cfg._skillExportName) { process.stderr.write("Error: skill export requires a skill name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
+    else if (sub === "verify") { cfg._subcommand = "skill-verify"; cfg._skillVerifyName = argv[2]; if (!cfg._skillVerifyName) { process.stderr.write("Error: skill verify requires a skill name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
+    else if (sub === "search") { cfg._subcommand = "skill-search"; cfg._skillSearchQuery = argv.slice(2).join(" "); if (!cfg._skillSearchQuery) { process.stderr.write("Error: skill search requires a query\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
+    else if (sub === "publish") { cfg._subcommand = "skill-publish"; cfg._skillPublishName = argv[2]; if (!cfg._skillPublishName) { process.stderr.write("Error: skill publish requires a skill name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
+    else { process.stderr.write(`Error: Unknown skill subcommand "${sub || ""}"\n  Available: import, list, info, remove, update, export, verify, search, publish\n`); process.exit(EXIT.BAD_ARGS); }
+  }
+
+  // Tool subcommands
+  if (argv[0] === "tool") {
+    const sub = argv[1];
+    if (sub === "list") { cfg._subcommand = "tool-list"; cfg.interactive = false; return cfg; }
+    else if (sub === "info") { cfg._subcommand = "tool-info"; cfg._toolInfoName = argv[2]; if (!cfg._toolInfoName) { process.stderr.write("Error: tool info requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
+    else if (sub === "enable") { cfg._subcommand = "tool-enable"; cfg._toolEnableName = argv[2]; if (!cfg._toolEnableName) { process.stderr.write("Error: tool enable requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
+    else if (sub === "disable") { cfg._subcommand = "tool-disable"; cfg._toolDisableName = argv[2]; if (!cfg._toolDisableName) { process.stderr.write("Error: tool disable requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
+    else if (sub === "test") { cfg._subcommand = "tool-test"; cfg._toolTestName = argv[2]; if (!cfg._toolTestName) { process.stderr.write("Error: tool test requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
+    else if (sub === "install") { cfg._subcommand = "tool-install"; cfg._toolInstallSource = argv[2]; if (!cfg._toolInstallSource) { process.stderr.write("Error: tool install requires a path\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
+    else if (sub === "remove") { cfg._subcommand = "tool-remove"; cfg._toolRemoveName = argv[2]; if (!cfg._toolRemoveName) { process.stderr.write("Error: tool remove requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
+    else { process.stderr.write(`Error: Unknown tool subcommand "${sub || ""}"\n  Available: list, info, enable, disable, test, install, remove\n`); process.exit(EXIT.BAD_ARGS); }
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -781,6 +801,21 @@ Usage:
   cloclo -p "prompt"                    One-shot print mode
   cloclo --ndjson                       NDJSON bridge mode
   cloclo skill import <source>          Import a skill
+  cloclo skill list                     List installed skills
+  cloclo skill info <name>              Show skill details
+  cloclo skill remove <name>            Remove an installed skill
+  cloclo skill update [name]            Update skill(s) from source
+  cloclo skill export <name>            Export skill as .skill.json
+  cloclo skill verify <name>            Verify skill integrity (checksum)
+  cloclo skill search <query>           Search the skill registry
+  cloclo skill publish <name>           Publish skill to registry
+  cloclo tool list                      List all registered tools
+  cloclo tool info <name>               Show tool details
+  cloclo tool enable <name>             Enable a disabled tool
+  cloclo tool disable <name>            Disable a tool
+  cloclo tool test <name>               Test a tool
+  cloclo tool install <path>            Install custom tool from TOOL.json
+  cloclo tool remove <name>             Remove installed custom tool
 
 Examples:
   cloclo -p "explain this code"
@@ -1734,6 +1769,755 @@ class ToolRegistry {
     this._allowed = normalizeAllowed(allowed);
     this._disallowed = normalizeDisallowed(disallowed);
   }
+}
+
+// ── Tool Manifest & Management ────────────────────────────────
+
+const TOOL_MANIFEST_PATH = path.join(os.homedir(), ".claude", "tools", ".cloclo-tools.json");
+function _loadToolManifest() { try { const d = fs.readFileSync(TOOL_MANIFEST_PATH, "utf-8"); const m = JSON.parse(d); if (!m.tools || typeof m.tools !== "object") return { tools: {} }; return m; } catch { return { tools: {} }; } }
+function _saveToolManifest(manifest) { fs.mkdirSync(path.dirname(TOOL_MANIFEST_PATH), { recursive: true }); fs.writeFileSync(TOOL_MANIFEST_PATH, JSON.stringify(manifest, null, 2) + "\n"); }
+
+function _classifyToolType(name) {
+  if (name.startsWith("mcp__")) return "connector";
+  if (["Bash","Read","Write","Edit","Glob","Grep","WebFetch","WebSearch","ToolSearch","NotebookEdit","AskUserQuestion","SendUserMessage","Agent","Browser"].includes(name)) return "builtin";
+  if (name.startsWith("Task") || name.startsWith("Enter") || name.startsWith("Exit") || name.startsWith("ListMcp") || name.startsWith("ReadMcp")) return "builtin";
+  return "custom";
+}
+
+function toolList(cfg, registry) {
+  if (!registry) { process.stderr.write("Error: tool list requires an active session.\n"); return; }
+  const manifest = _loadToolManifest(); const allTools = [];
+  for (const [name, { definition, deferred }] of registry._tools) { const type = _classifyToolType(name); const enabled = !manifest.tools[name]?.disabled; allTools.push({ name, description: (definition.description || "").slice(0, 60), type, deferred, enabled }); }
+  allTools.sort((a, b) => { const order = { builtin: 0, custom: 1, connector: 2 }; if (a.type !== b.type) return (order[a.type] || 3) - (order[b.type] || 3); return a.name.localeCompare(b.name); });
+  if (allTools.length === 0) { process.stderr.write("No tools registered.\n"); return; }
+  const nameW = Math.max(20, ...allTools.map(t => t.name.length)) + 2;
+  process.stderr.write(`\n  ${"Name".padEnd(nameW)}${"Type".padEnd(12)}${"State".padEnd(10)}Description\n  ${"─".repeat(nameW)}${"─".repeat(12)}${"─".repeat(10)}${"─".repeat(30)}\n`);
+  for (const t of allTools) { const state = !t.enabled ? "\x1b[31mdisabled\x1b[0m" : t.deferred ? "\x1b[2mdeferred\x1b[0m" : "\x1b[32menabled \x1b[0m"; const tc = t.type === "builtin" ? "36" : t.type === "connector" ? "35" : "33"; process.stderr.write(`  ${t.name.padEnd(nameW)}\x1b[${tc}m${t.type.padEnd(12)}\x1b[0m${state}  ${t.description}\n`); }
+  const eager = allTools.filter(t => !t.deferred && t.enabled).length; const deferred = allTools.filter(t => t.deferred && t.enabled).length; const disabled = allTools.filter(t => !t.enabled).length;
+  process.stderr.write(`\n  ${allTools.length} tools (${eager} active, ${deferred} deferred${disabled ? `, ${disabled} disabled` : ""})\n\n`);
+}
+
+function toolInfo(cfg, registry, name) {
+  if (!name) { process.stderr.write("Usage: cloclo tool info <name>\n"); return; } if (!registry) { process.stderr.write("Error: tool info requires an active session.\n"); return; }
+  const tool = registry._tools.get(name); if (!tool) { process.stderr.write(`Tool not found: ${name}\n`); return; }
+  const manifest = _loadToolManifest(); const entry = manifest.tools[name] || {}; const type = _classifyToolType(name);
+  process.stderr.write(`\n  Name:        ${name}\n  Description: ${tool.definition.description || "(none)"}\n  Type:        ${type}\n  Deferred:    ${tool.deferred ? "yes" : "no"}\n  Enabled:     ${entry.disabled ? "no" : "yes"}\n`);
+  if (PROTECTED_TOOLS.has(name)) process.stderr.write(`  Protected:   yes (cannot be disabled)\n`);
+  if (name.startsWith("mcp__")) { const parts = name.split("__"); process.stderr.write(`  MCP server:  ${parts[1]}\n`); }
+  if (tool.definition.input_schema?.properties) { const params = Object.keys(tool.definition.input_schema.properties); const required = tool.definition.input_schema.required || []; process.stderr.write(`  Parameters:  ${params.map(p => required.includes(p) ? p : p + "?").join(", ")}\n`); }
+  if (entry.source) process.stderr.write(`  Source:      ${entry.source}\n`);
+  if (entry.backend) process.stderr.write(`  Backend:     ${entry.backend}\n`);
+  if (entry.model) process.stderr.write(`  Model:       ${entry.model}\n`);
+  if (entry.installedAt) process.stderr.write(`  Installed:   ${entry.installedAt.slice(0, 10)}\n`);
+  process.stderr.write(`\n`);
+}
+
+function toolEnable(cfg, registry, name) {
+  if (!name) { process.stderr.write("Usage: cloclo tool enable <name>\n"); return; } if (!registry?.has(name)) { process.stderr.write(`Tool not found: ${name}\n`); return; }
+  const manifest = _loadToolManifest(); if (manifest.tools[name]) { delete manifest.tools[name].disabled; delete manifest.tools[name].disabledAt; _saveToolManifest(manifest); }
+  if (registry._disallowed) { registry._disallowed = registry._disallowed.filter(t => t !== name); if (registry._disallowed.length === 0) registry._disallowed = null; }
+  process.stderr.write(`Enabled: ${name}\n`);
+}
+
+const PROTECTED_TOOLS = new Set(["Read", "Glob", "Grep", "ToolSearch", "Agent", "AskUserQuestion"]);
+
+function toolDisable(cfg, registry, name) {
+  if (!name) { process.stderr.write("Usage: cloclo tool disable <name>\n"); return; } if (!registry?.has(name)) { process.stderr.write(`Tool not found: ${name}\n`); return; }
+  if (PROTECTED_TOOLS.has(name)) { process.stderr.write(`Cannot disable ${name}: core tool required for cloclo to function.\n  Protected: ${[...PROTECTED_TOOLS].join(", ")}\n`); return; }
+  const manifest = _loadToolManifest(); if (!manifest.tools[name]) manifest.tools[name] = {}; manifest.tools[name].disabled = true; manifest.tools[name].disabledAt = new Date().toISOString(); _saveToolManifest(manifest);
+  if (!registry._disallowed) registry._disallowed = []; if (!registry._disallowed.includes(name)) registry._disallowed.push(name);
+  process.stderr.write(`Disabled: ${name}\n`);
+}
+
+async function toolTest(cfg, registry, name) {
+  if (!name) { process.stderr.write("Usage: cloclo tool test <name>\n"); return; } if (!registry?.has(name)) { process.stderr.write(`Tool not found: ${name}\n`); return; }
+  const tool = registry._tools.get(name); process.stderr.write(`Testing ${name}...\n`);
+  if (!tool.executor) { process.stderr.write(`  \x1b[32m✓\x1b[0m Registered${name.startsWith("mcp__") ? ` (MCP: ${name.split("__")[1]})` : " (external)"}\n`); return; }
+  const testInputs = { Bash: { command: "echo ok", timeout: 5000 }, Read: { file_path: "/dev/null" }, Glob: { pattern: "*.nonexistent-cloclo-test" }, Grep: { pattern: "cloclo-nonexistent-test", path: "/dev/null" }, WebFetch: null, WebSearch: null };
+  const input = testInputs[name]; if (input === null) { process.stderr.write(`  \x1b[32m✓\x1b[0m Registered\n  \x1b[2m○\x1b[0m Skipped (requires external input)\n`); return; }
+  if (input === undefined && !tool.deferred) { process.stderr.write(`  \x1b[32m✓\x1b[0m Registered\n  \x1b[2m○\x1b[0m No safe test input defined\n`); return; }
+  if (tool.deferred) { process.stderr.write(`  \x1b[32m✓\x1b[0m Registered (deferred)\n`); return; }
+  try { const start = Date.now(); const result = await registry.execute(name, input); const elapsed = Date.now() - start;
+    if (result?.is_error) process.stderr.write(`  \x1b[31m✗\x1b[0m Execution failed: ${(result.content || "").slice(0, 100)}\n`);
+    else process.stderr.write(`  \x1b[32m✓\x1b[0m Executed OK (${elapsed}ms)\n`);
+  } catch (e) { process.stderr.write(`  \x1b[31m✗\x1b[0m Error: ${e.message}\n`); }
+}
+
+// ── Custom Tools (TOOL.json) ──────────────────────────────────
+
+const CUSTOM_TOOLS_DIR = path.join(os.homedir(), ".claude", "tools");
+
+function _validateToolJson(toolDef) {
+  const errors = [];
+  if (!toolDef.name || typeof toolDef.name !== "string") errors.push("'name' is required (string)");
+  if (toolDef.name && !/^[a-zA-Z][a-zA-Z0-9_-]*$/.test(toolDef.name)) errors.push("'name' must start with letter, alphanumeric/hyphens/underscores");
+  if (!toolDef.description) errors.push("'description' is required");
+  if (!["shell", "http", "ai"].includes(toolDef.type)) errors.push("'type' must be one of: shell, http, ai");
+  if (!toolDef.input_schema || typeof toolDef.input_schema !== "object") errors.push("'input_schema' is required (object)");
+  if (toolDef.type === "shell") { if (!toolDef.command) errors.push("shell tools require 'command'"); if (toolDef.read_only === undefined) errors.push("shell tools must declare 'read_only' (true/false)"); }
+  if (toolDef.type === "http") { if (!toolDef.url) errors.push("http tools require 'url'"); if (!toolDef.method) errors.push("http tools require 'method'"); if (!toolDef.timeout) errors.push("http tools require 'timeout'"); }
+  if (toolDef.type === "ai") { if (!toolDef.task) errors.push("ai tools require 'task'"); if (!toolDef.model) errors.push("ai tools require 'model'");
+    const validBackends = ["provider", "ollama", "openai-compatible", "transformers"];
+    if (toolDef.backend && !validBackends.includes(toolDef.backend)) errors.push(`ai backend must be one of: ${validBackends.join(", ")}`);
+    if (toolDef.backend === "openai-compatible" && !toolDef.base_url) errors.push("openai-compatible backend requires 'base_url'");
+    if (toolDef.backend === "transformers") { const validTasks = ["classify","translation","ocr","rerank","stt","text-generation","summarization","fill-mask","ner","sentiment"]; if (toolDef.task && !validTasks.includes(toolDef.task)) errors.push(`transformers task must be one of: ${validTasks.join(", ")}`);
+      if (toolDef.device && !["cpu", "cuda", "mps", "auto"].includes(toolDef.device)) errors.push("device must be one of: cpu, cuda, mps, auto"); }
+  }
+  return errors;
+}
+
+function _createShellExecutor(toolDef) { const timeout = toolDef.timeout || 30000; return async (input) => { let cmd = toolDef.command; cmd = cmd.replace(/\$INPUT_JSON/g, JSON.stringify(input)); for (const [k, v] of Object.entries(input || {})) cmd = cmd.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), String(v)); try { return { content: execSync(cmd, { encoding: "utf-8", timeout, cwd: toolDef.cwd || process.cwd(), env: { ...process.env, ...(toolDef.env || {}) }, maxBuffer: 10 * 1024 * 1024 }), is_error: false }; } catch (e) { return { content: e.stderr || e.message, is_error: true }; } }; }
+
+function _createHttpExecutor(toolDef) { const timeout = toolDef.timeout || 10000; return async (input) => { const url = toolDef.url.replace(/\$INPUT_JSON/g, encodeURIComponent(JSON.stringify(input))); const body = ["POST","PUT","PATCH"].includes(toolDef.method?.toUpperCase()) ? JSON.stringify(input) : null; const headers = { "Content-Type": "application/json", ...(toolDef.headers || {}) }; return new Promise((resolve) => { const parsed = new URL(url); const mod = parsed.protocol === "https:" ? _https : _http; const req = mod.request({ hostname: parsed.hostname, port: parsed.port, path: parsed.pathname + parsed.search, method: toolDef.method?.toUpperCase() || "GET", headers, timeout }, (res) => { let d = ""; res.on("data", c => d += c); res.on("end", () => resolve(res.statusCode < 400 ? { content: d, is_error: false } : { content: `HTTP ${res.statusCode}: ${d}`, is_error: true })); }); req.on("error", e => resolve({ content: e.message, is_error: true })); req.on("timeout", () => { req.destroy(); resolve({ content: "Request timed out", is_error: true }); }); if (body) req.write(body); req.end(); }); }; }
+
+function _aiToolRequest(url, body, timeout, extraHeaders) { return new Promise((resolve, reject) => { const parsed = new URL(url); const mod = parsed.protocol === "https:" ? _https : _http; const req = mod.request({ hostname: parsed.hostname, port: parsed.port, path: parsed.pathname + parsed.search, method: "POST", headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(body), ...(extraHeaders || {}) }, timeout }, (res) => { let d = ""; res.on("data", c => d += c); res.on("end", () => res.statusCode < 400 ? resolve(d) : reject(new Error(`HTTP ${res.statusCode}: ${d.slice(0, 200)}`))); }); req.on("error", reject); req.on("timeout", () => { req.destroy(); reject(new Error("AI tool timed out")); }); req.write(body); req.end(); }); }
+
+function _createAiExecutor(toolDef, cfg) { const timeout = toolDef.timeout || 30000; return async (input) => { let prompt = toolDef.task; prompt = prompt.replace(/\$INPUT_JSON/g, JSON.stringify(input)); for (const [k, v] of Object.entries(input || {})) prompt = prompt.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), String(v)); try { const model = toolDef.model; const provider = toolDef.provider || null; const apiKey = cfg.apiKey || process.env.ANTHROPIC_API_KEY; const openaiKey = cfg.openaiApiKey || process.env.OPENAI_API_KEY; const isOAI = model.startsWith("gpt") || model.startsWith("o1") || model.startsWith("o3") || ["openai","azure","groq","deepseek","mistral"].includes(provider); let url, headers, body; if (isOAI) { url = { openai: cfg.openaiApiUrl || "https://api.openai.com/v1/chat/completions", groq: "https://api.groq.com/openai/v1/chat/completions", deepseek: "https://api.deepseek.com/v1/chat/completions", mistral: "https://api.mistral.ai/v1/chat/completions" }[provider] || cfg.openaiApiUrl || "https://api.openai.com/v1/chat/completions"; headers = { Authorization: `Bearer ${toolDef.api_key || openaiKey || ""}` }; body = JSON.stringify({ model, messages: [{ role: "user", content: prompt }], max_tokens: toolDef.max_tokens || 4096 }); } else { url = cfg.apiUrl || "https://api.anthropic.com/v1/messages"; headers = { "x-api-key": apiKey, "anthropic-version": "2023-06-01" }; body = JSON.stringify({ model, messages: [{ role: "user", content: prompt }], max_tokens: toolDef.max_tokens || 4096 }); } const resp = await _aiToolRequest(url, body, timeout, headers); const result = JSON.parse(resp); return { content: result.content?.[0]?.text || result.choices?.[0]?.message?.content || JSON.stringify(result), is_error: false }; } catch (e) { return { content: `AI tool error: ${e.message}`, is_error: true }; } }; }
+
+function _createOllamaExecutor(toolDef) { const timeout = toolDef.timeout || 30000; const baseUrl = toolDef.base_url || process.env.OLLAMA_API_URL || "http://localhost:11434"; return async (input) => { let prompt = toolDef.task; prompt = prompt.replace(/\$INPUT_JSON/g, JSON.stringify(input)); for (const [k, v] of Object.entries(input || {})) prompt = prompt.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), String(v)); try { const resp = await _aiToolRequest(`${baseUrl}/api/generate`, JSON.stringify({ model: toolDef.model, prompt, stream: false }), timeout); return { content: JSON.parse(resp).response || resp, is_error: false }; } catch (e) { return { content: `Ollama error: ${e.message}`, is_error: true }; } }; }
+
+function _createOpenAICompatibleExecutor(toolDef) { const timeout = toolDef.timeout || 30000; return async (input) => { let prompt = toolDef.task; prompt = prompt.replace(/\$INPUT_JSON/g, JSON.stringify(input)); for (const [k, v] of Object.entries(input || {})) prompt = prompt.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), String(v)); try { const url = `${toolDef.base_url.replace(/\/$/, "")}/v1/chat/completions`; const apiKey = toolDef.api_key || process.env[toolDef.api_key_env || ""] || ""; const headers = apiKey ? { Authorization: `Bearer ${apiKey}` } : {}; const resp = await _aiToolRequest(url, JSON.stringify({ model: toolDef.model, messages: [{ role: "user", content: prompt }], max_tokens: toolDef.max_tokens || 4096 }), timeout, headers); return { content: JSON.parse(resp).choices?.[0]?.message?.content || resp, is_error: false }; } catch (e) { return { content: `OpenAI-compatible error: ${e.message}`, is_error: true }; } }; }
+
+const _hfPipelineCache = new Map();
+function _createTransformersExecutor(toolDef) { const timeout = toolDef.timeout || 60000; const TASK_MAP = { classify:"text-classification",sentiment:"text-classification",translation:"translation",ocr:"image-to-text",rerank:"text-classification",stt:"automatic-speech-recognition","text-generation":"text-generation",summarization:"summarization","fill-mask":"fill-mask",ner:"token-classification" }; return async (input) => { let hf; try { hf = await import("@huggingface/transformers"); } catch { return { content: "Error: @huggingface/transformers not installed.\n  Run: npm install @huggingface/transformers", is_error: true }; } const hfTask = TASK_MAP[toolDef.task] || toolDef.task; const modelId = toolDef.local_path || toolDef.model; const cacheKey = `${hfTask}:${modelId}`; try { const start = Date.now(); let pipe = _hfPipelineCache.get(cacheKey); if (!pipe) { pipe = await hf.pipeline(hfTask, modelId); _hfPipelineCache.set(cacheKey, pipe); } const textInput = input.text || input.input || input.image_path || input.path || Object.values(input).find(v => typeof v === "string") || JSON.stringify(input); const result = await Promise.race([pipe(textInput), new Promise((_, rej) => setTimeout(() => rej(new Error("Timed out")), timeout))]); const elapsed = Date.now() - start; let output; if (Array.isArray(result) && result.length > 0) { const f = result[0]; output = (toolDef.task === "classify" || toolDef.task === "sentiment") ? JSON.stringify({ label: f.label, score: Math.round(f.score * 10000) / 10000 }) : f.generated_text || f.translation_text || f.summary_text || f.text || JSON.stringify(f); } else output = String(result); return { content: `${output}\n\n[${toolDef.task} via ${modelId} in ${elapsed}ms]`, is_error: false }; } catch (e) { return { content: `Transformers error: ${e.message}`, is_error: true }; } }; }
+
+function _registerCustomTool(registry, toolDef, cfg) {
+  let executor;
+  if (toolDef.type === "shell") executor = _createShellExecutor(toolDef);
+  else if (toolDef.type === "http") executor = _createHttpExecutor(toolDef);
+  else if (toolDef.type === "ai" && toolDef.backend === "transformers") executor = _createTransformersExecutor(toolDef);
+  else if (toolDef.type === "ai" && toolDef.backend === "ollama") executor = _createOllamaExecutor(toolDef);
+  else if (toolDef.type === "ai" && toolDef.backend === "openai-compatible") executor = _createOpenAICompatibleExecutor(toolDef);
+  else if (toolDef.type === "ai") executor = _createAiExecutor(toolDef, cfg);
+  else return;
+  registry.register(toolDef.name, { description: toolDef.description, input_schema: toolDef.input_schema }, executor);
+}
+
+function scanCustomTools(registry, cfg) { try { for (const entry of fs.readdirSync(CUSTOM_TOOLS_DIR, { withFileTypes: true })) { if (!entry.isDirectory() || entry.name.startsWith(".")) continue; try { const raw = fs.readFileSync(path.join(CUSTOM_TOOLS_DIR, entry.name, "TOOL.json"), "utf-8"); const toolDef = JSON.parse(raw); if (_validateToolJson(toolDef).length === 0) { _registerCustomTool(registry, toolDef, cfg); log(`Loaded custom tool: ${toolDef.name}`); } } catch { /* skip */ } } } catch { /* no tools dir */ } }
+
+function toolInstall(cfg, source) {
+  if (!source) { process.stderr.write("Usage: cloclo tool install <path>\n"); return; }
+  let toolDef; const resolved = path.resolve(source);
+  if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) { const jp = path.join(resolved, "TOOL.json"); if (!fs.existsSync(jp)) { process.stderr.write(`Error: No TOOL.json found in ${resolved}\n`); process.exit(EXIT.BAD_ARGS); } toolDef = JSON.parse(fs.readFileSync(jp, "utf-8")); }
+  else if (fs.existsSync(resolved) && resolved.endsWith("TOOL.json")) { toolDef = JSON.parse(fs.readFileSync(resolved, "utf-8")); }
+  else { process.stderr.write(`Error: ${source} is not a valid path\n`); process.exit(EXIT.BAD_ARGS); }
+  const errors = _validateToolJson(toolDef); if (errors.length > 0) { process.stderr.write(`\x1b[31mInvalid TOOL.json:\x1b[0m\n`); for (const e of errors) process.stderr.write(`  - ${e}\n`); process.exit(EXIT.BAD_ARGS); }
+  const targetDir = path.join(CUSTOM_TOOLS_DIR, toolDef.name); fs.mkdirSync(targetDir, { recursive: true });
+  const srcDir = fs.statSync(resolved).isDirectory() ? resolved : path.dirname(resolved);
+  for (const e of fs.readdirSync(srcDir)) { const src = path.join(srcDir, e); if (fs.statSync(src).isFile()) fs.copyFileSync(src, path.join(targetDir, e)); }
+  const manifest = _loadToolManifest(); manifest.tools[toolDef.name] = { name: toolDef.name, type: toolDef.type, source: resolved, installedAt: manifest.tools[toolDef.name]?.installedAt || new Date().toISOString(), updatedAt: new Date().toISOString(), disabled: false, ...(toolDef.type === "ai" ? { backend: toolDef.backend || "provider", model: toolDef.model, task: toolDef.task, device: toolDef.device || null } : {}) }; _saveToolManifest(manifest);
+  process.stderr.write(`\x1b[32mInstalled tool: ${toolDef.name}\x1b[0m (${toolDef.type})\n  Restart cloclo or use /tool list to see it.\n`);
+}
+
+function toolRemove(cfg, name) {
+  if (!name) { process.stderr.write("Usage: cloclo tool remove <name>\n"); return; }
+  const toolDir = path.join(CUSTOM_TOOLS_DIR, name); if (!fs.existsSync(path.join(toolDir, "TOOL.json"))) { if (_classifyToolType(name) === "builtin") process.stderr.write(`Cannot remove ${name}: it's a built-in tool. Use 'tool disable' instead.\n`); else process.stderr.write(`Custom tool not found: ${name}\n`); return; }
+  fs.rmSync(toolDir, { recursive: true, force: true }); const manifest = _loadToolManifest(); delete manifest.tools[name]; _saveToolManifest(manifest);
+  process.stderr.write(`Removed tool: ${name}\n  Restart cloclo to fully unload.\n`);
+}
+
+// ── Browser Tool Pack (CDP-native, enterprise) ────────────────────────────
+
+const BROWSER_READ_ONLY_ACTIONS = new Set(["get_state","get_text","screenshot","pdf","cookies_get","list_tabs","list_sessions","list_frames","get_events","dropdown_options","extract","switch_tab","get_network_log"]);
+const BROWSER_MUTATING_ACTIONS = new Set(["navigate","click_element","type_element","click","fill","send_keys","upload_file","select_dropdown","cookies_set","cookies_clear","new_tab","close_tab","new_session","close_session","back","forward","reload","close","set_dialog_auto_dismiss","inject_script","enable_network_log"]);
+const BROWSER_PRIVILEGED_ACTIONS = new Set(["evaluate"]);
+
+const _BROWSER_KEY_MAP = { Enter:{key:"Enter",code:"Enter",kc:13}, Tab:{key:"Tab",code:"Tab",kc:9}, Escape:{key:"Escape",code:"Escape",kc:27}, Backspace:{key:"Backspace",code:"Backspace",kc:8}, Delete:{key:"Delete",code:"Delete",kc:46}, Space:{key:" ",code:"Space",kc:32}, ArrowUp:{key:"ArrowUp",code:"ArrowUp",kc:38}, ArrowDown:{key:"ArrowDown",code:"ArrowDown",kc:40}, ArrowLeft:{key:"ArrowLeft",code:"ArrowLeft",kc:37}, ArrowRight:{key:"ArrowRight",code:"ArrowRight",kc:39}, Home:{key:"Home",code:"Home",kc:36}, End:{key:"End",code:"End",kc:35}, PageUp:{key:"PageUp",code:"PageUp",kc:33}, PageDown:{key:"PageDown",code:"PageDown",kc:34}, F1:{key:"F1",code:"F1",kc:112}, F2:{key:"F2",code:"F2",kc:113}, F3:{key:"F3",code:"F3",kc:114}, F4:{key:"F4",code:"F4",kc:115}, F5:{key:"F5",code:"F5",kc:116}, F6:{key:"F6",code:"F6",kc:117}, F7:{key:"F7",code:"F7",kc:118}, F8:{key:"F8",code:"F8",kc:119}, F9:{key:"F9",code:"F9",kc:120}, F10:{key:"F10",code:"F10",kc:121}, F11:{key:"F11",code:"F11",kc:122}, F12:{key:"F12",code:"F12",kc:123} };
+
+class BrowserSession {
+  constructor(id = "default", opts = {}) {
+    this._id = id; this._proc = null; this._ws = null; this._cmdId = 0;
+    this._callbacks = new Map(); this._eventHandlers = new Map();
+    this._tabs = new Map(); // targetId → {targetId, cdpSessionId, url, title}
+    this._activeTabId = null; this._mode = null; // "launch" | "attach"
+    this._url = ""; this._title = ""; this._consoleErrors = [];
+    this._screenshotPath = null; this._debugPort = 9222 + Math.floor(Math.random() * 1000);
+    this._actionHistory = []; this._events = []; // ring buffer, max 50
+    this._dialogAutoDismiss = true; this._networkLog = []; this._networkLogEnabled = false;
+    this._networkBodies = new Map(); // requestId → {url, method, status, headers, body, size, mimeType, ts}
+    this._profileName = opts.profileName || null;
+    this._userDataDir = opts.userDataDir || null;
+    this._profileDir = opts.profileDir || null;
+    this._cdpUrl = opts.cdpUrl || null;
+  }
+
+  // ── Lifecycle ─────────────────────────────────────────────────
+
+  async ensureBrowser() {
+    if (this._ws) return;
+    if (this._cdpUrl || process.env.BROWSER_CDP_URL) {
+      await this._attachRemote(this._cdpUrl || process.env.BROWSER_CDP_URL);
+    } else {
+      await this._launchBrowser();
+    }
+  }
+
+  async _launchBrowser() {
+    this._mode = "launch";
+    const paths = [process.env.CHROME_PATH, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/Applications/Chromium.app/Contents/MacOS/Chromium", "/opt/homebrew/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/chromium", "/usr/bin/google-chrome-stable", "/usr/bin/google-chrome"].filter(Boolean);
+    let cp = null; for (const p of paths) { if (fs.existsSync(p)) { cp = p; break; } } if (!cp) throw new Error("Chrome/Chromium not found. Set CHROME_PATH.");
+    let dataDir = this._userDataDir;
+    if (!dataDir) {
+      if (this._profileName) { dataDir = path.join(os.homedir(), ".claude", "browser-profiles", this._profileName); fs.mkdirSync(dataDir, { recursive: true }); }
+      else { dataDir = path.join(os.tmpdir(), "cloclo-browser-" + this._debugPort); }
+    }
+    const args = [`--remote-debugging-port=${this._debugPort}`, "--headless=new", "--disable-gpu", "--no-first-run", `--user-data-dir=${dataDir}`, "--window-size=1280,720", "--disable-blink-features=AutomationControlled", "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"];
+    if (this._profileDir) args.push(`--profile-directory=${this._profileDir}`);
+    args.push("about:blank");
+    this._proc = spawn(cp, args, { stdio: "pipe" });
+    this._proc.on("error", () => {}); this._proc.stderr?.on("data", () => {});
+    // Connect to browser-level WS via /json/version
+    let browserWsUrl = null;
+    for (let i = 0; i < 30; i++) { await new Promise(r => setTimeout(r, 200)); try { const resp = await _httpGet(`http://127.0.0.1:${this._debugPort}/json/version`); const info = JSON.parse(resp); if (info.webSocketDebuggerUrl) { browserWsUrl = info.webSocketDebuggerUrl; break; } } catch { /* not ready */ } }
+    if (!browserWsUrl) throw new Error("Chrome failed to start CDP");
+    await this._connectWs(browserWsUrl);
+    await this._send("Target.setDiscoverTargets", { discover: true });
+    this._setupTargetListeners();
+    // Attach to existing page targets
+    const resp = await this._send("Target.getTargets");
+    const pages = (resp?.targetInfos || []).filter(t => t.type === "page");
+    for (const page of pages) await this._attachToTarget(page.targetId);
+  }
+
+  async _attachRemote(cdpUrl) {
+    this._mode = "attach";
+    let browserWsUrl;
+    if (cdpUrl.startsWith("ws://") || cdpUrl.startsWith("wss://")) {
+      browserWsUrl = cdpUrl;
+    } else {
+      const base = cdpUrl.replace(/\/$/, "").replace(/^ws/, "http");
+      const resp = await _httpGet(`${base}/json/version`);
+      browserWsUrl = JSON.parse(resp).webSocketDebuggerUrl;
+    }
+    if (!browserWsUrl) throw new Error("Could not resolve browser WS URL from: " + cdpUrl);
+    await this._connectWs(browserWsUrl);
+    await this._send("Target.setDiscoverTargets", { discover: true });
+    this._setupTargetListeners();
+    const resp = await this._send("Target.getTargets");
+    const pages = (resp?.targetInfos || []).filter(t => t.type === "page");
+    for (const page of pages) await this._attachToTarget(page.targetId);
+  }
+
+  async _attachToTarget(targetId) {
+    const resp = await this._send("Target.attachToTarget", { targetId, flatten: true });
+    const cdpSessionId = resp?.sessionId;
+    if (!cdpSessionId) return null;
+    this._tabs.set(targetId, { targetId, cdpSessionId, url: "", title: "" });
+    if (!this._activeTabId) this._activeTabId = targetId;
+    await this._send("Runtime.enable", {}, cdpSessionId);
+    await this._send("Page.enable", {}, cdpSessionId);
+    await this._send("DOM.enable", {}, cdpSessionId);
+    this._setupPageListeners(cdpSessionId, targetId);
+    // Try to set download behavior (domain may vary across Chrome versions)
+    try { await this._send("Page.setDownloadBehavior", { behavior: "allow", downloadPath: path.join(os.tmpdir(), "cloclo-downloads") }, cdpSessionId); } catch { /* older Chrome */ }
+    try { await this._send("Browser.setDownloadBehavior", { behavior: "allow", downloadPath: path.join(os.tmpdir(), "cloclo-downloads") }, cdpSessionId); } catch { /* fallback */ }
+    // Auto-enable network log on new tabs if already active
+    if (this._networkLogEnabled) { try { await this._enableNetworkOnSession(cdpSessionId); } catch { /* non-critical */ } }
+    return targetId;
+  }
+
+  _activeCdpSession() { if (!this._activeTabId) return null; return this._tabs.get(this._activeTabId)?.cdpSessionId || null; }
+
+  async close() {
+    for (const [, tab] of this._tabs) { try { await this._send("Target.detachFromTarget", { sessionId: tab.cdpSessionId }); } catch { /* already detached */ } }
+    this._tabs.clear(); this._activeTabId = null;
+    if (this._ws) { try { this._ws.destroy(); } catch { /* already closed */ } this._ws = null; }
+    if (this._mode === "launch" && this._proc) { try { this._proc.kill("SIGTERM"); } catch { /* already dead */ } this._proc = null; }
+    this._url = ""; this._title = ""; return "Browser closed.";
+  }
+
+  // ── Tab Management ────────────────────────────────────────────
+
+  async newTab(url) {
+    const resp = await this._send("Target.createTarget", { url: url || "about:blank" });
+    const targetId = resp?.targetId;
+    if (!targetId) throw new Error("Failed to create new tab");
+    await this._attachToTarget(targetId);
+    this._activeTabId = targetId;
+    if (url && url !== "about:blank") {
+      await new Promise(r => setTimeout(r, 800));
+      try { const info = JSON.parse(await this._eval("JSON.stringify({url:location.href,title:document.title})")); const tab = this._tabs.get(targetId); if (tab) { tab.url = info.url; tab.title = info.title; } } catch { /* page still loading */ }
+    }
+    return `New tab: ${targetId}${url ? " → " + url : ""}`;
+  }
+
+  async switchTab(tabId) {
+    if (!this._tabs.has(tabId)) return `Tab not found: ${tabId}`;
+    this._activeTabId = tabId;
+    await this._send("Target.activateTarget", { targetId: tabId });
+    const tab = this._tabs.get(tabId);
+    return `Switched to tab: ${tabId} (${tab?.url || "about:blank"})`;
+  }
+
+  async closeTab(tabId) {
+    const tid = tabId || this._activeTabId;
+    if (!tid || !this._tabs.has(tid)) return `Tab not found: ${tid}`;
+    await this._send("Target.closeTarget", { targetId: tid });
+    this._tabs.delete(tid);
+    if (this._activeTabId === tid) { const next = this._tabs.keys().next().value; this._activeTabId = next || null; }
+    return `Closed tab: ${tid}`;
+  }
+
+  listTabs() { return Array.from(this._tabs.entries()).map(([id, t]) => ({ id, url: t.url, title: t.title, active: id === this._activeTabId })); }
+
+  // ── Navigation ────────────────────────────────────────────────
+
+  async navigate(url) {
+    const sid = this._activeCdpSession();
+    await this._send("Page.navigate", { url }, sid); await new Promise(r => setTimeout(r, 800));
+    const info = await this._eval("JSON.stringify({url:location.href,title:document.title})");
+    try { const p = JSON.parse(info); this._url = p.url; this._title = p.title; const tab = this._tabs.get(this._activeTabId); if (tab) { tab.url = p.url; tab.title = p.title; } } catch { this._url = url; }
+    return `Navigated to: ${this._url}\nTitle: ${this._title}`;
+  }
+
+  async back() { await this._eval("history.back()"); await new Promise(r => setTimeout(r, 500)); return "Back"; }
+  async forward() { await this._eval("history.forward()"); await new Promise(r => setTimeout(r, 500)); return "Forward"; }
+  async reload() { await this._send("Page.reload", {}, this._activeCdpSession()); await new Promise(r => setTimeout(r, 800)); return "Reloaded"; }
+
+  // ── State / Observation ───────────────────────────────────────
+
+  async getState(format) {
+    const js = `(()=>{const els=document.querySelectorAll('a,button,input,select,textarea,[role="button"],[role="link"],[onclick],[tabindex]');const items=[];let lk=0,inp=0,btn=0;els.forEach((el,i)=>{const tag=el.tagName.toLowerCase();const text=(el.textContent||el.value||el.placeholder||el.getAttribute('aria-label')||'').trim().slice(0,80);const type=el.type||'';const href=el.href||'';const name=el.name||'';if(tag==='a')lk++;if(tag==='input'||tag==='textarea'||tag==='select')inp++;if(tag==='button'||el.getAttribute('role')==='button')btn++;if(text||href||name)items.push({i,tag,type,name,text,href});});return JSON.stringify({url:location.href,title:document.title,scroll:{y:window.scrollY,h:document.documentElement.scrollHeight,vw:window.innerWidth,vh:window.innerHeight},text:document.body?.innerText?.slice(0,3000)||'',elements:items.slice(0,60),stats:{total:items.length,links:lk,inputs:inp,buttons:btn}});})()`;
+    const raw = await this._eval(js);
+    try {
+      const s = JSON.parse(raw); this._url = s.url; this._title = s.title;
+      const tab = this._tabs.get(this._activeTabId); if (tab) { tab.url = s.url; tab.title = s.title; }
+      if (format === "json") {
+        return JSON.stringify({ url: s.url, title: s.title, scroll: { y: s.scroll.y, height: s.scroll.h, vw: s.scroll.vw, vh: s.scroll.vh }, stats: s.stats, elements: s.elements.map(e => ({ index: e.i, tag: e.tag, ...(e.type ? { type: e.type } : {}), ...(e.name ? { name: e.name } : {}), text: e.text, ...(e.href ? { href: e.href } : {}) })), text: s.text, session_id: this._id, active_tab_id: this._activeTabId }, null, 2);
+      }
+      const elLines = s.elements.map(e => `[${e.i}] <${e.tag}${e.type ? ":" + e.type : ""}>${e.name ? ' name="' + e.name + '"' : ""} "${e.text}"${e.href ? " -> " + e.href : ""}`);
+      return [`URL: ${s.url}`, `Title: ${s.title}`, `Scroll: ${s.scroll.y}/${s.scroll.h} (${s.scroll.vw}x${s.scroll.vh})`, `Interactive: ${s.stats.total} (links:${s.stats.links} inputs:${s.stats.inputs} buttons:${s.stats.buttons})`, "", "=== DOM ===", ...elLines, "", s.text ? "=== Text ===" : "", s.text?.slice(0, 2000) || ""].join("\n");
+    } catch { return raw; }
+  }
+
+  async getText(selector) { if (!selector) return (await this._eval("document.body?.innerText?.slice(0,10000)||''")).slice(0, 10000); return await this._eval(`(document.querySelector(${JSON.stringify(selector)})?.textContent||'not found')`); }
+
+  async screenshot(op) {
+    const sid = this._activeCdpSession();
+    const r = await this._send("Page.captureScreenshot", { format: "png" }, sid);
+    if (!r?.data) throw new Error("Screenshot failed");
+    const dir = path.join(os.tmpdir(), "cloclo-screenshots"); fs.mkdirSync(dir, { recursive: true });
+    const fp = op || path.join(dir, `screenshot-${Date.now()}.png`);
+    fs.writeFileSync(fp, Buffer.from(r.data, "base64")); this._screenshotPath = fp;
+    return `Screenshot saved: ${fp} (${(fs.statSync(fp).size / 1024).toFixed(1)} KB)`;
+  }
+
+  // ── Interaction ───────────────────────────────────────────────
+
+  async clickElement(index, frameId) {
+    const r = await this._eval(`(()=>{const els=document.querySelectorAll('a,button,input,select,textarea,[role="button"],[role="link"],[onclick],[tabindex]');const el=els[${index}];if(!el)return 'not found';el.scrollIntoView({block:"center"});el.click();return 'clicked [${index}] <'+el.tagName.toLowerCase()+'> "'+(el.textContent||'').trim().slice(0,40)+'"';})()`, frameId);
+    await new Promise(r => setTimeout(r, 300)); return r;
+  }
+
+  async typeElement(index, value, frameId) {
+    const sid = this._activeCdpSession();
+    await this._eval(`(()=>{const els=document.querySelectorAll('a,button,input,select,textarea,[role="button"],[role="link"],[onclick],[tabindex]');const el=els[${index}];if(el){el.focus();el.value='';}})()`, frameId);
+    for (const c of value) { await this._send("Input.dispatchKeyEvent", { type: "keyDown", text: c, key: c }, sid); await this._send("Input.dispatchKeyEvent", { type: "keyUp", key: c }, sid); }
+    return `Typed '${value}' into [${index}]`;
+  }
+
+  async click(selector, frameId) {
+    const r = await this._eval(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(!el)return 'not found';el.scrollIntoView({block:"center"});el.click();return 'clicked '+el.tagName.toLowerCase();})()`, frameId);
+    await new Promise(r => setTimeout(r, 300)); return r;
+  }
+
+  async fill(selector, value, frameId) {
+    await this._eval(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(el){el.focus();el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('input',{bubbles:true}));}})()`, frameId);
+    return `Filled ${selector}`;
+  }
+
+  async sendKeys(keys) {
+    const sid = this._activeCdpSession();
+    const parts = keys.split(" ");
+    for (const part of parts) {
+      const segs = part.split("+"); const keyName = segs.pop();
+      const modBits = (segs.includes("Alt") ? 1 : 0) | (segs.includes("Ctrl") ? 2 : 0) | (segs.includes("Meta") || segs.includes("Cmd") ? 4 : 0) | (segs.includes("Shift") ? 8 : 0);
+      const mapped = _BROWSER_KEY_MAP[keyName];
+      if (mapped) {
+        await this._send("Input.dispatchKeyEvent", { type: "rawKeyDown", key: mapped.key, code: mapped.code, windowsVirtualKeyCode: mapped.kc, modifiers: modBits }, sid);
+        await this._send("Input.dispatchKeyEvent", { type: "keyUp", key: mapped.key, code: mapped.code, windowsVirtualKeyCode: mapped.kc, modifiers: modBits }, sid);
+      } else {
+        for (const c of keyName) {
+          await this._send("Input.dispatchKeyEvent", { type: "keyDown", text: c, key: c, modifiers: modBits }, sid);
+          await this._send("Input.dispatchKeyEvent", { type: "keyUp", key: c, modifiers: modBits }, sid);
+        }
+      }
+    }
+    return `Sent keys: ${keys}`;
+  }
+
+  async uploadFile(selector, filePath, frameId) {
+    const sid = this._activeCdpSession();
+    const { root } = await this._send("DOM.getDocument", {}, sid) || {};
+    if (!root) return "DOM not available";
+    const { nodeId } = await this._send("DOM.querySelector", { nodeId: root.nodeId, selector }, sid) || {};
+    if (!nodeId) return `File input not found: ${selector}`;
+    await this._send("DOM.setFileInputFiles", { files: [path.resolve(filePath)], nodeId }, sid);
+    return `Uploaded ${path.basename(filePath)} to ${selector}`;
+  }
+
+  async selectDropdown(selector, value, frameId) {
+    return await this._eval(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(!el)return 'not found';el.value=${JSON.stringify(value)};el.dispatchEvent(new Event('change',{bubbles:true}));return 'selected '+${JSON.stringify(value)};})()`, frameId);
+  }
+
+  async dropdownOptions(selector, frameId) {
+    return await this._eval(`(()=>{const el=document.querySelector(${JSON.stringify(selector)});if(!el||el.tagName!=='SELECT')return JSON.stringify([]);return JSON.stringify(Array.from(el.options).map(o=>({value:o.value,text:o.textContent.trim(),selected:o.selected})));})()`, frameId);
+  }
+
+  async extract(schema, frameId) {
+    const js = `(()=>{const s=${JSON.stringify(schema)};const r={};for(const[k,sel] of Object.entries(s)){const el=document.querySelector(sel);r[k]=el?el.textContent.trim():null;}return JSON.stringify(r);})()`;
+    return await this._eval(js, frameId);
+  }
+
+  async evaluate(js, frameId) { return await this._eval(js, frameId); }
+
+  async waitFor(selector, t) { const start = Date.now(); while (Date.now() - start < t) { if ((await this._eval(`!!document.querySelector(${JSON.stringify(selector)})`)) === "true") return `Found: ${selector} (${Date.now() - start}ms)`; await new Promise(r => setTimeout(r, 200)); } return `Timeout: ${selector} not found after ${t}ms`; }
+
+  async scrollTo(sel, px) { if (sel) { await this._eval(`document.querySelector(${JSON.stringify(sel)})?.scrollIntoView({block:"center"})`); return `Scrolled to: ${sel}`; } await this._eval(`window.scrollBy(0,${px || 500})`); return "Scrolled"; }
+
+  // ── Cookies ───────────────────────────────────────────────────
+
+  async cookiesGet() { const sid = this._activeCdpSession(); const r = await this._send("Network.getCookies", {}, sid); return JSON.stringify(r?.cookies?.slice(0, 30) || [], null, 2); }
+  async cookiesSet(n, v, d, p) { const sid = this._activeCdpSession(); await this._send("Network.setCookie", { name: n, value: v, domain: d, path: p || "/" }, sid); return `Cookie set: ${n}=${v}`; }
+  async cookiesClear() { const sid = this._activeCdpSession(); await this._send("Network.clearBrowserCookies", {}, sid); return "Cookies cleared"; }
+
+  // ── Frames ────────────────────────────────────────────────────
+
+  async listFrames() {
+    const sid = this._activeCdpSession();
+    const resp = await this._send("Page.getFrameTree", {}, sid);
+    const frames = [];
+    const walk = (node, parentId) => { frames.push({ frameId: node.frame.id, url: node.frame.url, name: node.frame.name || "", parentFrameId: parentId || null }); for (const child of (node.childFrames || [])) walk(child, node.frame.id); };
+    if (resp?.frameTree) walk(resp.frameTree, null);
+    return JSON.stringify(frames, null, 2);
+  }
+
+  async _evalInFrame(frameId, expr) {
+    const sid = this._activeCdpSession();
+    const resp = await this._send("Page.createIsolatedWorld", { frameId, worldName: "cloclo" }, sid);
+    const ctxId = resp?.executionContextId;
+    if (!ctxId) throw new Error("Failed to create isolated world for frame: " + frameId);
+    const r = await this._send("Runtime.evaluate", { expression: expr, contextId: ctxId, returnByValue: true }, sid);
+    return r?.result?.value !== undefined ? String(r.result.value) : JSON.stringify(r?.result || {});
+  }
+
+  // ── Events ────────────────────────────────────────────────────
+
+  _pushEvent(type, payload) {
+    this._events.push({ timestamp: new Date().toISOString(), type, session_id: this._id, tab_id: this._activeTabId, payload });
+    if (this._events.length > 50) this._events = this._events.slice(-50);
+  }
+
+  getEvents() { return JSON.stringify(this._events, null, 2); }
+  setDialogAutoDismiss(enabled) { this._dialogAutoDismiss = enabled; return `Dialog auto-dismiss: ${enabled}`; }
+
+  // ── Network Interception (CDP-level, no JS injection) ─────────
+
+  async enableNetworkLog(opts = {}) {
+    if (this._networkLogEnabled) return "Network log already enabled.";
+    this._networkLogEnabled = true; this._networkLog = []; this._networkBodies = new Map();
+    // Enable on ALL current tabs
+    for (const [, tab] of this._tabs) await this._enableNetworkOnSession(tab.cdpSessionId);
+    const filter = opts.filter || null;
+    return `Network log enabled on ${this._tabs.size} tab(s).${filter ? " Filter: " + filter : ""} Captures at CDP level (survives navigation). Auto-enables on new tabs.`;
+  }
+
+  async _enableNetworkOnSession(cdpSessionId) {
+    await this._send("Network.enable", {}, cdpSessionId);
+    // Track requests — use session-prefixed events for multiplexing
+    this._onEvent(`${cdpSessionId}:Network.requestWillBeSent`, (params) => {
+      this._networkBodies.set(params.requestId, { url: params.request.url, method: params.request.method, postData: params.request.postData?.slice(0, 5000) || null, ts: Date.now(), status: null, mimeType: null, body: null, size: 0 });
+    });
+    this._onEvent(`${cdpSessionId}:Network.responseReceived`, (params) => {
+      const entry = this._networkBodies.get(params.requestId);
+      if (entry) { entry.status = params.response.status; entry.mimeType = params.response.mimeType; }
+    });
+    this._onEvent(`${cdpSessionId}:Network.loadingFinished`, async (params) => {
+      const entry = this._networkBodies.get(params.requestId);
+      if (!entry) return;
+      entry.size = params.encodedDataLength || 0;
+      const mime = (entry.mimeType || "").toLowerCase();
+      const isText = mime.includes("json") || mime.includes("text") || mime.includes("html") || mime.includes("event-stream") || mime.includes("javascript");
+      if (isText && entry.size < 2000000) {
+        try {
+          const resp = await this._send("Network.getResponseBody", { requestId: params.requestId }, cdpSessionId);
+          entry.body = resp?.base64Encoded ? Buffer.from(resp.body, "base64").toString("utf-8") : (resp?.body || null);
+        } catch { /* body unavailable */ }
+      }
+      this._networkLog.push(entry);
+      if (this._networkLog.length > 1000) this._networkLog = this._networkLog.slice(-1000);
+      this._networkBodies.delete(params.requestId);
+    });
+  }
+
+  getNetworkLog(filter) {
+    let log = this._networkLog;
+    if (filter) {
+      const f = filter.toLowerCase();
+      log = log.filter(e => (e.url || "").toLowerCase().includes(f) || (e.mimeType || "").toLowerCase().includes(f));
+    }
+    return JSON.stringify(log.map(e => ({ url: e.url, method: e.method, status: e.status, mimeType: e.mimeType, size: e.size, bodyLength: e.body?.length || 0, ts: e.ts, hasBody: !!e.body })), null, 2);
+  }
+
+  getNetworkResponseBody(index) {
+    if (index < 0 || index >= this._networkLog.length) return "Index out of range";
+    const entry = this._networkLog[index];
+    return entry.body || `(no body captured for ${entry.url})`;
+  }
+
+  // ── Persistent Script Injection (survives navigation) ─────────
+
+  async injectScript(script) {
+    const sid = this._activeCdpSession();
+    const resp = await this._send("Page.addScriptToEvaluateOnNewDocument", { source: script }, sid);
+    return `Script injected (id: ${resp?.identifier || "unknown"}). Will run before page JS on every navigation.`;
+  }
+
+  _setupTargetListeners() {
+    this._onEvent("Target.targetCreated", (params) => {
+      // Track new page targets — auto-attach handled by explicit newTab calls
+    });
+    this._onEvent("Target.targetDestroyed", (params) => {
+      const tid = params.targetId;
+      this._tabs.delete(tid);
+      if (this._activeTabId === tid) { const next = this._tabs.keys().next().value; this._activeTabId = next || null; }
+    });
+    this._onEvent("Target.targetInfoChanged", (params) => {
+      const info = params.targetInfo;
+      if (info && this._tabs.has(info.targetId)) {
+        const tab = this._tabs.get(info.targetId);
+        tab.url = info.url || tab.url; tab.title = info.title || tab.title;
+      }
+    });
+  }
+
+  _setupPageListeners(cdpSessionId, tabId) {
+    // Dialog handler
+    this._onEvent(`${cdpSessionId}:Page.javascriptDialogOpening`, (params) => {
+      this._pushEvent("dialog", { message: params.message, type: params.type, tab_id: tabId });
+      if (this._dialogAutoDismiss) { this._send("Page.handleJavaScriptDialog", { accept: true }, cdpSessionId); }
+    });
+    // Navigation handler
+    this._onEvent(`${cdpSessionId}:Page.frameNavigated`, (params) => {
+      if (params.frame?.parentId) return; // only top-level
+      const tab = this._tabs.get(tabId);
+      if (tab) { tab.url = params.frame?.url || ""; tab.title = ""; }
+      this._pushEvent("navigation", { url: params.frame?.url, tab_id: tabId });
+    });
+    // Crash handler
+    this._onEvent(`${cdpSessionId}:Inspector.targetCrashed`, () => { this._pushEvent("crash", { tab_id: tabId }); });
+    // Download handlers (domain varies across Chrome versions)
+    this._onEvent(`${cdpSessionId}:Page.downloadWillBegin`, (params) => { this._pushEvent("download", { url: params.url, suggestedFilename: params.suggestedFilename, tab_id: tabId }); });
+    this._onEvent(`${cdpSessionId}:Browser.downloadWillBegin`, (params) => { this._pushEvent("download", { url: params.url, suggestedFilename: params.suggestedFilename, tab_id: tabId }); });
+  }
+
+  // ── Utility ───────────────────────────────────────────────────
+
+  state() { return { open: !!this._ws, url: this._url, title: this._title, mode: this._mode, tabs: this.listTabs() }; }
+
+  _detectLoop(k) {
+    const fullKey = `${this._id}:${this._activeTabId}:${k}`;
+    this._actionHistory.push(fullKey);
+    if (this._actionHistory.length > 20) this._actionHistory = this._actionHistory.slice(-20);
+    const n = this._actionHistory.length;
+    return n >= 3 && this._actionHistory[n - 1] === this._actionHistory[n - 2] && this._actionHistory[n - 2] === this._actionHistory[n - 3];
+  }
+
+  async _eval(expr, frameId) {
+    if (frameId) return this._evalInFrame(frameId, expr);
+    const sid = this._activeCdpSession();
+    const r = await this._send("Runtime.evaluate", { expression: expr, returnByValue: true }, sid);
+    return r?.result?.value !== undefined ? String(r.result.value) : JSON.stringify(r?.result || {});
+  }
+
+  // ── WebSocket (raw RFC 6455, browser-level with session routing) ──
+
+  _connectWs(wsUrl) {
+    return new Promise((resolve, reject) => {
+      const parsed = new URL(wsUrl);
+      const key = Buffer.from(Array.from({ length: 16 }, () => Math.floor(Math.random() * 256))).toString("base64");
+      const mod = parsed.protocol === "wss:" ? _https : _http;
+      const req = mod.request({ hostname: parsed.hostname, port: parsed.port || (parsed.protocol === "wss:" ? 443 : 80), path: parsed.pathname, headers: { Upgrade: "websocket", Connection: "Upgrade", "Sec-WebSocket-Key": key, "Sec-WebSocket-Version": "13" } });
+      req.on("upgrade", (res, socket) => {
+        this._ws = socket; let buf = Buffer.alloc(0);
+        socket.on("data", (chunk) => {
+          buf = Buffer.concat([buf, chunk]);
+          while (buf.length >= 2) {
+            const pLen = buf[1] & 0x7f; let off = 2, len = pLen;
+            if (pLen === 126) { if (buf.length < 4) break; len = buf.readUInt16BE(2); off = 4; }
+            else if (pLen === 127) { if (buf.length < 10) break; len = Number(buf.readBigUInt64BE(2)); off = 10; }
+            if (buf.length < off + len) break;
+            const payload = buf.slice(off, off + len).toString("utf-8"); buf = buf.slice(off + len);
+            try {
+              const msg = JSON.parse(payload);
+              if (msg.id !== undefined && this._callbacks.has(msg.id)) { this._callbacks.get(msg.id)(msg.result || msg.error || {}); this._callbacks.delete(msg.id); }
+              if (msg.method) {
+                // Session-specific event handler (e.g., "CDPsessionId:Page.javascriptDialogOpening")
+                if (msg.sessionId) { const sKey = `${msg.sessionId}:${msg.method}`; if (this._eventHandlers.has(sKey)) this._eventHandlers.get(sKey)(msg.params); }
+                // Generic event handler
+                if (this._eventHandlers.has(msg.method)) this._eventHandlers.get(msg.method)(msg.params);
+              }
+            } catch { /* non-JSON */ }
+          }
+        });
+        socket.on("close", () => { this._ws = null; });
+        socket.on("error", () => { this._ws = null; });
+        resolve();
+      });
+      req.on("error", reject);
+      req.setTimeout(5000, () => { req.destroy(); reject(new Error("WS timeout")); });
+      req.end();
+    });
+  }
+
+  _send(method, params, cdpSessionId) {
+    return new Promise((resolve) => {
+      if (!this._ws) return resolve({});
+      const id = ++this._cmdId;
+      const msg = { id, method, params: params || {} };
+      if (cdpSessionId) msg.sessionId = cdpSessionId;
+      const payload = Buffer.from(JSON.stringify(msg), "utf-8");
+      const mask = Buffer.from(Array.from({ length: 4 }, () => Math.floor(Math.random() * 256)));
+      let header;
+      if (payload.length < 126) { header = Buffer.alloc(2); header[0] = 0x81; header[1] = 0x80 | payload.length; }
+      else if (payload.length < 65536) { header = Buffer.alloc(4); header[0] = 0x81; header[1] = 0x80 | 126; header.writeUInt16BE(payload.length, 2); }
+      else { header = Buffer.alloc(10); header[0] = 0x81; header[1] = 0x80 | 127; header.writeBigUInt64BE(BigInt(payload.length), 2); }
+      const masked = Buffer.alloc(payload.length); for (let i = 0; i < payload.length; i++) masked[i] = payload[i] ^ mask[i % 4];
+      this._ws.write(Buffer.concat([header, mask, masked]));
+      const timer = setTimeout(() => { this._callbacks.delete(id); resolve({}); }, 10000);
+      this._callbacks.set(id, (v) => { clearTimeout(timer); resolve(v); });
+    });
+  }
+
+  _onEvent(m, h) { this._eventHandlers.set(m, h); }
+}
+
+// ── Session Manager ─────────────────────────────────────────────
+
+class BrowserSessionManager {
+  constructor() { this._sessions = new Map(); }
+
+  get(id = "default") {
+    if (!this._sessions.has(id)) this._sessions.set(id, new BrowserSession(id));
+    return this._sessions.get(id);
+  }
+
+  async create(id, opts = {}) {
+    if (this._sessions.has(id)) await this.close(id);
+    const session = new BrowserSession(id, opts);
+    this._sessions.set(id, session);
+    await session.ensureBrowser();
+    return session;
+  }
+
+  async close(id) {
+    const session = this._sessions.get(id);
+    if (session) { await session.close(); this._sessions.delete(id); }
+  }
+
+  async closeAll() { for (const [, session] of this._sessions) { await session.close(); } this._sessions.clear(); }
+
+  list() {
+    return Array.from(this._sessions.entries()).map(([id, s]) => ({
+      id, open: !!s._ws, url: s._url, title: s._title, mode: s._mode, tabs: s.listTabs()
+    }));
+  }
+}
+
+let _sessionManager = null;
+function _getSessionManager() { if (!_sessionManager) _sessionManager = new BrowserSessionManager(); return _sessionManager; }
+
+function registerBrowserTools(registry) {
+  registry.register("Browser", {
+    description: "Browser automation with DOM understanding. Actions: navigate, get_state, click_element, type_element, click, fill, send_keys, upload_file, select_dropdown, dropdown_options, extract, get_text, evaluate, wait_for, scroll_to, screenshot, pdf, cookies_get/set/clear, back, forward, reload, close, new_tab, switch_tab, close_tab, list_tabs, new_session, close_session, list_sessions, list_frames, get_events, set_dialog_auto_dismiss, inject_script, enable_network_log, get_network_log. Always get_state first, then use element indices. Use session_id for multi-session, tab_id for multi-tab, frame_id for iframes. Use inject_script to run JS before page load (persists across navigations). Use enable_network_log + get_network_log for CDP-level request/response capture.",
+    input_schema: { type: "object", properties: {
+      action: { type: "string", enum: ["navigate","get_state","screenshot","click_element","type_element","click","fill","send_keys","upload_file","select_dropdown","dropdown_options","extract","get_text","evaluate","wait_for","scroll_to","pdf","cookies_get","cookies_set","cookies_clear","back","forward","reload","close","new_tab","switch_tab","close_tab","list_tabs","new_session","close_session","list_sessions","list_frames","get_events","set_dialog_auto_dismiss","inject_script","enable_network_log","get_network_log"], description: "Browser action to perform" },
+      url: { type: "string", description: "URL for navigate/new_tab" },
+      index: { type: "integer", description: "Element index from get_state" },
+      selector: { type: "string", description: "CSS selector" },
+      value: { type: "string", description: "Text value for typing/filling/evaluate/scroll_to" },
+      output_path: { type: "string", description: "Output path for screenshot/pdf" },
+      timeout: { type: "integer", description: "Timeout in ms for wait_for" },
+      cookie: { type: "object", properties: { name: { type: "string" }, value: { type: "string" }, domain: { type: "string" }, path: { type: "string" } }, description: "Cookie for cookies_set" },
+      session_id: { type: "string", description: "Session ID (default: 'default'). Use for multi-session workflows." },
+      tab_id: { type: "string", description: "Tab ID for switch_tab/close_tab" },
+      frame_id: { type: "string", description: "Frame ID for iframe-scoped actions" },
+      format: { type: "string", enum: ["text", "json"], description: "Output format for get_state (default: text)" },
+      keys: { type: "string", description: "Key sequence for send_keys (e.g. 'Enter', 'Tab Tab Enter', 'Ctrl+a')" },
+      file_path: { type: "string", description: "File path for upload_file" },
+      schema: { type: "object", description: "Extraction schema for extract (e.g. {\"title\": \"h1\", \"price\": \".price\"})" },
+      profile_name: { type: "string", description: "Named browser profile (~/.claude/browser-profiles/<name>/)" },
+      user_data_dir: { type: "string", description: "Custom Chrome user data directory" },
+      profile_dir: { type: "string", description: "Chrome --profile-directory flag" },
+      cdp_url: { type: "string", description: "CDP URL for attach mode (e.g. http://localhost:9222)" },
+      enabled: { type: "boolean", description: "Enable/disable flag for set_dialog_auto_dismiss" },
+      script: { type: "string", description: "JS code for inject_script (runs before page JS on every navigation)" },
+      filter: { type: "string", description: "URL/mime filter for get_network_log (e.g. 'api', 'json')" },
+      body_index: { type: "integer", description: "Network log entry index for retrieving response body" }
+    }, required: ["action"] }
+  },
+  async (input) => {
+    const mgr = _getSessionManager(); const a = input.action;
+    const sessionId = input.session_id || "default";
+    try {
+      // Session-level actions that don't need an existing browser
+      if (a === "new_session") {
+        const opts = {};
+        if (input.profile_name) opts.profileName = input.profile_name;
+        if (input.user_data_dir) opts.userDataDir = input.user_data_dir;
+        if (input.profile_dir) opts.profileDir = input.profile_dir;
+        if (input.cdp_url) opts.cdpUrl = input.cdp_url;
+        const s = await mgr.create(input.session_id || "new-" + Date.now(), opts);
+        return { content: `Session created: ${s._id} (${s._mode} mode, ${s._tabs.size} tab(s))`, is_error: false };
+      }
+      if (a === "close_session") { await mgr.close(sessionId); return { content: `Session closed: ${sessionId}`, is_error: false }; }
+      if (a === "list_sessions") { return { content: JSON.stringify(mgr.list(), null, 2), is_error: false }; }
+
+      const b = mgr.get(sessionId);
+      const k = `${a}:${input.selector || ""}:${input.value || ""}:${input.index ?? ""}`;
+      if (b._detectLoop(k)) return { content: "Loop detected: you've repeated this exact action 3 times. Try a different approach.", is_error: true };
+
+      if (a === "close") return { content: await b.close(), is_error: false };
+      await b.ensureBrowser();
+
+      switch (a) {
+        case "navigate": return { content: await b.navigate(input.url || "about:blank"), is_error: false };
+        case "get_state": return { content: await b.getState(input.format), is_error: false };
+        case "click_element": return { content: await b.clickElement(input.index ?? 0, input.frame_id), is_error: false };
+        case "type_element": return { content: await b.typeElement(input.index ?? 0, input.value || "", input.frame_id), is_error: false };
+        case "click": return { content: await b.click(input.selector || "body", input.frame_id), is_error: false };
+        case "fill": return { content: await b.fill(input.selector || "input", input.value || "", input.frame_id), is_error: false };
+        case "send_keys": return { content: await b.sendKeys(input.keys || input.value || ""), is_error: false };
+        case "upload_file": return { content: await b.uploadFile(input.selector || 'input[type="file"]', input.file_path || input.value || "", input.frame_id), is_error: false };
+        case "select_dropdown": return { content: await b.selectDropdown(input.selector || "select", input.value || "", input.frame_id), is_error: false };
+        case "dropdown_options": return { content: await b.dropdownOptions(input.selector || "select", input.frame_id), is_error: false };
+        case "extract": return { content: await b.extract(input.schema || {}, input.frame_id), is_error: false };
+        case "get_text": return { content: await b.getText(input.selector), is_error: false };
+        case "evaluate": return { content: await b.evaluate(input.value || "", input.frame_id), is_error: false };
+        case "wait_for": return { content: await b.waitFor(input.selector || "body", input.timeout || 5000), is_error: false };
+        case "scroll_to": return { content: await b.scrollTo(input.selector, input.value ? parseInt(input.value) : undefined), is_error: false };
+        case "screenshot": return { content: await b.screenshot(input.output_path), is_error: false };
+        case "pdf": { const sid = b._activeCdpSession(); const r = await b._send("Page.printToPDF", { printBackground: true }, sid); if (!r?.data) return { content: "PDF failed", is_error: true }; const dir = path.join(os.tmpdir(), "cloclo-screenshots"); fs.mkdirSync(dir, { recursive: true }); const fp = input.output_path || path.join(dir, `page-${Date.now()}.pdf`); fs.writeFileSync(fp, Buffer.from(r.data, "base64")); return { content: `PDF saved: ${fp}`, is_error: false }; }
+        case "back": return { content: await b.back(), is_error: false };
+        case "forward": return { content: await b.forward(), is_error: false };
+        case "reload": return { content: await b.reload(), is_error: false };
+        case "cookies_get": return { content: await b.cookiesGet(), is_error: false };
+        case "cookies_set": { const c = input.cookie || {}; return { content: await b.cookiesSet(c.name || input.value, c.value || "", c.domain || "", c.path), is_error: false }; }
+        case "cookies_clear": return { content: await b.cookiesClear(), is_error: false };
+        case "new_tab": return { content: await b.newTab(input.url), is_error: false };
+        case "switch_tab": return { content: await b.switchTab(input.tab_id || ""), is_error: false };
+        case "close_tab": return { content: await b.closeTab(input.tab_id), is_error: false };
+        case "list_tabs": return { content: JSON.stringify(b.listTabs(), null, 2), is_error: false };
+        case "list_frames": return { content: await b.listFrames(), is_error: false };
+        case "get_events": return { content: b.getEvents(), is_error: false };
+        case "set_dialog_auto_dismiss": return { content: b.setDialogAutoDismiss(input.enabled !== false), is_error: false };
+        case "inject_script": return { content: await b.injectScript(input.script || input.value || ""), is_error: false };
+        case "enable_network_log": return { content: await b.enableNetworkLog(), is_error: false };
+        case "get_network_log": { if (input.body_index !== undefined) return { content: b.getNetworkResponseBody(input.body_index), is_error: false }; return { content: b.getNetworkLog(input.filter), is_error: false }; }
+        default: return { content: `Unknown action: ${a}`, is_error: true };
+      }
+    } catch (e) { return { content: `Browser error: ${e.message}`, is_error: true }; }
+  }, { deferred: true });
 }
 
 // ── SecurityClassifier v1 ────────────────────────────────────────
@@ -2987,7 +3771,7 @@ class McpManager {
       await this._rpc(server, "initialize", {
         protocolVersion: "2024-11-05",
         capabilities: {},
-        clientInfo: { name: "claude-native", version: "1.0.0" },
+        clientInfo: { name: "claude-native", version: _VERSION },
       });
 
       // Send initialized notification (no id, no response expected)
@@ -4698,6 +5482,7 @@ function ensureSkillDataDir(skillName) {
 
 function parseSkillSource(source) {
   if (!source) throw new Error("No source provided");
+  if (source.startsWith("registry:")) { const name = source.slice(9); if (!name) throw new Error("Invalid registry source"); return { type: "registry", name }; }
   if (source.startsWith("github:")) {
     const parts = source.slice(7).split("/");
     if (parts.length < 2) throw new Error(`Invalid GitHub source: ${source}. Use github:owner/repo`);
@@ -4727,12 +5512,13 @@ function parseSkillSource(source) {
   throw new Error(`Invalid skill source: "${source}"\n  Supported: local folder, SKILL.md file, URL, github:owner/repo`);
 }
 
-function _httpGet(url) {
+function _httpGet(url, extraHeaders) {
   return new Promise((resolve, reject) => {
     const mod = url.startsWith("https") ? _https : _http;
-    mod.get(url, { headers: { "User-Agent": "cloclo/1.0" } }, (res) => {
+    const headers = { "User-Agent": "cloclo/1.0", ...extraHeaders };
+    mod.get(url, { headers }, (res) => {
       if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return _httpGet(res.headers.location).then(resolve, reject);
+        return _httpGet(res.headers.location, extraHeaders).then(resolve, reject);
       }
       if (res.statusCode >= 400) {
         res.resume();
@@ -4745,6 +5531,14 @@ function _httpGet(url) {
     }).on("error", reject);
   });
 }
+
+function _getGitHubHeaders() {
+  const token = process.env.GITHUB_TOKEN || process.env.GH_TOKEN;
+  if (token) return { Authorization: `token ${token}`, Accept: "application/vnd.github.v3+json" };
+  return {};
+}
+
+function _ghGet(url) { return _httpGet(url, _getGitHubHeaders()); }
 
 // ── Skill Format Detection & Conversion ────────────────────────
 
@@ -4885,7 +5679,24 @@ async function fetchSkillContents(parsed) {
       if (found.length > 0) break;
     }
 
-    if (found.length === 0) throw new Error(`No skill files found in github:${parsed.owner}/${parsed.repo}\n  Searched for: SKILL.md, AGENTS.md, .cursorrules, .windsurfrules`);
+    // Fallback: git clone --depth 1 --single-branch if API failed
+    if (found.length === 0) {
+      let usedGitClone = false;
+      try {
+        const cloneUrl = _getGitHubHeaders().Authorization
+          ? `https://${process.env.GITHUB_TOKEN || process.env.GH_TOKEN}@github.com/${parsed.owner}/${parsed.repo}.git`
+          : `https://github.com/${parsed.owner}/${parsed.repo}.git`;
+        const tmpClone = fs.mkdtempSync(path.join(os.tmpdir(), "cloclo-clone-"));
+        process.stderr.write(`\x1b[2mAPI found nothing, trying git clone --depth 1...\x1b[0m\n`);
+        execSync(`git clone --depth 1 --single-branch ${cloneUrl} ${tmpClone}`, { stdio: "pipe", timeout: 30000 });
+        usedGitClone = true;
+        const result = await fetchSkillContents({ type: "dir", path: tmpClone });
+        try { fs.rmSync(tmpClone, { recursive: true, force: true }); } catch { /* best effort */ }
+        return result;
+      } catch (cloneErr) {
+        throw new Error(`No skill files found in github:${parsed.owner}/${parsed.repo}\n  API: no results, git clone: ${cloneErr.message}`);
+      }
+    }
 
     // Fetch all found skills (multiple = import all)
     async function _fetchOneGitHubSkill(skill) {
@@ -4969,7 +5780,169 @@ async function fetchSkillContents(parsed) {
     return allSkills;
   }
 
+  if (parsed.type === "registry") {
+    process.stderr.write(`\x1b[2mFetching from registry: ${parsed.name}...\x1b[0m\n`);
+    let pkg; try { pkg = JSON.parse(await _registryGet(`/api/skills/${encodeURIComponent(parsed.name)}`)); } catch (e) { throw new Error(`Skill "${parsed.name}" not found in registry (${e.message})`); }
+    if (!pkg.files || !pkg.files["SKILL.md"]) throw new Error(`Registry package "${parsed.name}" has no SKILL.md`);
+    const fm = parseYamlFrontmatter(pkg.files["SKILL.md"]); return { name: fm.name || pkg.name || parsed.name, files: pkg.files };
+  }
+
   throw new Error(`Unknown source type: ${parsed.type}`);
+}
+
+// ── Skill Registry (Marketplace) ──────────────────────────────
+
+const SKILL_REGISTRY_URL = process.env.CLOCLO_REGISTRY_URL || "https://cloclo-registry-799190737906.europe-west1.run.app";
+
+function _registryGet(endpoint) { return _httpGet(`${SKILL_REGISTRY_URL}${endpoint}`, { Accept: "application/json" }); }
+
+function _registryPost(endpoint, body) {
+  return new Promise((resolve, reject) => {
+    const parsed = new URL(`${SKILL_REGISTRY_URL}${endpoint}`);
+    const mod = parsed.protocol === "https:" ? _https : _http;
+    const data = JSON.stringify(body);
+    const req = mod.request({ hostname: parsed.hostname, port: parsed.port, path: parsed.pathname, method: "POST",
+      headers: { "Content-Type": "application/json", "Content-Length": Buffer.byteLength(data), "User-Agent": "cloclo/1.0", Accept: "application/json",
+        ...(process.env.CLOCLO_REGISTRY_TOKEN ? { Authorization: `Bearer ${process.env.CLOCLO_REGISTRY_TOKEN}` } : {}) },
+    }, (res) => { let b = ""; res.on("data", (c) => b += c); res.on("end", () => { if (res.statusCode >= 400) return reject(new Error(`Registry error ${res.statusCode}: ${b}`)); resolve(b); }); res.on("error", reject); });
+    req.on("error", reject); req.write(data); req.end();
+  });
+}
+
+async function skillSearch(cfg, query) {
+  if (!query) { process.stderr.write("Usage: cloclo skill search <query>\n"); return; }
+  process.stderr.write(`\x1b[2mSearching ${SKILL_REGISTRY_URL}...\x1b[0m\n`);
+  let results;
+  try { results = JSON.parse(await _registryGet(`/api/skills/search?q=${encodeURIComponent(query)}`)); }
+  catch (e) { process.stderr.write(`\x1b[31mRegistry unavailable: ${e.message}\x1b[0m\n\x1b[2mTip: Set CLOCLO_REGISTRY_URL to use a custom registry.\x1b[0m\n`); return; }
+  const skills = results.skills || results.results || [];
+  if (skills.length === 0) { process.stderr.write(`No skills found matching "${query}".\n`); return; }
+  process.stderr.write(`\n`);
+  const nameW = Math.max(18, ...skills.map(s => (s.name || "").length)) + 2;
+  const authorW = Math.max(12, ...skills.map(s => (s.author || "").length)) + 2;
+  process.stderr.write(`  ${"Name".padEnd(nameW)}${"Author".padEnd(authorW)}Description\n`);
+  process.stderr.write(`  ${"─".repeat(nameW)}${"─".repeat(authorW)}${"─".repeat(30)}\n`);
+  for (const s of skills.slice(0, 20)) { process.stderr.write(`  ${(s.name || "?").padEnd(nameW)}${(s.author || "—").padEnd(authorW)}${(s.description || "").slice(0, 50)}\n`); }
+  process.stderr.write(`\n  ${skills.length} result(s). Install with: cloclo skill import registry:<name>\n\n`);
+}
+
+async function skillPublish(cfg, name) {
+  if (!name) { process.stderr.write("Usage: cloclo skill publish <name>\n"); return; }
+  if (!process.env.CLOCLO_REGISTRY_TOKEN) { process.stderr.write("Error: CLOCLO_REGISTRY_TOKEN required for publishing.\n"); process.exit(EXIT.BAD_ARGS); }
+  const skillDir = path.join(os.homedir(), ".claude", "skills", name);
+  if (!fs.existsSync(path.join(skillDir, "SKILL.md"))) { process.stderr.write(`Skill not found: ${name}\n`); process.exit(EXIT.BAD_ARGS); }
+  const content = fs.readFileSync(path.join(skillDir, "SKILL.md"), "utf-8");
+  const { frontmatter } = parseYamlFrontmatter(content);
+  const files = {};
+  function walk(dir, prefix) { try { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { if (e.name === ".git" || e.name === "node_modules") continue; const full = path.join(dir, e.name); const rel = prefix ? `${prefix}/${e.name}` : e.name; if (e.isDirectory()) walk(full, rel); else files[rel] = fs.readFileSync(full, "utf-8"); } } catch { /* skip */ } }
+  walk(skillDir, "");
+  // Security review before publish
+  const scan = staticSkillScan(files);
+  if (scan.findings.length > 0) { process.stderr.write(`\n  \x1b[1mSecurity Review\x1b[0m\n`); for (const f of scan.findings) { const color = f.severity === "WARNING" ? "33" : "2"; process.stderr.write(`    \x1b[${color}m${f.severity}\x1b[0m ${f.file}: ${f.message}\n`); } }
+  const verdictColor = scan.verdict === "SAFE" || scan.verdict === "PASS" ? "32" : scan.verdict === "WARN" ? "33" : "31";
+  process.stderr.write(`  Verdict: \x1b[${verdictColor}m${scan.verdict}\x1b[0m\n\n`);
+  if (scan.verdict === "BLOCK") { process.stderr.write(`\x1b[31mPublish blocked due to security concerns.\x1b[0m\n`); return; }
+  const checksum = _computeSkillChecksum(files);
+  const payload = { name, description: frontmatter.description || "", version: frontmatter.version || "1.0.0", allowedTools: frontmatter["allowed-tools"] || null, hooks: frontmatter.hooks || null, checksum, files };
+  process.stderr.write(`\x1b[2mPublishing ${name} to ${SKILL_REGISTRY_URL}...\x1b[0m\n`);
+  try { const resp = await _registryPost("/api/skills/publish", payload); const result = JSON.parse(resp); process.stderr.write(`\x1b[32mPublished!\x1b[0m ${name}@${payload.version}\n`); if (result.url) process.stderr.write(`  ${result.url}\n`); process.stderr.write(`  Install: cloclo skill import registry:${name}\n`); }
+  catch (e) { process.stderr.write(`\x1b[31mPublish failed: ${e.message}\x1b[0m\n`); }
+}
+
+// ── Skill Manifest ────────────────────────────────────────────
+
+const SKILL_MANIFEST_PATH = path.join(os.homedir(), ".claude", "skills", ".cloclo-skills.json");
+
+function _loadSkillManifest() { try { const d = fs.readFileSync(SKILL_MANIFEST_PATH, "utf-8"); const m = JSON.parse(d); if (!m.skills || typeof m.skills !== "object") return { skills: {} }; return m; } catch { return { skills: {} }; } }
+function _saveSkillManifest(manifest) { fs.mkdirSync(path.dirname(SKILL_MANIFEST_PATH), { recursive: true }); fs.writeFileSync(SKILL_MANIFEST_PATH, JSON.stringify(manifest, null, 2) + "\n"); }
+
+function _computeSkillChecksum(files) { const hash = createHash("sha256"); for (const key of Object.keys(files).sort()) { hash.update(key); hash.update(files[key]); } return hash.digest("hex").slice(0, 16); }
+function _computeDirChecksum(dir) { const hash = createHash("sha256"); function w(d, p) { try { for (const e of fs.readdirSync(d, { withFileTypes: true }).sort((a, b) => a.name.localeCompare(b.name))) { const f = path.join(d, e.name); const r = p ? `${p}/${e.name}` : e.name; if (e.isDirectory()) w(f, r); else { hash.update(r); hash.update(fs.readFileSync(f, "utf-8")); } } } catch { /* skip */ } } w(dir, ""); return hash.digest("hex").slice(0, 16); }
+
+// ── Skill Management Commands ─────────────────────────────────
+
+function skillList(cfg) {
+  const manifest = _loadSkillManifest(); const skillsDir = path.join(os.homedir(), ".claude", "skills");
+  const installedDirs = new Set();
+  try { for (const entry of fs.readdirSync(skillsDir, { withFileTypes: true })) { if (entry.isDirectory() && !entry.name.startsWith(".") && fs.existsSync(path.join(skillsDir, entry.name, "SKILL.md"))) installedDirs.add(entry.name); } } catch { /* no dir */ }
+  if (installedDirs.size === 0 && Object.keys(manifest.skills).length === 0) { process.stderr.write("No skills installed.\n"); return; }
+  const rows = []; const seen = new Set();
+  for (const [name, entry] of Object.entries(manifest.skills)) { seen.add(name); rows.push({ name, source: entry.source || "(unknown)", installed: entry.installedAt ? entry.installedAt.slice(0, 10) : "—" }); }
+  for (const name of installedDirs) { if (!seen.has(name)) rows.push({ name, source: "(manual)", installed: "—" }); }
+  const nameW = Math.max(16, ...rows.map(r => r.name.length)) + 2; const srcW = Math.max(28, ...rows.map(r => r.source.length)) + 2;
+  process.stderr.write(`\n  ${"Name".padEnd(nameW)}${"Source".padEnd(srcW)}Installed\n  ${"─".repeat(nameW)}${"─".repeat(srcW)}${"─".repeat(12)}\n`);
+  for (const r of rows) process.stderr.write(`  ${r.name.padEnd(nameW)}${r.source.padEnd(srcW)}${r.installed}\n`);
+  process.stderr.write(`\n  ${rows.length} skill(s) installed.\n\n`);
+}
+
+function skillInfo(cfg, name) {
+  if (!name) { process.stderr.write("Usage: cloclo skill info <name>\n"); return; }
+  const manifest = _loadSkillManifest(); const skillDir = path.join(os.homedir(), ".claude", "skills", name);
+  if (!fs.existsSync(path.join(skillDir, "SKILL.md"))) { process.stderr.write(`Skill not found: ${name}\n`); return; }
+  const content = fs.readFileSync(path.join(skillDir, "SKILL.md"), "utf-8"); const { frontmatter } = parseYamlFrontmatter(content); const entry = manifest.skills[name] || {};
+  let files = []; let totalSize = 0;
+  function walkDir(dir, prefix) { try { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { if (e.isDirectory()) walkDir(path.join(dir, e.name), prefix ? `${prefix}/${e.name}` : e.name); else { const rel = prefix ? `${prefix}/${e.name}` : e.name; totalSize += fs.statSync(path.join(dir, e.name)).size; files.push(rel); } } } catch { /* skip */ } }
+  walkDir(skillDir, "");
+  const sizeStr = totalSize < 1024 ? `${totalSize} B` : totalSize < 1024 * 1024 ? `${(totalSize / 1024).toFixed(1)} KB` : `${(totalSize / (1024 * 1024)).toFixed(1)} MB`;
+  process.stderr.write(`\n  Name:        ${name}\n  Description: ${frontmatter.description || "(none)"}\n  Source:      ${entry.source || "(manual)"}\n  Installed:   ${entry.installedAt ? entry.installedAt.slice(0, 10) : "—"}\n`);
+  if (entry.updatedAt && entry.updatedAt !== entry.installedAt) process.stderr.write(`  Updated:     ${entry.updatedAt.slice(0, 10)}\n`);
+  process.stderr.write(`  Files:       ${files.join(", ")} (${files.length} file${files.length !== 1 ? "s" : ""})\n`);
+  if (frontmatter.hooks) process.stderr.write(`  Hooks:       ${typeof frontmatter.hooks === "string" ? frontmatter.hooks : Object.keys(frontmatter.hooks).join(", ")}\n`);
+  if (frontmatter["allowed-tools"]) process.stderr.write(`  Tools:       ${frontmatter["allowed-tools"]}\n`);
+  process.stderr.write(`  Size:        ${sizeStr}\n${entry.checksum ? `  Checksum:    ${entry.checksum}\n` : ""}\n`);
+}
+
+async function skillRemove(cfg, name) {
+  if (!name) { process.stderr.write("Usage: cloclo skill remove <name>\n"); return; }
+  const skillDir = path.join(os.homedir(), ".claude", "skills", name);
+  if (!fs.existsSync(skillDir)) { process.stderr.write(`Skill not found: ${name}\n`); process.exit(EXIT.BAD_ARGS); }
+  const skipConfirm = cfg.permissionMode === "bypassPermissions";
+  if (!skipConfirm) { if (!process.stdin.isTTY) { process.stderr.write("Error: Confirmation required. Use --yes to skip.\n"); process.exit(EXIT.BAD_ARGS); }
+    const rl = (await import("node:readline")).createInterface({ input: process.stdin, output: process.stderr }); const answer = await new Promise((resolve) => { rl.question(`Remove skill "${name}"? (y/n) `, resolve); }); rl.close(); if (!answer.match(/^y(es)?$/i)) { process.stderr.write("Cancelled.\n"); return; } }
+  fs.rmSync(skillDir, { recursive: true, force: true });
+  const manifest = _loadSkillManifest(); if (manifest.skills[name]) { delete manifest.skills[name]; _saveSkillManifest(manifest); }
+  process.stderr.write(`Removed skill: ${name}\n`);
+}
+
+async function skillUpdate(cfg, client, registry, permissions, name) {
+  const manifest = _loadSkillManifest();
+  const entries = name ? (manifest.skills[name] ? [[name, manifest.skills[name]]] : []) : Object.entries(manifest.skills);
+  if (name && entries.length === 0) { process.stderr.write(`Skill not found in manifest: ${name}\n`); process.exit(EXIT.BAD_ARGS); }
+  let updated = 0;
+  for (const [skillName, entry] of entries) {
+    if (!entry.source) { process.stderr.write(`\x1b[2mSkipping ${skillName}: no source recorded\x1b[0m\n`); continue; }
+    try { process.stderr.write(`\x1b[2mUpdating ${skillName} from ${entry.source}...\x1b[0m\n`);
+      const parsed = parseSkillSource(entry.source); let fetched = await fetchSkillContents(parsed); let skills = Array.isArray(fetched) ? fetched : [fetched];
+      if (skills.length > 1) { const match = skills.filter(s => s.name === skillName); if (match.length > 0) skills = match; else continue; }
+      const skill = skills[0]; const scan = staticSkillScan(skill.files); if (scan.hasBlock) continue;
+      const targetDir = path.join(os.homedir(), ".claude", "skills", skillName);
+      if (fs.existsSync(targetDir)) fs.rmSync(targetDir, { recursive: true, force: true });
+      fs.mkdirSync(targetDir, { recursive: true }); for (const [fp, c] of Object.entries(skill.files)) { const dest = path.join(targetDir, fp); fs.mkdirSync(path.dirname(dest), { recursive: true }); fs.writeFileSync(dest, c); }
+      entry.updatedAt = new Date().toISOString(); entry.files = Object.keys(skill.files); entry.checksum = _computeSkillChecksum(skill.files); manifest.skills[skillName] = entry; _saveSkillManifest(manifest);
+      process.stderr.write(`\x1b[32m${skillName}: updated\x1b[0m\n`); updated++;
+    } catch (e) { process.stderr.write(`\x1b[31m${skillName}: ${e.message}\x1b[0m\n`); }
+  }
+  process.stderr.write(name ? `Skill ${name} updated.\n` : `Updated ${updated} skill(s).\n`);
+}
+
+function skillExport(cfg, name) {
+  if (!name) { process.stderr.write("Usage: cloclo skill export <name>\n"); return; }
+  const skillDir = path.join(os.homedir(), ".claude", "skills", name);
+  if (!fs.existsSync(path.join(skillDir, "SKILL.md"))) { process.stderr.write(`Skill not found: ${name}\n`); process.exit(EXIT.BAD_ARGS); }
+  const files = {}; function walk(dir, prefix) { try { for (const e of fs.readdirSync(dir, { withFileTypes: true })) { if (e.name === ".git" || e.name === "node_modules") continue; const full = path.join(dir, e.name); const rel = prefix ? `${prefix}/${e.name}` : e.name; if (e.isDirectory()) walk(full, rel); else files[rel] = fs.readFileSync(full, "utf-8"); } } catch { /* skip */ } }
+  walk(skillDir, ""); const checksum = _computeSkillChecksum(files);
+  const outPath = path.resolve(`${name}.skill.json`); fs.writeFileSync(outPath, JSON.stringify({ name, version: "1", exportedAt: new Date().toISOString(), checksum, files }, null, 2) + "\n");
+  process.stderr.write(`Exported skill: ${name}\n  → ${outPath}\n  Checksum: ${checksum}\n  Files: ${Object.keys(files).length}\n`);
+}
+
+function skillVerify(cfg, name) {
+  if (!name) { process.stderr.write("Usage: cloclo skill verify <name>\n"); return; }
+  const skillDir = path.join(os.homedir(), ".claude", "skills", name);
+  if (!fs.existsSync(path.join(skillDir, "SKILL.md"))) { process.stderr.write(`Skill not found: ${name}\n`); process.exit(EXIT.BAD_ARGS); }
+  const manifest = _loadSkillManifest(); const entry = manifest.skills[name]; const currentChecksum = _computeDirChecksum(skillDir);
+  if (!entry || !entry.checksum) { process.stderr.write(`  Skill: ${name}\n  Checksum: ${currentChecksum}\n  \x1b[33mNo recorded checksum in manifest.\x1b[0m\n`); return; }
+  if (currentChecksum === entry.checksum) process.stderr.write(`  Skill: ${name}\n  Checksum: ${currentChecksum}\n  \x1b[32m✓ Integrity verified.\x1b[0m\n`);
+  else process.stderr.write(`  Skill: ${name}\n  Current:  ${currentChecksum}\n  Recorded: ${entry.checksum}\n  \x1b[33m! Modified since installation.\x1b[0m\n`);
 }
 
 function staticSkillScan(files) {
@@ -5213,6 +6186,15 @@ async function _installOneSkill(cfg, client, registry, permissions, source, skil
     fs.writeFileSync(dest, content);
   }
 
+  // Record in manifest
+  const manifest = _loadSkillManifest();
+  const detectedFormat = detectSkillFormat(skill.files) || null;
+  const parsedSrc = (() => { try { return parseSkillSource(source); } catch { return null; } })();
+  const prev = manifest.skills[skillName];
+  manifest.skills[skillName] = { name: skillName, source: source || null, sourceType: parsedSrc?.type || null, format: detectedFormat,
+    convertedFrom: (detectedFormat !== "skill.md" && detectedFormat) ? detectedFormat : (prev?.convertedFrom || null), selectedPath: skill._selectedPath || null,
+    installedAt: prev?.installedAt || new Date().toISOString(), updatedAt: new Date().toISOString(), version: fm.version || null, files: Object.keys(skill.files), checksum: _computeSkillChecksum(skill.files) };
+  _saveSkillManifest(manifest);
   process.stderr.write(`\x1b[32mInstalled!\x1b[0m Use /${skillName} in the REPL.\n`);
 }
 
@@ -6498,7 +7480,7 @@ class NdjsonBridge {
   async run() {
     const sessionId = this.sessions.create();
     this.checkpoints = new CheckpointStore(sessionId);
-    this.emit({ type: "ready", version: "1.0.0", mode: "native", session_id: sessionId });
+    this.emit({ type: "ready", version: _VERSION, mode: "native", session_id: sessionId });
 
     // Non-blocking stdin reader: pushes messages to a queue and resolves waiters
     const queue = [];
@@ -7418,22 +8400,34 @@ class InteractiveMode {
         }
       } });
 
-    // Skill — import (and future: list, remove)
-    s.register({ name: "skill", description: "Skill management (import, list)", argumentHint: "import <source>",
+    // Skill management
+    s.register({ name: "skill", description: "Skill management", argumentHint: "<subcommand> [args]",
       handler: async (args) => {
         const sub = args[0];
-        if (sub === "import") {
-          const source = args.slice(1).join(" ");
-          if (!source) {
-            process.stderr.write("Usage: /skill import <folder|SKILL.md|URL|github:owner/repo>\n");
-            return;
-          }
-          await skillImport(self.cfg, self.client, self.registry, self.permissions, source);
-          // Reload skills
-          self.cfg._skillLoader = new SkillLoader().scan(self.cfg.cwd);
-        } else {
-          process.stderr.write("Usage: /skill import <source>\n\x1b[2mFuture: /skill list, /skill remove\x1b[0m\n");
-        }
+        if (sub === "import") { const source = args.slice(1).join(" "); if (!source) { process.stderr.write("Usage: /skill import <source>\n"); return; } await skillImport(self.cfg, self.client, self.registry, self.permissions, source); self.cfg._skillLoader = new SkillLoader().scan(self.cfg.cwd); }
+        else if (sub === "list") { skillList(self.cfg); }
+        else if (sub === "info") { skillInfo(self.cfg, args[1]); }
+        else if (sub === "remove") { await skillRemove(self.cfg, args[1]); self.cfg._skillLoader = new SkillLoader().scan(self.cfg.cwd); }
+        else if (sub === "update") { await skillUpdate(self.cfg, self.client, self.registry, self.permissions, args[1]); self.cfg._skillLoader = new SkillLoader().scan(self.cfg.cwd); }
+        else if (sub === "export") { skillExport(self.cfg, args[1]); }
+        else if (sub === "verify") { skillVerify(self.cfg, args[1]); }
+        else if (sub === "search") { await skillSearch(self.cfg, args.slice(1).join(" ")); }
+        else if (sub === "publish") { await skillPublish(self.cfg, args[1]); }
+        else { process.stderr.write("Usage: /skill <subcommand>\n  import, list, info, remove, update, export, verify, search, publish\n"); }
+      } });
+
+    // Tool management
+    s.register({ name: "tool", description: "Tool management", argumentHint: "<subcommand> [args]",
+      handler: async (args) => {
+        const sub = args[0];
+        if (sub === "list") toolList(self.cfg, self.registry);
+        else if (sub === "info") toolInfo(self.cfg, self.registry, args[1]);
+        else if (sub === "enable") toolEnable(self.cfg, self.registry, args[1]);
+        else if (sub === "disable") toolDisable(self.cfg, self.registry, args[1]);
+        else if (sub === "test") await toolTest(self.cfg, self.registry, args[1]);
+        else if (sub === "install") { toolInstall(self.cfg, args.slice(1).join(" ")); scanCustomTools(self.registry, self.cfg); }
+        else if (sub === "remove") { toolRemove(self.cfg, args[1]); if (args[1] && self.registry.has(args[1])) self.registry.unregister(args[1]); }
+        else process.stderr.write("Usage: /tool <subcommand>\n  list, info, enable, disable, test, install, remove\n");
       } });
 
     // Doctor — basic installation health check
@@ -8516,6 +9510,8 @@ async function main() {
   registerBuiltinTools(registry);
   registerAskUserQuestion(registry);
   registerDeferredBuiltinTools(registry, cfg);
+  registerBrowserTools(registry);
+  scanCustomTools(registry, cfg);
   if (cfg.briefMode) registerBriefTools(registry, cfg);
 
   if (cfg.allowedTools || cfg.disallowedTools) {
@@ -8596,6 +9592,12 @@ async function main() {
   // Register ToolSearch if there are deferred tools (after all tools registered)
   registerToolSearch(registry);
 
+  // Apply persisted disabled tools from manifest
+  const _tm = _loadToolManifest();
+  for (const [name, entry] of Object.entries(_tm.tools)) {
+    if (entry.disabled && registry.has(name)) { if (!registry._disallowed) registry._disallowed = []; if (!registry._disallowed.includes(name)) registry._disallowed.push(name); }
+  }
+
   // Handle shutdown
   const cleanup = () => { mcpManager.shutdown(); process.exit(0); };
   process.on("SIGINT", cleanup);
@@ -8611,12 +9613,28 @@ async function main() {
     }, cfg.timeout * 1000);
   }
 
-  // Subcommand dispatch
+  // Subcommand dispatch — skills
+  if (cfg._subcommand === "skill-list") { skillList(cfg); process.exit(0); }
+  if (cfg._subcommand === "skill-info") { skillInfo(cfg, cfg._skillInfoName); process.exit(0); }
+  if (cfg._subcommand === "skill-remove") { await skillRemove(cfg, cfg._skillRemoveName); process.exit(0); }
+  if (cfg._subcommand === "skill-update") { await skillUpdate(cfg, client, registry, permissions, cfg._skillUpdateName); mcpManager.shutdown(); process.exit(0); }
+  if (cfg._subcommand === "skill-export") { skillExport(cfg, cfg._skillExportName); process.exit(0); }
+  if (cfg._subcommand === "skill-verify") { skillVerify(cfg, cfg._skillVerifyName); process.exit(0); }
+  if (cfg._subcommand === "skill-search") { await skillSearch(cfg, cfg._skillSearchQuery); process.exit(0); }
+  if (cfg._subcommand === "skill-publish") { await skillPublish(cfg, cfg._skillPublishName); process.exit(0); }
   if (cfg._subcommand === "skill-import") {
     await skillImport(cfg, client, registry, permissions, cfg._skillImportSource);
     mcpManager.shutdown();
     process.exit(0);
   }
+  // Subcommand dispatch — tools
+  if (cfg._subcommand === "tool-list") { toolList(cfg, registry); mcpManager.shutdown(); process.exit(0); }
+  if (cfg._subcommand === "tool-info") { toolInfo(cfg, registry, cfg._toolInfoName); mcpManager.shutdown(); process.exit(0); }
+  if (cfg._subcommand === "tool-enable") { toolEnable(cfg, registry, cfg._toolEnableName); mcpManager.shutdown(); process.exit(0); }
+  if (cfg._subcommand === "tool-disable") { toolDisable(cfg, registry, cfg._toolDisableName); mcpManager.shutdown(); process.exit(0); }
+  if (cfg._subcommand === "tool-test") { await toolTest(cfg, registry, cfg._toolTestName); mcpManager.shutdown(); process.exit(0); }
+  if (cfg._subcommand === "tool-install") { toolInstall(cfg, cfg._toolInstallSource); process.exit(0); }
+  if (cfg._subcommand === "tool-remove") { toolRemove(cfg, cfg._toolRemoveName); process.exit(0); }
 
   // Mode dispatch
   if (cfg.ndjson) {

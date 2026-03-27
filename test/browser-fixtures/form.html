@@ -1,0 +1,20 @@
+<!DOCTYPE html>
+<html><head><title>Form Test</title></head>
+<body>
+<h1>Test Form</h1>
+<form id="test-form">
+  <label>Name: <input type="text" name="name" id="name"></label>
+  <label>Email: <input type="email" name="email" id="email"></label>
+  <label>Message: <textarea name="message" id="message"></textarea></label>
+  <button type="submit" id="submit-btn">Submit</button>
+</form>
+<div id="result" style="display:none"></div>
+<script>
+document.getElementById('test-form').addEventListener('submit', function(e) {
+  e.preventDefault();
+  var r = document.getElementById('result');
+  r.style.display = 'block';
+  r.textContent = 'Submitted: ' + document.getElementById('name').value + ', ' + document.getElementById('email').value;
+});
+</script>
+</body></html>

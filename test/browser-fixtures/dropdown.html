@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html><head><title>Dropdown Test</title></head>
+<body>
+<h1>Dropdown</h1>
+<select id="color-select" name="color">
+  <option value="">-- Choose --</option>
+  <option value="red">Red</option>
+  <option value="green">Green</option>
+  <option value="blue">Blue</option>
+</select>
+<div id="selected" style="display:none"></div>
+<script>
+document.getElementById('color-select').addEventListener('change', function(e) {
+  var s = document.getElementById('selected');
+  s.style.display = 'block';
+  s.textContent = 'Selected: ' + e.target.value;
+});
+</script>
+</body></html>

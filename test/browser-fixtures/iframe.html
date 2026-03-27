@@ -1,0 +1,7 @@
+<!DOCTYPE html>
+<html><head><title>Iframe Test</title></head>
+<body>
+<h1>Main Page</h1>
+<p id="main-text">This is the main page.</p>
+<iframe id="child-frame" name="child" srcdoc='<!DOCTYPE html><html><head><title>Child Frame</title></head><body><h2>Child Frame</h2><p id="inner-text">Inside iframe</p><button id="inner-btn" onclick="document.getElementById(&apos;inner-text&apos;).textContent=&apos;Clicked!&apos;">Click me</button></body></html>' style="width:400px;height:200px;border:1px solid #ccc;"></iframe>
+</body></html>

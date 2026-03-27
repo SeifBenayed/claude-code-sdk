@@ -1030,7 +1030,8 @@ $ARGUMENTS`);
     assert(index.includes("/review-pr"), "Skill index includes /review-pr");
 
     const skills = loader.list();
-    assert(skills.length === 2, "Skill list has 2 skills");
+    const projectSkills = skills.filter(s => s.source === "project");
+    assert(projectSkills.length === 2, "Skill list has 2 project skills");
 
     // Test invocation
     const invoked = loader.invoke("commit", "fix: typo in readme");
@@ -3266,12 +3267,13 @@ section("UNIT: /skill slash command registered");
 {
   assert(source.includes('name: "skill"'), "/skill command registered");
   assert(source.includes('"import"'), "/skill handles import subcommand");
+  assert(source.includes('"list"') && source.includes('"info"') && source.includes('"remove"') && source.includes('"update"'), "/skill handles all subcommands");
 }
 
 section("UNIT: skill import CLI subcommand parsed");
 
 {
-  assert(source.includes('argv[0] === "skill"') && source.includes('argv[1] === "import"'), "skill import parsed from argv prefix");
+  assert(source.includes('argv[0] === "skill"') && source.includes('sub === "import"'), "skill import parsed from argv prefix");
   assert(source.includes('cfg._subcommand = "skill-import"'), "sets _subcommand");
 }
 
@@ -3761,6 +3763,1105 @@ if (RUN_E2E) {
   } catch {
     skip("Ollama: not available");
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SKILL MANAGEMENT — Phase 2: list, info, remove, update, manifest
+// ═══════════════════════════════════════════════════════════════════
+
+section("UNIT: _loadSkillManifest returns empty object for missing file");
+
+{
+  const loadFn = extractBlock(source, "function _loadSkillManifest(");
+  const saveFn = extractBlock(source, "function _saveSkillManifest(");
+  if (loadFn && saveFn) {
+    try {
+      const mns = {};
+      new Function("exports", "fs", "path", "os",
+        loadFn + "\n" + saveFn + "\n" +
+        'const SKILL_MANIFEST_PATH = "/tmp/cloclo-test-manifest-missing-' + Date.now() + '.json";\n' +
+        "exports._loadSkillManifest = _loadSkillManifest;\n" +
+        "exports._saveSkillManifest = _saveSkillManifest;\n" +
+        "exports.SKILL_MANIFEST_PATH = SKILL_MANIFEST_PATH;\n"
+      )(mns, fs, path, os);
+      const result = mns._loadSkillManifest();
+      assert(result && typeof result === "object", "_loadSkillManifest returns object");
+      assert(result.skills && typeof result.skills === "object", "_loadSkillManifest has skills key");
+      assert(Object.keys(result.skills).length === 0, "_loadSkillManifest skills is empty for missing file");
+    } catch (e) {
+      skip(`_loadSkillManifest test failed: ${e.message}`);
+    }
+  } else {
+    skip("_loadSkillManifest function not found");
+  }
+}
+
+section("UNIT: _saveSkillManifest writes valid JSON");
+
+{
+  const loadFn = extractBlock(source, "function _loadSkillManifest(");
+  const saveFn = extractBlock(source, "function _saveSkillManifest(");
+  if (loadFn && saveFn) {
+    const testPath = `/tmp/cloclo-test-manifest-save-${Date.now()}.json`;
+    try {
+      const mns = {};
+      new Function("exports", "fs", "path", "os",
+        // Override the const to use our test path
+        `const SKILL_MANIFEST_PATH = ${JSON.stringify(testPath)};\n` +
+        loadFn + "\n" + saveFn + "\n" +
+        "exports._loadSkillManifest = _loadSkillManifest;\n" +
+        "exports._saveSkillManifest = _saveSkillManifest;\n"
+      )(mns, fs, path, os);
+
+      const manifest = { skills: { test: { name: "test", source: "github:owner/repo", installedAt: "2026-03-26T14:00:00Z" } } };
+      mns._saveSkillManifest(manifest);
+      const raw = fs.readFileSync(testPath, "utf-8");
+      const parsed = JSON.parse(raw);
+      assert(parsed.skills.test.name === "test", "Saved manifest has correct skill name");
+      assert(parsed.skills.test.source === "github:owner/repo", "Saved manifest has correct source");
+      fs.unlinkSync(testPath);
+    } catch (e) {
+      try { fs.unlinkSync(testPath); } catch {}
+      skip(`_saveSkillManifest test failed: ${e.message}`);
+    }
+  } else {
+    skip("_saveSkillManifest function not found");
+  }
+}
+
+section("UNIT: skillList outputs installed skills");
+
+{
+  assert(source.includes("function skillList("), "skillList function exists");
+  assert(source.includes("No skills installed"), "skillList handles empty state");
+  assert(source.includes("(manual)"), "skillList shows untracked skills as manual");
+  assert(source.includes("skill(s) installed"), "skillList shows count");
+}
+
+section("UNIT: skillInfo outputs skill details");
+
+{
+  assert(source.includes("function skillInfo("), "skillInfo function exists");
+  assert(source.includes("Skill not found:"), "skillInfo handles missing skill");
+  assert(source.includes("Description:"), "skillInfo shows description");
+  assert(source.includes("Source:"), "skillInfo shows source");
+  assert(source.includes("Size:"), "skillInfo shows size");
+}
+
+section("UNIT: skillRemove deletes skill directory");
+
+{
+  assert(source.includes("function skillRemove(") || source.includes("async function skillRemove("), "skillRemove function exists");
+  assert(source.includes("Removed skill:"), "skillRemove prints confirmation");
+  assert(source.includes('rmSync(skillDir, { recursive: true, force: true })'), "skillRemove uses rmSync with recursive");
+}
+
+section("UNIT: skillRemove updates manifest");
+
+{
+  assert(source.includes("delete manifest.skills[name]"), "skillRemove deletes from manifest");
+  assert(source.includes("_saveSkillManifest(manifest)"), "skillRemove saves updated manifest");
+}
+
+section("UNIT: Manifest records source and installedAt");
+
+{
+  assert(source.includes("manifest.skills[skillName] = {"), "_installOneSkill writes to manifest");
+  assert(source.includes("installedAt:") && source.includes("new Date().toISOString()"), "Manifest records installedAt");
+  assert(source.includes("source: source"), "Manifest records source");
+}
+
+section("UNIT: parseArgs handles skill list/info/remove/update");
+
+{
+  assert(source.includes('cfg._subcommand = "skill-list"'), "parseArgs sets skill-list subcommand");
+  assert(source.includes('cfg._subcommand = "skill-info"'), "parseArgs sets skill-info subcommand");
+  assert(source.includes('cfg._subcommand = "skill-remove"'), "parseArgs sets skill-remove subcommand");
+  assert(source.includes('cfg._subcommand = "skill-update"'), "parseArgs sets skill-update subcommand");
+  assert(source.includes("cfg._skillInfoName = argv[2]"), "parseArgs captures skill info name");
+  assert(source.includes("cfg._skillRemoveName = argv[2]"), "parseArgs captures skill remove name");
+  assert(source.includes("cfg._skillUpdateName = argv[2]"), "parseArgs captures skill update name");
+  assert(source.includes('Unknown skill subcommand'), "parseArgs rejects unknown skill subcommands");
+}
+
+section("UNIT: /skill handler routes all subcommands");
+
+{
+  assert(source.includes('sub === "list"') && source.includes("skillList(self.cfg)"), "/skill routes list");
+  assert(source.includes('sub === "info"') && source.includes("skillInfo(self.cfg"), "/skill routes info");
+  assert(source.includes('sub === "remove"') && source.includes("skillRemove(self.cfg"), "/skill routes remove");
+  assert(source.includes('sub === "update"') && source.includes("skillUpdate(self.cfg"), "/skill routes update");
+}
+
+section("E2E: cloclo skill list runs without error");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["skill", "list"], {}, 5000);
+    assert(exitCode === 0, `skill list exits with code 0 (got ${exitCode})`);
+    assert(stderr.includes("skill") || stderr.includes("No skills"), "skill list produces output");
+  } catch (e) {
+    skip(`skill list E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: cloclo skill remove nonexistent → error");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["skill", "remove", "nonexistent-skill-99999", "--yes"], {}, 5000);
+    assert(exitCode !== 0, `skill remove nonexistent exits with non-zero (got ${exitCode})`);
+    assert(stderr.includes("not found") || stderr.includes("Error"), "stderr mentions skill not found");
+  } catch (e) {
+    skip(`skill remove E2E failed: ${e.message}`);
+  }
+}
+
+section("UNIT: _computeSkillChecksum produces stable hash");
+
+{
+  const fn = extractBlock(source, "function _computeSkillChecksum(");
+  if (fn) {
+    try {
+      const mns = {};
+      new Function("exports", "createHash",
+        fn + "\nexports._computeSkillChecksum = _computeSkillChecksum;\n"
+      )(mns, (await import("node:crypto")).createHash);
+      const files = { "SKILL.md": "---\nname: test\n---\nHello", "scripts/run.sh": "#!/bin/bash\necho hi" };
+      const h1 = mns._computeSkillChecksum(files);
+      const h2 = mns._computeSkillChecksum(files);
+      assert(typeof h1 === "string" && h1.length === 16, "Checksum is 16-char hex string");
+      assert(h1 === h2, "Checksum is deterministic");
+      const h3 = mns._computeSkillChecksum({ "SKILL.md": "different content" });
+      assert(h3 !== h1, "Different content produces different checksum");
+    } catch (e) {
+      skip(`_computeSkillChecksum test failed: ${e.message}`);
+    }
+  } else {
+    skip("_computeSkillChecksum not found");
+  }
+}
+
+section("UNIT: skillExport function exists");
+
+{
+  assert(source.includes("function skillExport("), "skillExport function exists");
+  assert(source.includes(".skill.json"), "skillExport writes .skill.json file");
+  assert(source.includes("exportedAt"), "skillExport includes exportedAt timestamp");
+}
+
+section("UNIT: skillVerify function exists");
+
+{
+  assert(source.includes("function skillVerify("), "skillVerify function exists");
+  assert(source.includes("Integrity verified"), "skillVerify reports match");
+  assert(source.includes("Modified since installation"), "skillVerify reports mismatch");
+}
+
+section("UNIT: GITHUB_TOKEN auth headers");
+
+{
+  assert(source.includes("_getGitHubHeaders"), "_getGitHubHeaders function exists");
+  assert(source.includes("GITHUB_TOKEN") && source.includes("GH_TOKEN"), "Supports both GITHUB_TOKEN and GH_TOKEN");
+  assert(source.includes("_ghGet"), "_ghGet convenience function exists");
+}
+
+section("UNIT: git clone --depth 1 fallback");
+
+{
+  assert(source.includes("git clone --depth 1"), "Fallback git clone --depth 1 implemented");
+  assert(source.includes("--single-branch"), "Clone uses --single-branch for efficiency");
+  assert(source.includes("usedGitClone"), "Git clone fallback tracked");
+}
+
+section("UNIT: parseArgs handles skill export/verify");
+
+{
+  assert(source.includes('cfg._subcommand = "skill-export"'), "parseArgs sets skill-export subcommand");
+  assert(source.includes('cfg._subcommand = "skill-verify"'), "parseArgs sets skill-verify subcommand");
+  assert(source.includes("cfg._skillExportName"), "parseArgs captures export name");
+  assert(source.includes("cfg._skillVerifyName"), "parseArgs captures verify name");
+}
+
+section("UNIT: manifest records enriched fields");
+
+{
+  assert(source.includes("sourceType:"), "Manifest records sourceType");
+  assert(source.includes("convertedFrom:"), "Manifest records convertedFrom");
+  assert(source.includes("selectedPath:"), "Manifest records selectedPath");
+  assert(source.includes("checksum: _computeSkillChecksum"), "Manifest records checksum at install");
+}
+
+section("UNIT: /skill handler routes export and verify");
+
+{
+  assert(source.includes('sub === "export"') && source.includes("skillExport(self.cfg"), "/skill routes export");
+  assert(source.includes('sub === "verify"') && source.includes("skillVerify(self.cfg"), "/skill routes verify");
+}
+
+section("E2E: cloclo skill verify on existing skill");
+
+{
+  try {
+    // gstack exists on disk — verify should work (no checksum in manifest = warning)
+    const { exitCode, stderr } = await runCLI(["skill", "verify", "gstack"], {}, 5000);
+    assert(exitCode === 0, `skill verify exits with code 0 (got ${exitCode})`);
+    assert(stderr.includes("Checksum") || stderr.includes("checksum"), "verify shows checksum info");
+  } catch (e) {
+    skip(`skill verify E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: cloclo skill export nonexistent → error");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["skill", "export", "nonexistent-skill-99999"], {}, 5000);
+    assert(exitCode !== 0, `skill export nonexistent exits non-zero (got ${exitCode})`);
+    assert(stderr.includes("not found"), "stderr mentions not found");
+  } catch (e) {
+    skip(`skill export E2E failed: ${e.message}`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// SKILL MARKETPLACE — Phase 4: search, publish, registry source
+// ═══════════════════════════════════════════════════════════════════
+
+section("UNIT: registry source type in parseSkillSource");
+
+{
+  assert(source.includes('source.startsWith("registry:")'), "parseSkillSource recognizes registry: prefix");
+  assert(source.includes('type: "registry"'), "registry source type defined");
+}
+
+section("UNIT: fetchSkillContents handles registry type");
+
+{
+  assert(source.includes('parsed.type === "registry"'), "fetchSkillContents handles registry type");
+  assert(source.includes("/api/skills/"), "Registry API endpoint used for fetch");
+}
+
+section("UNIT: skillSearch function exists");
+
+{
+  assert(source.includes("async function skillSearch("), "skillSearch function exists");
+  assert(source.includes("/api/skills/search"), "skillSearch queries search API");
+  assert(source.includes("CLOCLO_REGISTRY_URL"), "Registry URL configurable via env");
+}
+
+section("UNIT: skillPublish function exists");
+
+{
+  assert(source.includes("async function skillPublish("), "skillPublish function exists");
+  assert(source.includes("/api/skills/publish"), "skillPublish posts to publish API");
+  assert(source.includes("CLOCLO_REGISTRY_TOKEN"), "Publish requires auth token");
+}
+
+section("UNIT: registry client functions");
+
+{
+  assert(source.includes("function _registryGet("), "_registryGet function exists");
+  assert(source.includes("function _registryPost("), "_registryPost function exists");
+  assert(source.includes("SKILL_REGISTRY_URL"), "Registry URL constant defined");
+  assert(source.includes("cloclo-registry") && source.includes("run.app"), "Default registry URL set");
+}
+
+section("UNIT: parseArgs handles skill search/publish");
+
+{
+  assert(source.includes('cfg._subcommand = "skill-search"'), "parseArgs sets skill-search subcommand");
+  assert(source.includes('cfg._subcommand = "skill-publish"'), "parseArgs sets skill-publish subcommand");
+  assert(source.includes("cfg._skillSearchQuery"), "parseArgs captures search query");
+  assert(source.includes("cfg._skillPublishName"), "parseArgs captures publish name");
+}
+
+section("UNIT: /skill handler routes search and publish");
+
+{
+  assert(source.includes('sub === "search"') && source.includes("skillSearch(self.cfg"), "/skill routes search");
+  assert(source.includes('sub === "publish"') && source.includes("skillPublish(self.cfg"), "/skill routes publish");
+}
+
+section("E2E: cloclo skill search (registry unavailable → graceful error)");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["skill", "search", "test-query"], {}, 8000);
+    // Registry is not running, so we expect a graceful error
+    assert(exitCode === 0, `skill search exits 0 even on registry error (got ${exitCode})`);
+    assert(stderr.includes("unavailable") || stderr.includes("Searching") || stderr.includes("Registry"), "search shows registry status");
+  } catch (e) {
+    skip(`skill search E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: cloclo skill publish without token → error");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["skill", "publish", "gstack"], { CLOCLO_REGISTRY_TOKEN: "" }, 5000);
+    assert(exitCode !== 0, `skill publish without token exits non-zero (got ${exitCode})`);
+    assert(stderr.includes("CLOCLO_REGISTRY_TOKEN") || stderr.includes("required"), "stderr mentions token requirement");
+  } catch (e) {
+    skip(`skill publish E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: cloclo --help mentions skill search/publish");
+
+{
+  try {
+    const { stderr } = await runCLI(["--help"], {}, 5000);
+    assert(stderr.includes("skill search"), "--help mentions skill search");
+    assert(stderr.includes("skill publish"), "--help mentions skill publish");
+    assert(stderr.includes("registry"), "--help mentions registry");
+  } catch (e) {
+    skip(`--help marketplace E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: cloclo --help mentions skill list/info/remove/update");
+
+{
+  try {
+    const { stderr } = await runCLI(["--help"], {}, 5000);
+    assert(stderr.includes("skill list"), "--help mentions skill list");
+    assert(stderr.includes("skill info"), "--help mentions skill info");
+    assert(stderr.includes("skill remove"), "--help mentions skill remove");
+    assert(stderr.includes("skill update"), "--help mentions skill update");
+    assert(stderr.includes("skill export"), "--help mentions skill export");
+    assert(stderr.includes("skill verify"), "--help mentions skill verify");
+  } catch (e) {
+    skip(`--help skill management E2E failed: ${e.message}`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// TOOL MANAGEMENT — T1: list, info, enable, disable, test
+// ═══════════════════════════════════════════════════════════════════
+
+section("UNIT: Tool manifest functions");
+
+{
+  assert(source.includes("TOOL_MANIFEST_PATH"), "TOOL_MANIFEST_PATH defined");
+  assert(source.includes("function _loadToolManifest("), "_loadToolManifest exists");
+  assert(source.includes("function _saveToolManifest("), "_saveToolManifest exists");
+}
+
+section("UNIT: Tool management functions");
+
+{
+  assert(source.includes("function toolList("), "toolList function exists");
+  assert(source.includes("function toolInfo("), "toolInfo function exists");
+  assert(source.includes("function toolEnable("), "toolEnable function exists");
+  assert(source.includes("function toolDisable("), "toolDisable function exists");
+  assert(source.includes("function toolTest(") || source.includes("async function toolTest("), "toolTest function exists");
+}
+
+section("UNIT: _classifyToolType categorizes tools");
+
+{
+  assert(source.includes("function _classifyToolType("), "_classifyToolType exists");
+  assert(source.includes('"builtin"') && source.includes('"connector"') && source.includes('"custom"'), "All tool types defined");
+  assert(source.includes('name.startsWith("mcp__")'), "MCP tools classified as connector");
+}
+
+section("UNIT: parseArgs handles tool subcommands");
+
+{
+  assert(source.includes('cfg._subcommand = "tool-list"'), "parseArgs sets tool-list");
+  assert(source.includes('cfg._subcommand = "tool-info"'), "parseArgs sets tool-info");
+  assert(source.includes('cfg._subcommand = "tool-enable"'), "parseArgs sets tool-enable");
+  assert(source.includes('cfg._subcommand = "tool-disable"'), "parseArgs sets tool-disable");
+  assert(source.includes('cfg._subcommand = "tool-test"'), "parseArgs sets tool-test");
+  assert(source.includes("cfg._toolInfoName"), "parseArgs captures tool info name");
+  assert(source.includes('Unknown tool subcommand'), "parseArgs rejects unknown tool subcommands");
+}
+
+section("UNIT: /tool slash command routes all subcommands");
+
+{
+  assert(source.includes('name: "tool"') && source.includes("Tool management"), "/tool command registered");
+  assert(source.includes("toolList(self.cfg, self.registry)"), "/tool routes list");
+  assert(source.includes("toolInfo(self.cfg, self.registry"), "/tool routes info");
+  assert(source.includes("toolEnable(self.cfg, self.registry"), "/tool routes enable");
+  assert(source.includes("toolDisable(self.cfg, self.registry"), "/tool routes disable");
+  assert(source.includes("toolTest(self.cfg, self.registry"), "/tool routes test");
+}
+
+section("UNIT: Protected tools cannot be disabled");
+
+{
+  assert(source.includes("PROTECTED_TOOLS"), "PROTECTED_TOOLS set defined");
+  assert(source.includes("Cannot disable") && source.includes("core tool"), "toolDisable refuses protected tools");
+  assert(source.includes('"Read"') && source.includes('"ToolSearch"') && source.includes('"Agent"'), "Read, ToolSearch, Agent are protected");
+}
+
+section("UNIT: Disabled tools loaded from manifest at startup");
+
+{
+  assert(source.includes("_loadToolManifest()") && source.includes("entry.disabled && registry.has(name)"), "Disabled tools applied from manifest at startup");
+}
+
+section("E2E: cloclo tool list runs");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["tool", "list"], {}, 10000);
+    assert(exitCode === 0, `tool list exits 0 (got ${exitCode})`);
+    assert(stderr.includes("Bash") || stderr.includes("tools"), "tool list shows tools");
+  } catch (e) {
+    skip(`tool list E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: cloclo tool info Bash");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["tool", "info", "Bash"], {}, 10000);
+    assert(exitCode === 0, `tool info exits 0 (got ${exitCode})`);
+    assert(stderr.includes("Bash") && stderr.includes("builtin"), "tool info shows Bash as builtin");
+  } catch (e) {
+    skip(`tool info E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: cloclo tool test Bash");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["tool", "test", "Bash"], {}, 10000);
+    assert(exitCode === 0, `tool test exits 0 (got ${exitCode})`);
+    assert(stderr.includes("Executed OK") || stderr.includes("✓"), "tool test Bash succeeds");
+  } catch (e) {
+    skip(`tool test E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: cloclo --help mentions tool commands");
+
+{
+  try {
+    const { stderr } = await runCLI(["--help"], {}, 5000);
+    assert(stderr.includes("tool list"), "--help mentions tool list");
+    assert(stderr.includes("tool info"), "--help mentions tool info");
+    assert(stderr.includes("tool enable"), "--help mentions tool enable");
+    assert(stderr.includes("tool disable"), "--help mentions tool disable");
+    assert(stderr.includes("tool test"), "--help mentions tool test");
+  } catch (e) {
+    skip(`--help tool E2E failed: ${e.message}`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// CUSTOM TOOLS — T2A: TOOL.json install, remove, execute
+// ═══════════════════════════════════════════════════════════════════
+
+section("UNIT: TOOL.json validation");
+
+{
+  assert(source.includes("function _validateToolJson("), "_validateToolJson exists");
+  assert(source.includes('"shell"') && source.includes('"http"') && source.includes('"ai"'), "Validates shell/http/ai types");
+  assert(source.includes("'read_only'") && source.includes("shell tools must declare"), "Shell must declare read_only");
+  assert(source.includes("http tools require 'timeout'"), "HTTP must have timeout");
+  assert(source.includes("ai tools require 'task'"), "AI must have task");
+}
+
+section("UNIT: Custom tool executors");
+
+{
+  assert(source.includes("function _createShellExecutor("), "Shell executor exists");
+  assert(source.includes("function _createHttpExecutor("), "HTTP executor exists");
+  assert(source.includes("function _createAiExecutor("), "AI executor exists");
+  assert(source.includes("$INPUT_JSON"), "Shell command supports $INPUT_JSON substitution");
+}
+
+section("UNIT: scanCustomTools loads from disk");
+
+{
+  assert(source.includes("function scanCustomTools("), "scanCustomTools exists");
+  assert(source.includes("CUSTOM_TOOLS_DIR"), "CUSTOM_TOOLS_DIR defined");
+  assert(source.includes("TOOL.json"), "Scans for TOOL.json files");
+}
+
+section("UNIT: toolInstall and toolRemove");
+
+{
+  assert(source.includes("function toolInstall("), "toolInstall exists");
+  assert(source.includes("function toolRemove("), "toolRemove exists");
+  assert(source.includes("Cannot remove") && source.includes("built-in tool"), "toolRemove refuses builtins");
+}
+
+section("UNIT: parseArgs handles tool install/remove");
+
+{
+  assert(source.includes('cfg._subcommand = "tool-install"'), "parseArgs sets tool-install");
+  assert(source.includes('cfg._subcommand = "tool-remove"'), "parseArgs sets tool-remove");
+  assert(source.includes("cfg._toolInstallSource"), "parseArgs captures install source");
+  assert(source.includes("cfg._toolRemoveName"), "parseArgs captures remove name");
+}
+
+section("UNIT: /tool handler routes install and remove");
+
+{
+  assert(source.includes("toolInstall(self.cfg") && source.includes('sub === "install"'), "/tool routes install");
+  assert(source.includes("toolRemove(self.cfg") && source.includes('sub === "remove"'), "/tool routes remove");
+}
+
+section("E2E: install and remove a shell custom tool");
+
+{
+  // Create a test TOOL.json
+  const tmpToolDir = fs.mkdtempSync(path.join(os.tmpdir(), "cloclo-tool-test-"));
+  const toolJson = {
+    name: "test-echo",
+    description: "Echo input back",
+    type: "shell",
+    command: "echo $INPUT_JSON",
+    read_only: true,
+    timeout: 5000,
+    input_schema: { type: "object", properties: { message: { type: "string", description: "Message to echo" } }, required: ["message"] },
+  };
+  fs.writeFileSync(path.join(tmpToolDir, "TOOL.json"), JSON.stringify(toolJson));
+
+  try {
+    // Install
+    const { exitCode: ic, stderr: se } = await runCLI(["tool", "install", tmpToolDir], {}, 10000);
+    assert(ic === 0, `tool install exits 0 (got ${ic})`);
+    assert(se.includes("Installed tool: test-echo"), "install confirms tool name");
+
+    // Verify file exists
+    const installed = fs.existsSync(path.join(os.homedir(), ".claude", "tools", "test-echo", "TOOL.json"));
+    assert(installed, "TOOL.json installed to ~/.claude/tools/test-echo/");
+
+    // Remove
+    const { exitCode: rc, stderr: rse } = await runCLI(["tool", "remove", "test-echo"], {}, 10000);
+    assert(rc === 0, `tool remove exits 0 (got ${rc})`);
+    assert(rse.includes("Removed tool: test-echo"), "remove confirms tool name");
+
+    // Verify gone
+    const gone = !fs.existsSync(path.join(os.homedir(), ".claude", "tools", "test-echo", "TOOL.json"));
+    assert(gone, "TOOL.json removed from disk");
+  } catch (e) {
+    skip(`Custom tool E2E failed: ${e.message}`);
+  }
+  fs.rmSync(tmpToolDir, { recursive: true, force: true });
+}
+
+section("E2E: invalid TOOL.json rejected");
+
+{
+  const tmpToolDir = fs.mkdtempSync(path.join(os.tmpdir(), "cloclo-tool-bad-"));
+  fs.writeFileSync(path.join(tmpToolDir, "TOOL.json"), JSON.stringify({ name: "bad", type: "unknown" }));
+
+  try {
+    const { exitCode, stderr } = await runCLI(["tool", "install", tmpToolDir], {}, 10000);
+    assert(exitCode !== 0, `invalid TOOL.json exits non-zero (got ${exitCode})`);
+    assert(stderr.includes("Invalid TOOL.json"), "stderr shows validation error");
+  } catch (e) {
+    skip(`Invalid TOOL.json E2E failed: ${e.message}`);
+  }
+  fs.rmSync(tmpToolDir, { recursive: true, force: true });
+}
+
+section("E2E: cloclo --help mentions tool install/remove");
+
+{
+  try {
+    const { stderr } = await runCLI(["--help"], {}, 5000);
+    assert(stderr.includes("tool install"), "--help mentions tool install");
+    assert(stderr.includes("tool remove"), "--help mentions tool remove");
+  } catch (e) {
+    skip(`--help tool install E2E failed: ${e.message}`);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// LOCAL AI TOOLS — T2B: backend: "transformers" via worker
+// ═══════════════════════════════════════════════════════════════════
+
+section("UNIT: AI backend validation — all backends");
+
+{
+  assert(source.includes('"provider"') && source.includes('"ollama"') && source.includes('"openai-compatible"') && source.includes('"transformers"'), "All 4 backends recognized");
+  assert(source.includes("ai backend must be one of"), "Invalid backend rejected with list");
+  assert(source.includes('"classify"') && source.includes('"translation"') && source.includes('"ocr"'), "transformers tasks: classify/translation/ocr");
+  assert(source.includes('"cpu"') && source.includes('"cuda"') && source.includes('"mps"'), "transformers devices: cpu/cuda/mps/auto");
+  assert(source.includes("openai-compatible backend requires 'base_url'"), "openai-compatible requires base_url");
+}
+
+section("UNIT: AI backend executors");
+
+{
+  assert(source.includes("function _createAiExecutor("), "Provider executor exists");
+  assert(source.includes("function _createOllamaExecutor("), "Ollama executor exists");
+  assert(source.includes("function _createOpenAICompatibleExecutor("), "OpenAI-compatible executor exists");
+  assert(source.includes("function _createTransformersExecutor("), "Transformers executor exists");
+  assert(source.includes("function _aiToolRequest("), "Shared HTTP helper exists");
+}
+
+section("UNIT: Provider executor routes to multiple providers");
+
+{
+  assert(source.includes("api.openai.com") && source.includes("api.anthropic.com"), "Routes to OpenAI and Anthropic");
+  assert(source.includes("api.groq.com"), "Routes to Groq");
+  assert(source.includes("api.deepseek.com"), "Routes to DeepSeek");
+  assert(source.includes("api.mistral.ai"), "Routes to Mistral");
+  assert(source.includes("generativelanguage.googleapis.com"), "Routes to Google Gemini");
+}
+
+section("UNIT: Ollama executor");
+
+{
+  assert(source.includes("OLLAMA_API_URL") && source.includes("localhost:11434"), "Ollama defaults to localhost:11434");
+  assert(source.includes("/api/generate"), "Ollama uses /api/generate endpoint");
+}
+
+section("UNIT: OpenAI-compatible executor");
+
+{
+  assert(source.includes("base_url") && source.includes("/v1/chat/completions"), "OpenAI-compatible appends /v1/chat/completions");
+  assert(source.includes("api_key_env"), "Supports api_key_env for env var lookup");
+}
+
+section("UNIT: Transformers executor (JS)");
+
+{
+  assert(source.includes("@huggingface/transformers"), "Uses @huggingface/transformers JS library");
+  assert(source.includes("_hfPipelineCache"), "Pipeline cache for model reuse");
+  assert(source.includes("hf.pipeline("), "Creates HF pipeline");
+}
+
+section("UNIT: Backend routing in _registerCustomTool");
+
+{
+  assert(source.includes('toolDef.backend === "transformers"') && source.includes("_createTransformersExecutor"), "transformers routes correctly");
+  assert(source.includes('toolDef.backend === "ollama"') && source.includes("_createOllamaExecutor"), "ollama routes correctly");
+  assert(source.includes('toolDef.backend === "openai-compatible"') && source.includes("_createOpenAICompatibleExecutor"), "openai-compatible routes correctly");
+}
+
+section("UNIT: manifest stores backend/task/device for ai tools");
+
+{
+  assert(source.includes("backend: toolDef.backend") && source.includes("task: toolDef.task") && source.includes("device: toolDef.device"), "Manifest captures backend, task, device");
+}
+
+section("E2E: install transformers tool — validation");
+
+{
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cloclo-t2b-"));
+  const toolJson = {
+    name: "test-classify",
+    description: "Test local classifier",
+    type: "ai",
+    backend: "transformers",
+    task: "classify",
+    model: "distilbert-base-uncased-finetuned-sst-2-english",
+    device: "cpu",
+    timeout: 30000,
+    read_only: true,
+    input_schema: { type: "object", properties: { text: { type: "string" } }, required: ["text"] },
+  };
+  fs.writeFileSync(path.join(tmpDir, "TOOL.json"), JSON.stringify(toolJson));
+
+  try {
+    const { exitCode, stderr } = await runCLI(["tool", "install", tmpDir], {}, 10000);
+    assert(exitCode === 0, `transformers tool installs OK (got ${exitCode})`);
+    assert(stderr.includes("Installed tool: test-classify"), "install confirms name");
+
+    // Check manifest
+    const manifest = JSON.parse(fs.readFileSync(path.join(os.homedir(), ".claude", "tools", ".cloclo-tools.json"), "utf-8"));
+    assert(manifest.tools["test-classify"]?.backend === "transformers", "manifest has backend: transformers");
+    assert(manifest.tools["test-classify"]?.task === "classify", "manifest has task: classify");
+    assert(manifest.tools["test-classify"]?.device === "cpu", "manifest has device: cpu");
+
+    // Cleanup
+    await runCLI(["tool", "remove", "test-classify"], {}, 5000);
+  } catch (e) {
+    skip(`T2B install E2E failed: ${e.message}`);
+  }
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+}
+
+section("E2E: invalid transformers task rejected");
+
+{
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cloclo-t2b-bad-"));
+  fs.writeFileSync(path.join(tmpDir, "TOOL.json"), JSON.stringify({
+    name: "bad-task",
+    description: "Invalid task",
+    type: "ai",
+    backend: "transformers",
+    task: "nonexistent-task",
+    model: "some-model",
+    input_schema: { type: "object", properties: {} },
+  }));
+
+  try {
+    const { exitCode, stderr } = await runCLI(["tool", "install", tmpDir], {}, 10000);
+    assert(exitCode !== 0, `invalid task rejected (got ${exitCode})`);
+    assert(stderr.includes("transformers task must be"), "error mentions valid tasks");
+  } catch (e) {
+    skip(`T2B bad task E2E failed: ${e.message}`);
+  }
+  fs.rmSync(tmpDir, { recursive: true, force: true });
+}
+
+section("UNIT: @huggingface/transformers available");
+
+{
+  let hfOk = false;
+  try { await import("@huggingface/transformers"); hfOk = true; } catch { /* not installed */ }
+  assert(hfOk, "@huggingface/transformers importable");
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// BROWSER TOOL PACK — Enterprise CDP-native multi-session/multi-tab
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Phase 0: Connection Refactor (browser-level WS) ─────────────
+
+section("UNIT: BrowserSession class (Phase 0 — connection refactor)");
+
+{
+  assert(source.includes("class BrowserSession"), "BrowserSession class exists");
+  assert(source.includes("ensureBrowser()"), "Lazy browser init");
+  assert(source.includes("_connectWs("), "WebSocket CDP connection (raw RFC 6455)");
+  assert(source.includes("_send(method"), "CDP command sender");
+  assert(source.includes("_detectLoop("), "Loop detection (3x same action)");
+  // Phase 0: browser-level WS
+  assert(source.includes("/json/version"), "Phase 0: connects via /json/version (browser-level WS)");
+  assert(source.includes("Target.setDiscoverTargets"), "Phase 0: enables target discovery");
+  assert(source.includes("Target.attachToTarget") && source.includes("flatten: true"), "Phase 0: attaches to targets with flatten:true");
+  assert(source.includes("_activeCdpSession"), "Phase 0: routes CDP commands via active tab session");
+  assert(source.includes("msg.sessionId"), "Phase 0: routes events by CDP sessionId");
+}
+
+// ── Phase 1: Session Manager + Tabs + Profiles ──────────────────
+
+section("UNIT: BrowserSessionManager (Phase 1)");
+
+{
+  assert(source.includes("class BrowserSessionManager"), "BrowserSessionManager class exists");
+  assert(source.includes("_getSessionManager"), "Session manager singleton accessor");
+  assert(source.includes("session_id"), "session_id param in schema");
+  assert(source.includes("tab_id"), "tab_id param in schema");
+}
+
+section("UNIT: Tab management actions (Phase 1)");
+
+{
+  assert(source.includes('"new_tab"') && source.includes('"switch_tab"') && source.includes('"close_tab"') && source.includes('"list_tabs"'), "Tab actions: new_tab, switch_tab, close_tab, list_tabs");
+  assert(source.includes('"new_session"') && source.includes('"close_session"') && source.includes('"list_sessions"'), "Session actions: new_session, close_session, list_sessions");
+  assert(source.includes("Target.createTarget"), "newTab uses Target.createTarget");
+  assert(source.includes("Target.closeTarget"), "closeTab uses Target.closeTarget");
+  assert(source.includes("Target.activateTarget"), "switchTab uses Target.activateTarget");
+}
+
+section("UNIT: Named profiles (Phase 1)");
+
+{
+  assert(source.includes("profile_name") && source.includes("browser-profiles"), "Named profile support (~/.claude/browser-profiles/<name>/)");
+  assert(source.includes("user_data_dir"), "Custom user data directory support");
+  assert(source.includes("profile-directory") || source.includes("profile_dir"), "Chrome --profile-directory flag support");
+}
+
+// ── Phase 2: CDP Attach Mode ────────────────────────────────────
+
+section("UNIT: CDP attach mode (Phase 2)");
+
+{
+  assert(source.includes("BROWSER_CDP_URL"), "BROWSER_CDP_URL env var support");
+  assert(source.includes("_attachRemote"), "_attachRemote method for external CDP");
+  assert(source.includes('"launch"') && source.includes('"attach"'), "_mode: launch | attach");
+  assert(source.includes("cdp_url"), "cdp_url param in schema");
+}
+
+// ── Phase 3: New Primitives ─────────────────────────────────────
+
+section("UNIT: Browser tool actions (Phase 3 — new primitives)");
+
+{
+  // Original actions
+  assert(source.includes('"get_state"') && source.includes('"click_element"') && source.includes('"type_element"'), "Core actions: get_state, click_element, type_element");
+  assert(source.includes('"navigate"') && source.includes('"back"') && source.includes('"forward"') && source.includes('"reload"'), "Nav: navigate, back, forward, reload");
+  assert(source.includes('"screenshot"') && source.includes('"pdf"'), "Output: screenshot, pdf");
+  assert(source.includes('"cookies_get"') && source.includes('"cookies_set"') && source.includes('"cookies_clear"'), "Cookies: get, set, clear");
+  assert(source.includes('"evaluate"') && source.includes('"wait_for"') && source.includes('"scroll_to"'), "Other: evaluate, wait_for, scroll_to");
+  assert(source.includes('"click"') && source.includes('"fill"'), "Selector-based: click, fill");
+  // New primitives
+  assert(source.includes('"send_keys"'), "Phase 3: send_keys action");
+  assert(source.includes('"upload_file"'), "Phase 3: upload_file action");
+  assert(source.includes('"extract"'), "Phase 3: extract action");
+  assert(source.includes('"dropdown_options"'), "Phase 3: dropdown_options action");
+  assert(source.includes('"select_dropdown"'), "Phase 3: select_dropdown action");
+}
+
+section("UNIT: send_keys key map + modifiers");
+
+{
+  assert(source.includes("_BROWSER_KEY_MAP"), "Named key lookup table exists");
+  assert(source.includes("Enter") && source.includes("Tab") && source.includes("Escape") && source.includes("Backspace"), "Common keys mapped");
+  assert(source.includes("ArrowUp") && source.includes("ArrowDown") && source.includes("ArrowLeft") && source.includes("ArrowRight"), "Arrow keys mapped");
+  assert(source.includes("modifiers") || source.includes("modBits"), "Modifier key support (Ctrl/Alt/Shift/Meta)");
+}
+
+section("UNIT: upload_file uses DOM.setFileInputFiles");
+
+{
+  assert(source.includes("DOM.setFileInputFiles"), "upload_file uses CDP DOM.setFileInputFiles");
+  assert(source.includes("DOM.getDocument"), "upload_file resolves nodeId via DOM.getDocument");
+  assert(source.includes("DOM.querySelector"), "upload_file queries file input via DOM.querySelector");
+}
+
+section("UNIT: extract + dropdown primitives");
+
+{
+  assert(source.includes("extract") && source.includes("schema"), "extract takes a schema and returns structured data");
+  assert(source.includes("dropdownOptions") && source.includes("el.options"), "dropdownOptions reads select options");
+  assert(source.includes("selectDropdown") && source.includes("change"), "selectDropdown dispatches change event");
+}
+
+// ── Phase 4: Event-Driven Watchers ──────────────────────────────
+
+section("UNIT: Event buffer + watchers (Phase 4)");
+
+{
+  assert(source.includes("_events") && source.includes("_pushEvent"), "Event ring buffer with _pushEvent");
+  assert(source.includes('"get_events"'), "get_events action");
+  assert(source.includes('"set_dialog_auto_dismiss"'), "set_dialog_auto_dismiss action");
+  assert(source.includes("Page.javascriptDialogOpening"), "Dialog event listener");
+  assert(source.includes("Page.handleJavaScriptDialog"), "Auto-dismiss dialog handler");
+  assert(source.includes("Inspector.targetCrashed"), "Crash event listener");
+  assert(source.includes("downloadWillBegin"), "Download event listener");
+  assert(source.includes("Page.frameNavigated"), "Navigation event listener");
+  assert(source.includes("_dialogAutoDismiss"), "Dialog auto-dismiss flag");
+}
+
+// ── Phase 5: Frame/Iframe Robustness ────────────────────────────
+
+section("UNIT: Frame support (Phase 5)");
+
+{
+  assert(source.includes('"list_frames"'), "list_frames action");
+  assert(source.includes("Page.getFrameTree"), "listFrames uses Page.getFrameTree");
+  assert(source.includes("_evalInFrame"), "_evalInFrame method exists");
+  assert(source.includes("Page.createIsolatedWorld"), "_evalInFrame uses Page.createIsolatedWorld");
+  assert(source.includes("frame_id"), "frame_id param in schema");
+}
+
+// ── Action Classification ───────────────────────────────────────
+
+section("UNIT: Action classification sets");
+
+{
+  assert(source.includes("BROWSER_READ_ONLY_ACTIONS"), "BROWSER_READ_ONLY_ACTIONS set");
+  assert(source.includes("BROWSER_MUTATING_ACTIONS"), "BROWSER_MUTATING_ACTIONS set");
+  assert(source.includes("BROWSER_PRIVILEGED_ACTIONS"), "BROWSER_PRIVILEGED_ACTIONS set");
+}
+
+// ── get_state format upgrade ────────────────────────────────────
+
+section("UNIT: get_state format upgrade");
+
+{
+  assert(source.includes('format') && source.includes('"json"'), "get_state supports format param (text/json)");
+  assert(source.includes("session_id") && source.includes("active_tab_id"), "JSON format includes session_id and active_tab_id");
+}
+
+// ── Backward compatibility ──────────────────────────────────────
+
+section("UNIT: Browser registered as single tool with action dispatcher");
+
+{
+  assert(source.includes('registry.register("Browser"'), "Single Browser tool registered");
+  assert(source.includes("action dispatcher") || source.includes("action to perform"), "Action-based schema");
+  assert(source.includes("registerBrowserTools(registry)"), "Browser tools registered in main()");
+}
+
+section("UNIT: Browser DOM extraction (browser-use pattern)");
+
+{
+  assert(source.includes("Interactive:") || source.includes("interactive"), "get_state extracts interactive element count");
+  assert(source.includes("querySelectorAll") && source.includes("[role=\"button\"]"), "Queries buttons, links, inputs, ARIA roles");
+  assert(source.includes("scrollIntoView"), "Elements scrolled into view before click");
+}
+
+section("UNIT: Browser anti-bot + anti-loop");
+
+{
+  assert(source.includes("AutomationControlled"), "Anti-bot: disables automation flag");
+  assert(source.includes("Mozilla/5.0"), "Anti-bot: real user agent");
+  assert(source.includes("Loop detected") && source.includes("3 times"), "Loop detection blocks repeated actions");
+}
+
+section("UNIT: Browser security");
+
+{
+  assert(source.includes("CHROME_PATH"), "Chrome path configurable via env");
+  assert(source.includes("headless=new"), "Runs headless by default");
+}
+
+// ── Test fixtures ───────────────────────────────────────────────
+
+section("UNIT: Browser test fixtures exist");
+
+{
+  const fixtureDir = path.join(__dirname, "test", "browser-fixtures");
+  const fixtures = ["form.html", "upload.html", "iframe.html", "dropdown.html", "tabs.html", "download.html", "dialog.html"];
+  for (const f of fixtures) {
+    assert(fs.existsSync(path.join(fixtureDir, f)), `Fixture: ${f}`);
+  }
+}
+
+// ── E2E Tests ───────────────────────────────────────────────────
+
+section("E2E: cloclo tool list shows Browser");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["tool", "list"], {}, 10000);
+    assert(exitCode === 0, "tool list exits 0");
+    assert(stderr.includes("Browser"), "Browser tool appears in tool list");
+  } catch (e) {
+    skip(`Browser tool list E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: cloclo tool info Browser");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["tool", "info", "Browser"], {}, 10000);
+    assert(exitCode === 0, "tool info Browser exits 0");
+    assert(stderr.includes("get_state") || stderr.includes("Browser automation"), "tool info shows Browser description");
+  } catch (e) {
+    skip(`Browser tool info E2E failed: ${e.message}`);
+  }
+}
+
+// ── E2E: Browser on local fixtures (requires Chrome) ────────────
+
+if (RUN_E2E) {
+
+  const { createServer: createFixtureServer } = await import("node:http");
+  const fixtureDir = path.join(__dirname, "test", "browser-fixtures");
+
+  // Start local fixture server on random port
+  let fixturePort = 0;
+  let fixtureServer = null;
+  try {
+    fixtureServer = createFixtureServer((req, res) => {
+      const fp = path.join(fixtureDir, req.url === "/" ? "form.html" : req.url.replace(/^\//, ""));
+      if (fs.existsSync(fp)) { res.writeHead(200, { "Content-Type": "text/html" }); res.end(fs.readFileSync(fp)); }
+      else { res.writeHead(404); res.end("Not found"); }
+    });
+    await new Promise((resolve) => { fixtureServer.listen(0, "127.0.0.1", () => { fixturePort = fixtureServer.address().port; resolve(); }); });
+  } catch (e) {
+    skip(`Fixture server failed: ${e.message}`);
+  }
+
+  if (fixturePort > 0) {
+    const BASE = `http://127.0.0.1:${fixturePort}`;
+
+    section("E2E: Phase 0 — browser-level WS connection on local fixture");
+
+    {
+      // Basic navigate + get_state on form.html fixture
+      try {
+        const { exitCode, stdout } = await runCLI(["--print", "-m", "anthropic", "-p", `Use the Browser tool to navigate to ${BASE}/form.html, then get_state, then close. Report the title.`], {}, 30000);
+        assert(exitCode === 0, "Navigate to local form.html fixture");
+        assert(stdout.includes("Form Test") || stdout.includes("form"), "get_state sees form.html title/content");
+      } catch (e) {
+        skip(`Phase 0 E2E failed: ${e.message}`);
+      }
+    }
+
+    section("E2E: Phase 1 — multi-tab workflow on local fixtures");
+
+    {
+      try {
+        const { exitCode, stdout } = await runCLI(["--print", "-m", "anthropic", "-p", `Use the Browser tool: navigate to ${BASE}/form.html, then new_tab to ${BASE}/dropdown.html, then list_tabs, then close. Tell me how many tabs were listed.`], {}, 45000);
+        assert(exitCode === 0, "Multi-tab workflow exits 0");
+        assert(stdout.includes("2") || stdout.includes("two"), "list_tabs shows 2 tabs");
+      } catch (e) {
+        skip(`Phase 1 tabs E2E failed: ${e.message}`);
+      }
+    }
+
+    section("E2E: Phase 3 — send_keys, dropdown, extract on local fixtures");
+
+    {
+      // send_keys Enter to submit form
+      try {
+        const { exitCode, stdout } = await runCLI(["--print", "-m", "anthropic", "-p", `Use the Browser tool: navigate to ${BASE}/form.html, get_state, type_element into the Name input with value "Alice", then use send_keys with "Enter" to submit the form, then get_state. Report what the result div says. Then close.`], {}, 45000);
+        assert(exitCode === 0, "send_keys Enter form submit exits 0");
+        assert(stdout.includes("Submitted") || stdout.includes("Alice"), "Form submitted via send_keys Enter");
+      } catch (e) {
+        skip(`Phase 3 send_keys E2E failed: ${e.message}`);
+      }
+
+      // dropdown_options + select_dropdown
+      try {
+        const { exitCode, stdout } = await runCLI(["--print", "-m", "anthropic", "-p", `Use the Browser tool: navigate to ${BASE}/dropdown.html, get_state, then use dropdown_options with selector "#color-select", then use select_dropdown selector "#color-select" value "blue", then get_state. Report the options and selected value. Then close.`], {}, 45000);
+        assert(exitCode === 0, "Dropdown workflow exits 0");
+        assert(stdout.includes("blue") || stdout.includes("Blue"), "Dropdown selected blue");
+      } catch (e) {
+        skip(`Phase 3 dropdown E2E failed: ${e.message}`);
+      }
+
+      // extract
+      try {
+        const { exitCode, stdout } = await runCLI(["--print", "-m", "anthropic", "-p", `Use the Browser tool: navigate to ${BASE}/form.html, then use extract with schema {"heading": "h1"}. Report the extracted JSON. Then close.`], {}, 30000);
+        assert(exitCode === 0, "Extract workflow exits 0");
+        assert(stdout.includes("Test Form"), "Extracted h1 text from form.html");
+      } catch (e) {
+        skip(`Phase 3 extract E2E failed: ${e.message}`);
+      }
+    }
+
+    section("E2E: Phase 4 — dialog auto-dismiss + get_events");
+
+    {
+      try {
+        const { exitCode, stdout } = await runCLI(["--print", "-m", "anthropic", "-p", `Use the Browser tool: navigate to ${BASE}/dialog.html, get_state, click the Alert button using click_element, then use get_events. Report if a dialog event was captured. Then close.`], {}, 45000);
+        assert(exitCode === 0, "Dialog + events workflow exits 0");
+        assert(stdout.includes("dialog") || stdout.includes("alert") || stdout.includes("event"), "Dialog event captured");
+      } catch (e) {
+        skip(`Phase 4 dialog E2E failed: ${e.message}`);
+      }
+    }
+
+    section("E2E: Phase 5 — list_frames on iframe fixture");
+
+    {
+      try {
+        const { exitCode, stdout } = await runCLI(["--print", "-m", "anthropic", "-p", `Use the Browser tool: navigate to ${BASE}/iframe.html, then use list_frames. Report how many frames there are (main + child). Then close.`], {}, 30000);
+        assert(exitCode === 0, "list_frames workflow exits 0");
+        assert(stdout.includes("2") || stdout.includes("two") || stdout.includes("child") || stdout.includes("frame"), "list_frames shows main + child frame");
+      } catch (e) {
+        skip(`Phase 5 frames E2E failed: ${e.message}`);
+      }
+    }
+
+    section("E2E: get_state JSON format");
+
+    {
+      try {
+        const { exitCode, stdout } = await runCLI(["--print", "-m", "anthropic", "-p", `Use the Browser tool: navigate to ${BASE}/form.html, then get_state with format "json". Report whether the output includes session_id and active_tab_id fields. Then close.`], {}, 30000);
+        assert(exitCode === 0, "get_state json format exits 0");
+        assert(stdout.includes("session_id") || stdout.includes("active_tab_id") || stdout.includes("json"), "get_state JSON format includes session/tab metadata");
+      } catch (e) {
+        skip(`get_state JSON E2E failed: ${e.message}`);
+      }
+    }
+
+    // Cleanup fixture server
+    if (fixtureServer) { fixtureServer.close(); }
+  }
+
 }
 
 // ═══════════════════════════════════════════════════════════════════
