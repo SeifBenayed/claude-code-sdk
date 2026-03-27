@@ -512,25 +512,17 @@ function App({ interactiveMode, onSubmit, onExit }) {
           });
           tools = (JSON.parse(resp).tools || []).map(t => ({ ...t, category: t.category || "" }));
         } catch { /* registry unavailable */ }
-        // Fallback: use the static catalog via the /tool catalog handler output
-        if (tools.length === 0) {
-          // Invoke toolCatalog and parse — but we need the raw data. Read _OFFICIAL_CATALOG from source.
-          // Simpler: call the tool handler and suppress output, or just use a hardcoded fallback fetch
-          try {
-            const origWrite = process.stderr.write.bind(process.stderr);
-            let captured = "";
-            process.stderr.write = (data) => { captured += data; return true; };
-            const cmd = im.slashCommands.get("catalog");
-            if (cmd?.handler) await cmd.handler(query ? [query] : []);
-            process.stderr.write = origWrite;
-            // Parse the text output back — not ideal but works
-            // Better: just show an error and suggest CLI
-            if (captured.includes("tool(s) available")) {
-              addOutput("\x1b[2mRegistry empty — use CLI: cloclo catalog\x1b[0m");
-              setIsProcessing(false);
-              return;
-            }
-          } catch { /* fallback failed */ }
+        // Fallback: use static catalog from cfg if registry returned empty/unavailable
+        if (tools.length === 0 && im.cfg?._officialToolCatalog) {
+          const catalog = im.cfg._officialToolCatalog;
+          let all = Object.values(catalog).map(t => ({
+            name: t.name, description: t.description, type: t.type, category: t._meta?.category || "",
+            author: t._meta?.author || "cloclo", binary: t.binary, url: t.url,
+            read_only: t.read_only, env_required: t._meta?.env_required || t.env || [],
+            auth_note: t._meta?.auth_note,
+          }));
+          if (query) { const q = query.toLowerCase(); all = all.filter(t => `${t.name} ${t.description} ${t.type} ${t.category}`.toLowerCase().includes(q)); }
+          tools = all;
         }
         // Get installed tools
         const manifest = {};

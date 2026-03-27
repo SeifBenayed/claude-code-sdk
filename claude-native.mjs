@@ -2380,7 +2380,12 @@ async function _installOfficialTool(name) {
   process.stderr.write(`  Read-only:  ${toolDef.read_only ? "\x1b[32myes\x1b[0m" : "\x1b[33mno (mutating)\x1b[0m"}\n`);
   if (toolDef.type === "cli") process.stderr.write(`  Binary:     ${toolDef.binary}\n`);
   if (toolDef.type === "http") process.stderr.write(`  URL:        ${toolDef.url}\n`);
-  if (toolDef._meta?.env_required?.length > 0) process.stderr.write(`  Env needed: ${toolDef._meta.env_required.join(", ")}\n`);
+  // Show env requirements from _meta or by scanning headers/url for ${VAR}
+  const envReqs = toolDef._meta?.env_required || [];
+  if (envReqs.length === 0 && toolDef.headers) { for (const v of Object.values(toolDef.headers)) { const m = String(v).match(/\$\{([A-Z_][A-Z0-9_]*)\}/g) || []; for (const x of m) envReqs.push(x.slice(2, -1)); } }
+  if (envReqs.length === 0 && toolDef.url) { const m = String(toolDef.url).match(/\$\{([A-Z_][A-Z0-9_]*)\}/g) || []; for (const x of m) envReqs.push(x.slice(2, -1)); }
+  if (envReqs.length === 0 && Array.isArray(toolDef.env)) envReqs.push(...toolDef.env);
+  if (envReqs.length > 0) process.stderr.write(`  Env needed: ${envReqs.join(", ")}\n`);
   if (toolDef._meta?.auth_note) process.stderr.write(`  Auth:       ${toolDef._meta.auth_note}\n`);
   process.stderr.write(`  Author:     ${toolDef._meta?.author || "cloclo"}\n`);
   process.stderr.write(`  Source:     ${source}\n`);
@@ -10021,6 +10026,7 @@ async function main() {
   registerDeferredBuiltinTools(registry, cfg);
   registerBrowserTools(registry);
   scanCustomTools(registry, cfg);
+  cfg._officialToolCatalog = _OFFICIAL_CATALOG; // expose for ink-ui
   if (cfg.briefMode) registerBriefTools(registry, cfg);
 
   if (cfg.allowedTools || cfg.disallowedTools) {
