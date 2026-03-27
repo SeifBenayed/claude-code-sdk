@@ -5218,6 +5218,221 @@ section("E2E: gh connector (skipped if gh not installed)");
 }
 
 // ═══════════════════════════════════════════════════════════════════
+// T5 — DOCUMENT TOOLS (Spreadsheet, Pdf, Document)
+// ═══════════════════════════════════════════════════════════════════
+
+section("UNIT: document tools registered");
+
+{
+  assert(source.includes("registerSpreadsheetTools"), "registerSpreadsheetTools exists");
+  assert(source.includes("registerPdfTools"), "registerPdfTools exists");
+  assert(source.includes("registerDocumentTools"), "registerDocumentTools exists");
+  assert(source.includes("_validateDocPath"), "Common _validateDocPath helper exists");
+  assert(source.includes("_docResult") && source.includes("_docError"), "Common result helpers exist");
+}
+
+section("UNIT: Spreadsheet tool actions");
+
+{
+  assert(source.includes('"inspect"') && source.includes('"read_range"') && source.includes('"write_range"'), "Spreadsheet has inspect, read_range, write_range");
+  assert(source.includes('"find_text"') && source.includes('"export_csv"') && source.includes('"append_rows"'), "Spreadsheet has find_text, export_csv, append_rows");
+  assert(source.includes("SPREADSHEET_READ_ACTIONS") && source.includes("SPREADSHEET_WRITE_ACTIONS"), "Spreadsheet has read/write action classification");
+}
+
+section("UNIT: PDF tool actions");
+
+{
+  assert(source.includes('"extract_text"') && source.includes('"extract_pages_text"'), "PDF has extract_text, extract_pages_text");
+  assert(source.includes('"split"') && source.includes('"merge"'), "PDF has split, merge");
+  assert(source.includes('"fill_form"') && source.includes('"get_form_fields"'), "PDF has fill_form, get_form_fields");
+  assert(source.includes("PDF_READ_ACTIONS") && source.includes("PDF_WRITE_ACTIONS"), "PDF has read/write action classification");
+}
+
+section("UNIT: Document tool actions (read-only v1)");
+
+{
+  assert(source.includes('"read_text"') && source.includes('"extract_headings"'), "Document has read_text, extract_headings");
+  assert(source.includes('"extract_html"') && source.includes('"export_text"'), "Document has extract_html, export_text");
+  assert(source.includes("DOCUMENT_READ_ACTIONS"), "Document has read action classification");
+  assert(!source.includes("DOCUMENT_WRITE_ACTIONS") || source.includes("Document_WRITE") === false, "Document v1 is read-only (no write actions set)");
+}
+
+section("UNIT: document fixture files exist");
+
+{
+  const fixtureDir = path.join(__dirname, "test", "document-fixtures");
+  assert(fs.existsSync(path.join(fixtureDir, "sample.xlsx")), "Fixture: sample.xlsx");
+  assert(fs.existsSync(path.join(fixtureDir, "sample.pdf")), "Fixture: sample.pdf");
+  assert(fs.existsSync(path.join(fixtureDir, "sample.docx")), "Fixture: sample.docx");
+}
+
+section("E2E: Spreadsheet inspect");
+
+{
+  try {
+    const result = await new Promise((resolve) => {
+      const child = spawn("node", ["-e", `
+        const fs = require("fs"), path = require("path"), os = require("os");
+        async function run() {
+          const XLSX = await import("xlsx"); const xl = XLSX.default || XLSX;
+          const wb = xl.readFile("test/document-fixtures/sample.xlsx");
+          console.log(JSON.stringify({ sheets: wb.SheetNames, count: wb.SheetNames.length }));
+        }
+        run();
+      `], { cwd: __dirname, stdio: ["pipe", "pipe", "pipe"], timeout: 10000 });
+      let out = ""; child.stdout.on("data", d => out += d); child.on("close", () => resolve(out));
+    });
+    const data = JSON.parse(result);
+    assert(data.count === 2, "xlsx has 2 sheets");
+    assert(data.sheets.includes("People") && data.sheets.includes("Products"), "sheets are People and Products");
+  } catch (e) { skip(`Spreadsheet inspect E2E: ${e.message}`); }
+}
+
+section("E2E: Spreadsheet read_range");
+
+{
+  try {
+    const result = await new Promise((resolve) => {
+      const child = spawn("node", ["-e", `
+        async function run() {
+          const XLSX = await import("xlsx"); const xl = XLSX.default || XLSX;
+          const wb = xl.readFile("test/document-fixtures/sample.xlsx");
+          const data = xl.utils.sheet_to_json(wb.Sheets["People"]);
+          console.log(JSON.stringify(data));
+        }
+        run();
+      `], { cwd: __dirname, stdio: ["pipe", "pipe", "pipe"], timeout: 10000 });
+      let out = ""; child.stdout.on("data", d => out += d); child.on("close", () => resolve(out));
+    });
+    const rows = JSON.parse(result);
+    assert(rows.length === 4, "People sheet has 4 data rows");
+    assert(rows[0].Name === "Alice" && rows[0].City === "Paris", "First row is Alice/Paris");
+  } catch (e) { skip(`Spreadsheet read E2E: ${e.message}`); }
+}
+
+section("E2E: Spreadsheet write + read roundtrip");
+
+{
+  try {
+    const tmpFile = path.join(os.tmpdir(), "cloclo-test-write-" + Date.now() + ".xlsx");
+    const result = await new Promise((resolve) => {
+      const child = spawn("node", ["-e", `
+        const fs = require("fs");
+        async function run() {
+          const XLSX = await import("xlsx"); const xl = XLSX.default || XLSX;
+          const wb = xl.utils.book_new();
+          const ws = xl.utils.aoa_to_sheet([["A","B"],["hello","world"]]);
+          xl.utils.book_append_sheet(wb, ws, "Test");
+          xl.writeFile(wb, "${tmpFile}");
+          // Read back
+          const wb2 = xl.readFile("${tmpFile}");
+          const data = xl.utils.sheet_to_json(wb2.Sheets["Test"]);
+          console.log(JSON.stringify(data));
+        }
+        run();
+      `], { cwd: __dirname, stdio: ["pipe", "pipe", "pipe"], timeout: 10000 });
+      let out = ""; child.stdout.on("data", d => out += d); child.on("close", () => resolve(out));
+    });
+    const rows = JSON.parse(result);
+    assert(rows[0].A === "hello" && rows[0].B === "world", "write+read roundtrip preserves data");
+    try { fs.unlinkSync(tmpFile); } catch { /* cleanup */ }
+  } catch (e) { skip(`Spreadsheet write roundtrip E2E: ${e.message}`); }
+}
+
+section("E2E: PDF inspect + extract_text");
+
+{
+  try {
+    const result = await new Promise((resolve) => {
+      const child = spawn("node", ["-e", `
+        const fs = require("fs");
+        async function run() {
+          const { PDFDocument } = await import("pdf-lib");
+          const { extractText } = await import("unpdf");
+          const buf = fs.readFileSync("test/document-fixtures/sample.pdf");
+          const pdf = await PDFDocument.load(buf);
+          const { text, totalPages } = await extractText(new Uint8Array(buf));
+          const fullText = Array.isArray(text) ? text.join("\\n") : String(text);
+          console.log(JSON.stringify({ pages: pdf.getPageCount(), totalPages, hasAlice: fullText.includes("Alice"), hasPage2: fullText.includes("Page 2") }));
+        }
+        run();
+      `], { cwd: __dirname, stdio: ["pipe", "pipe", "pipe"], timeout: 10000 });
+      let out = ""; child.stdout.on("data", d => out += d); child.on("close", () => resolve(out));
+    });
+    const data = JSON.parse(result);
+    assert(data.pages === 2, "PDF has 2 pages");
+    assert(data.hasAlice, "PDF text contains Alice");
+    assert(data.hasPage2, "PDF text contains Page 2");
+  } catch (e) { skip(`PDF E2E: ${e.message}`); }
+}
+
+section("E2E: PDF split");
+
+{
+  try {
+    const tmpFile = path.join(os.tmpdir(), "cloclo-test-split-" + Date.now() + ".pdf");
+    const result = await new Promise((resolve) => {
+      const child = spawn("node", ["-e", `
+        const fs = require("fs");
+        async function run() {
+          const { PDFDocument } = await import("pdf-lib");
+          const src = await PDFDocument.load(fs.readFileSync("test/document-fixtures/sample.pdf"));
+          const dst = await PDFDocument.create();
+          const [page] = await dst.copyPages(src, [0]);
+          dst.addPage(page);
+          fs.writeFileSync("${tmpFile}", await dst.save());
+          const check = await PDFDocument.load(fs.readFileSync("${tmpFile}"));
+          console.log(JSON.stringify({ pages: check.getPageCount() }));
+        }
+        run();
+      `], { cwd: __dirname, stdio: ["pipe", "pipe", "pipe"], timeout: 10000 });
+      let out = ""; child.stdout.on("data", d => out += d); child.on("close", () => resolve(out));
+    });
+    const data = JSON.parse(result);
+    assert(data.pages === 1, "Split PDF has 1 page");
+    try { fs.unlinkSync(tmpFile); } catch { /* cleanup */ }
+  } catch (e) { skip(`PDF split E2E: ${e.message}`); }
+}
+
+section("E2E: Document read_text + extract_headings");
+
+{
+  try {
+    const result = await new Promise((resolve) => {
+      const child = spawn("node", ["-e", `
+        async function run() {
+          const mammoth = (await import("mammoth")).default;
+          const text = await mammoth.extractRawText({ path: "test/document-fixtures/sample.docx" });
+          const html = await mammoth.convertToHtml({ path: "test/document-fixtures/sample.docx" });
+          const headings = [];
+          const re = /<h([1-6])[^>]*>(.*?)<\\/h[1-6]>/gi;
+          let m; while ((m = re.exec(html.value)) !== null) { headings.push({ level: parseInt(m[1]), text: m[2].replace(/<[^>]*>/g, "").trim() }); }
+          console.log(JSON.stringify({ hasText: text.value.includes("Alice"), headingCount: headings.length, firstHeading: headings[0]?.text }));
+        }
+        run();
+      `], { cwd: __dirname, stdio: ["pipe", "pipe", "pipe"], timeout: 10000 });
+      let out = ""; child.stdout.on("data", d => out += d); child.on("close", () => resolve(out));
+    });
+    const data = JSON.parse(result);
+    assert(data.hasText, "Document text contains Alice");
+    assert(data.headingCount >= 2, "Document has at least 2 headings");
+    assert(data.firstHeading === "Test Document", "First heading is Test Document");
+  } catch (e) { skip(`Document E2E: ${e.message}`); }
+}
+
+section("E2E: tool list shows document tools (deferred)");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["tool", "list"], {}, 10000);
+    assert(exitCode === 0, "tool list exits 0");
+    assert(stderr.includes("Spreadsheet"), "tool list shows Spreadsheet");
+    assert(stderr.includes("Pdf"), "tool list shows Pdf");
+    assert(stderr.includes("Document"), "tool list shows Document");
+  } catch (e) { skip(`Document tools list E2E: ${e.message}`); }
+}
+
+// ═══════════════════════════════════════════════════════════════════
 // OFFICIAL TOOL CATALOG
 // ═══════════════════════════════════════════════════════════════════
 

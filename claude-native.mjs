@@ -2426,6 +2426,327 @@ async function toolPublish(cfg, name) {
   } catch (e) { process.stderr.write(`\x1b[31mPublish failed:\x1b[0m ${e.message}\n`); }
 }
 
+// ── Document Tools — Common Runtime ───────────────────────────────────────
+
+function _validateDocPath(filePath, extensions) {
+  if (!filePath) return { error: "file_path is required" };
+  const resolved = path.resolve(filePath);
+  if (!fs.existsSync(resolved)) return { error: `File not found: ${resolved}` };
+  const ext = path.extname(resolved).toLowerCase();
+  if (extensions && !extensions.includes(ext)) return { error: `Unsupported file type: ${ext}. Expected: ${extensions.join(", ")}` };
+  return { resolved };
+}
+
+function _docResult(data) { return { content: JSON.stringify(data, null, 2), is_error: false }; }
+function _docError(msg) { return { content: msg, is_error: true }; }
+
+// ── Spreadsheet Tool (xlsx) ──────────────────────────────────────────────
+
+const SPREADSHEET_READ_ACTIONS = new Set(["inspect", "list_sheets", "get_sheet_info", "read_range", "find_text", "inspect_formulas", "export_csv"]);
+const SPREADSHEET_WRITE_ACTIONS = new Set(["write_range", "append_rows"]);
+
+function registerSpreadsheetTools(registry) {
+  registry.register("Spreadsheet", {
+    description: "Spreadsheet operations on .xlsx/.xls/.csv files. Actions: inspect, list_sheets, get_sheet_info, read_range, write_range, append_rows, find_text, inspect_formulas, export_csv. Use read_range to get structured data, write_range/append_rows to modify.",
+    input_schema: { type: "object", properties: {
+      action: { type: "string", enum: ["inspect", "list_sheets", "get_sheet_info", "read_range", "write_range", "append_rows", "find_text", "inspect_formulas", "export_csv"], description: "Spreadsheet action" },
+      file_path: { type: "string", description: "Path to .xlsx/.xls/.csv file" },
+      sheet: { type: "string", description: "Sheet name (defaults to first sheet)" },
+      range: { type: "string", description: "Cell range e.g. 'A1:D10'" },
+      values: { type: "array", description: "2D array of values for write_range, e.g. [[1,2],[3,4]]" },
+      rows: { type: "array", description: "Array of row arrays for append_rows" },
+      query: { type: "string", description: "Search text for find_text" },
+      output_path: { type: "string", description: "Output file path for export_csv/write" },
+    }, required: ["action", "file_path"] }
+  }, async (input) => {
+    let XLSX;
+    try { XLSX = await import("xlsx"); if (XLSX.default) XLSX = XLSX.default; } catch { return _docError("xlsx not installed. Run: npm install xlsx"); }
+    const a = input.action;
+    const vp = _validateDocPath(input.file_path, [".xlsx", ".xls", ".csv"]);
+    if (vp.error && a !== "write_range" && a !== "append_rows") return _docError(vp.error);
+    try {
+      if (a === "inspect") {
+        const wb = XLSX.readFile(vp.resolved);
+        return _docResult({ file: path.basename(vp.resolved), sheets: wb.SheetNames, sheetCount: wb.SheetNames.length, activeSheet: wb.SheetNames[0] });
+      }
+      if (a === "list_sheets") {
+        const wb = XLSX.readFile(vp.resolved);
+        const sheets = wb.SheetNames.map(name => { const ws = wb.Sheets[name]; const r = XLSX.utils.decode_range(ws["!ref"] || "A1"); return { name, rows: r.e.r + 1, cols: r.e.c + 1 }; });
+        return _docResult(sheets);
+      }
+      if (a === "get_sheet_info") {
+        const wb = XLSX.readFile(vp.resolved);
+        const sheetName = input.sheet || wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        if (!ws) return _docError(`Sheet not found: ${sheetName}. Available: ${wb.SheetNames.join(", ")}`);
+        const r = XLSX.utils.decode_range(ws["!ref"] || "A1");
+        const headers = [];
+        for (let c = r.s.c; c <= r.e.c; c++) { const cell = ws[XLSX.utils.encode_cell({ r: 0, c })]; headers.push(cell ? String(cell.v) : ""); }
+        return _docResult({ name: sheetName, range: ws["!ref"], rows: r.e.r + 1, cols: r.e.c + 1, headers });
+      }
+      if (a === "read_range") {
+        const wb = XLSX.readFile(vp.resolved);
+        const sheetName = input.sheet || wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        if (!ws) return _docError(`Sheet not found: ${sheetName}`);
+        let data;
+        if (input.range) {
+          const opts = { range: input.range, header: 1 };
+          data = XLSX.utils.sheet_to_json(ws, opts);
+        } else { data = XLSX.utils.sheet_to_json(ws); }
+        // Truncate large outputs
+        const total = data.length;
+        if (total > 200) { data = data.slice(0, 200); return _docResult({ rows: data, rowCount: 200, totalRows: total, truncated: true }); }
+        return _docResult({ rows: data, rowCount: total });
+      }
+      if (a === "write_range") {
+        const filePath = vp.resolved || path.resolve(input.file_path);
+        let wb;
+        if (fs.existsSync(filePath)) { wb = XLSX.readFile(filePath); } else { wb = XLSX.utils.book_new(); }
+        const sheetName = input.sheet || wb.SheetNames[0] || "Sheet1";
+        let ws = wb.Sheets[sheetName];
+        if (!ws) { ws = XLSX.utils.aoa_to_sheet([]); XLSX.utils.book_append_sheet(wb, ws, sheetName); }
+        if (!input.range || !input.values) return _docError("write_range requires 'range' and 'values'");
+        const origin = input.range.split(":")[0];
+        XLSX.utils.sheet_add_aoa(ws, input.values, { origin });
+        const out = input.output_path ? path.resolve(input.output_path) : filePath;
+        XLSX.writeFile(wb, out);
+        return { content: `Written ${input.values.length} row(s) to ${sheetName}!${input.range} → ${out}`, is_error: false };
+      }
+      if (a === "append_rows") {
+        const filePath = vp.resolved || path.resolve(input.file_path);
+        if (!input.rows || !Array.isArray(input.rows)) return _docError("append_rows requires 'rows' array");
+        const wb = fs.existsSync(filePath) ? XLSX.readFile(filePath) : XLSX.utils.book_new();
+        const sheetName = input.sheet || wb.SheetNames[0] || "Sheet1";
+        let ws = wb.Sheets[sheetName];
+        if (!ws) { ws = XLSX.utils.aoa_to_sheet([]); XLSX.utils.book_append_sheet(wb, ws, sheetName); }
+        const r = XLSX.utils.decode_range(ws["!ref"] || "A1");
+        XLSX.utils.sheet_add_aoa(ws, input.rows, { origin: { r: r.e.r + 1, c: 0 } });
+        const out = input.output_path ? path.resolve(input.output_path) : filePath;
+        XLSX.writeFile(wb, out);
+        return { content: `Appended ${input.rows.length} row(s) to ${sheetName} → ${out}`, is_error: false };
+      }
+      if (a === "find_text") {
+        if (!input.query) return _docError("find_text requires 'query'");
+        const wb = XLSX.readFile(vp.resolved);
+        const results = [];
+        const q = input.query.toLowerCase();
+        for (const sheetName of wb.SheetNames) {
+          const ws = wb.Sheets[sheetName];
+          const r = XLSX.utils.decode_range(ws["!ref"] || "A1");
+          for (let row = r.s.r; row <= r.e.r; row++) {
+            for (let col = r.s.c; col <= r.e.c; col++) {
+              const cell = ws[XLSX.utils.encode_cell({ r: row, c: col })];
+              if (cell && String(cell.v).toLowerCase().includes(q)) {
+                results.push({ sheet: sheetName, cell: XLSX.utils.encode_cell({ r: row, c: col }), value: cell.v });
+              }
+            }
+          }
+          if (results.length > 100) break;
+        }
+        return _docResult(results);
+      }
+      if (a === "inspect_formulas") {
+        const wb = XLSX.readFile(vp.resolved);
+        const sheetName = input.sheet || wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        if (!ws) return _docError(`Sheet not found: ${sheetName}`);
+        const formulas = [];
+        const r = XLSX.utils.decode_range(ws["!ref"] || "A1");
+        for (let row = r.s.r; row <= r.e.r; row++) {
+          for (let col = r.s.c; col <= r.e.c; col++) {
+            const cell = ws[XLSX.utils.encode_cell({ r: row, c: col })];
+            if (cell?.f) formulas.push({ cell: XLSX.utils.encode_cell({ r: row, c: col }), formula: cell.f });
+          }
+        }
+        return _docResult(formulas);
+      }
+      if (a === "export_csv") {
+        const wb = XLSX.readFile(vp.resolved);
+        const sheetName = input.sheet || wb.SheetNames[0];
+        const ws = wb.Sheets[sheetName];
+        if (!ws) return _docError(`Sheet not found: ${sheetName}`);
+        const csv = XLSX.utils.sheet_to_csv(ws);
+        const out = input.output_path ? path.resolve(input.output_path) : vp.resolved.replace(/\.[^.]+$/, ".csv");
+        fs.writeFileSync(out, csv);
+        return { content: `Exported ${sheetName} to ${out}`, is_error: false };
+      }
+      return _docError(`Unknown action: ${a}`);
+    } catch (e) { return _docError(`Spreadsheet error: ${e.message}`); }
+  }, { deferred: true });
+}
+
+// ── PDF Tool ─────────────────────────────────────────────────────────────
+
+const PDF_READ_ACTIONS = new Set(["inspect", "extract_text", "extract_pages_text", "get_form_fields"]);
+const PDF_WRITE_ACTIONS = new Set(["split", "merge", "fill_form"]);
+
+function registerPdfTools(registry) {
+  registry.register("Pdf", {
+    description: "PDF operations on .pdf files. Actions: inspect, extract_text, extract_pages_text, split, merge, fill_form, get_form_fields. Use extract_text for reading, split/merge for restructuring, fill_form for form automation.",
+    input_schema: { type: "object", properties: {
+      action: { type: "string", enum: ["inspect", "extract_text", "extract_pages_text", "split", "merge", "fill_form", "get_form_fields"], description: "PDF action" },
+      file_path: { type: "string", description: "Path to .pdf file" },
+      file_paths: { type: "array", items: { type: "string" }, description: "Array of PDF paths for merge" },
+      pages: { type: "string", description: "Page range e.g. '1-3' or '1,3,5'" },
+      output_path: { type: "string", description: "Output file path" },
+      field_values: { type: "object", description: "Form field name→value pairs for fill_form" },
+    }, required: ["action"] }
+  }, async (input) => {
+    const a = input.action;
+    try {
+      if (a === "inspect") {
+        const vp = _validateDocPath(input.file_path, [".pdf"]);
+        if (vp.error) return _docError(vp.error);
+        const { PDFDocument } = await import("pdf-lib");
+        const bytes = fs.readFileSync(vp.resolved);
+        const pdf = await PDFDocument.load(bytes, { ignoreEncryption: true });
+        return _docResult({ file: path.basename(vp.resolved), pages: pdf.getPageCount(), title: pdf.getTitle() || null, author: pdf.getAuthor() || null, creator: pdf.getCreator() || null, subject: pdf.getSubject() || null, sizeKB: Math.round(bytes.length / 1024) });
+      }
+      if (a === "extract_text") {
+        const vp = _validateDocPath(input.file_path, [".pdf"]);
+        if (vp.error) return _docError(vp.error);
+        const { extractText } = await import("unpdf");
+        const buf = fs.readFileSync(vp.resolved);
+        const { text, totalPages } = await extractText(new Uint8Array(buf));
+        const fullText = Array.isArray(text) ? text.join("\n\n") : String(text);
+        if (fullText.length > 20000) return _docResult({ text: fullText.slice(0, 20000), totalChars: fullText.length, truncated: true, pages: totalPages });
+        return _docResult({ text: fullText, pages: totalPages });
+      }
+      if (a === "extract_pages_text") {
+        const vp = _validateDocPath(input.file_path, [".pdf"]);
+        if (vp.error) return _docError(vp.error);
+        const { extractText } = await import("unpdf");
+        const buf = fs.readFileSync(vp.resolved);
+        const { text, totalPages } = await extractText(new Uint8Array(buf));
+        const pages = Array.isArray(text) ? text : [String(text)];
+        return _docResult(pages.map((t, i) => ({ page: i + 1, text: (t || "").slice(0, 5000) })));
+      }
+      if (a === "split") {
+        const vp = _validateDocPath(input.file_path, [".pdf"]);
+        if (vp.error) return _docError(vp.error);
+        if (!input.pages) return _docError("split requires 'pages' (e.g. '1-3' or '1,3,5')");
+        if (!input.output_path) return _docError("split requires 'output_path'");
+        const { PDFDocument } = await import("pdf-lib");
+        const srcBytes = fs.readFileSync(vp.resolved);
+        const srcPdf = await PDFDocument.load(srcBytes);
+        const newPdf = await PDFDocument.create();
+        // Parse page range
+        const pageIndices = [];
+        for (const part of input.pages.split(",")) {
+          const trimmed = part.trim();
+          if (trimmed.includes("-")) { const [s, e] = trimmed.split("-").map(Number); for (let i = s; i <= e; i++) pageIndices.push(i - 1); }
+          else pageIndices.push(Number(trimmed) - 1);
+        }
+        const copied = await newPdf.copyPages(srcPdf, pageIndices);
+        for (const page of copied) newPdf.addPage(page);
+        const out = path.resolve(input.output_path);
+        fs.writeFileSync(out, await newPdf.save());
+        return { content: `Split ${pageIndices.length} page(s) → ${out}`, is_error: false };
+      }
+      if (a === "merge") {
+        if (!input.file_paths || !Array.isArray(input.file_paths) || input.file_paths.length < 2) return _docError("merge requires 'file_paths' array with at least 2 PDFs");
+        if (!input.output_path) return _docError("merge requires 'output_path'");
+        const { PDFDocument } = await import("pdf-lib");
+        const merged = await PDFDocument.create();
+        for (const fp of input.file_paths) {
+          const vp = _validateDocPath(fp, [".pdf"]);
+          if (vp.error) return _docError(`${fp}: ${vp.error}`);
+          const src = await PDFDocument.load(fs.readFileSync(vp.resolved));
+          const pages = await merged.copyPages(src, src.getPageIndices());
+          for (const p of pages) merged.addPage(p);
+        }
+        const out = path.resolve(input.output_path);
+        fs.writeFileSync(out, await merged.save());
+        return { content: `Merged ${input.file_paths.length} PDFs → ${out}`, is_error: false };
+      }
+      if (a === "get_form_fields") {
+        const vp = _validateDocPath(input.file_path, [".pdf"]);
+        if (vp.error) return _docError(vp.error);
+        const { PDFDocument } = await import("pdf-lib");
+        const pdf = await PDFDocument.load(fs.readFileSync(vp.resolved));
+        const form = pdf.getForm();
+        const fields = form.getFields().map(f => ({ name: f.getName(), type: f.constructor.name.replace("PDF", "").replace("Field", "").toLowerCase() }));
+        return _docResult(fields);
+      }
+      if (a === "fill_form") {
+        const vp = _validateDocPath(input.file_path, [".pdf"]);
+        if (vp.error) return _docError(vp.error);
+        if (!input.field_values) return _docError("fill_form requires 'field_values' object");
+        if (!input.output_path) return _docError("fill_form requires 'output_path'");
+        const { PDFDocument } = await import("pdf-lib");
+        const pdf = await PDFDocument.load(fs.readFileSync(vp.resolved));
+        const form = pdf.getForm();
+        let filled = 0;
+        for (const [name, value] of Object.entries(input.field_values)) {
+          try { const f = form.getTextField(name); f.setText(String(value)); filled++; } catch { /* field not found or not text field */ }
+        }
+        const out = path.resolve(input.output_path);
+        fs.writeFileSync(out, await pdf.save());
+        return { content: `Filled ${filled} field(s) → ${out}`, is_error: false };
+      }
+      return _docError(`Unknown action: ${a}`);
+    } catch (e) { return _docError(`PDF error: ${e.message}`); }
+  }, { deferred: true });
+}
+
+// ── Document Tool (Word .docx — read-only v1) ───────────────────────────
+
+const DOCUMENT_READ_ACTIONS = new Set(["inspect", "read_text", "extract_headings", "extract_html", "export_text"]);
+
+function registerDocumentTools(registry) {
+  registry.register("Document", {
+    description: "Word document operations on .docx files. Actions: inspect, read_text, extract_headings, extract_html, export_text. Read-only in v1 — use for reading and extracting content from Word documents.",
+    input_schema: { type: "object", properties: {
+      action: { type: "string", enum: ["inspect", "read_text", "extract_headings", "extract_html", "export_text"], description: "Document action" },
+      file_path: { type: "string", description: "Path to .docx file" },
+      output_path: { type: "string", description: "Output file path for export_text" },
+    }, required: ["action", "file_path"] }
+  }, async (input) => {
+    const a = input.action;
+    const vp = _validateDocPath(input.file_path, [".docx"]);
+    if (vp.error) return _docError(vp.error);
+    try {
+      const mammoth = (await import("mammoth")).default;
+      if (a === "inspect") {
+        const html = await mammoth.convertToHtml({ path: vp.resolved });
+        const headings = (html.value.match(/<h[1-6][^>]*>(.*?)<\/h[1-6]>/gi) || []).length;
+        const paragraphs = (html.value.match(/<p[^>]*>/gi) || []).length;
+        const images = (html.value.match(/<img[^>]*>/gi) || []).length;
+        const tables = (html.value.match(/<table[^>]*>/gi) || []).length;
+        return _docResult({ file: path.basename(vp.resolved), headings, paragraphs, images, tables, sizeKB: Math.round(fs.statSync(vp.resolved).size / 1024) });
+      }
+      if (a === "read_text") {
+        const result = await mammoth.extractRawText({ path: vp.resolved });
+        const text = result.value || "";
+        if (text.length > 20000) return _docResult({ text: text.slice(0, 20000), totalChars: text.length, truncated: true });
+        return _docResult({ text });
+      }
+      if (a === "extract_headings") {
+        const html = await mammoth.convertToHtml({ path: vp.resolved });
+        const headings = [];
+        const re = /<h([1-6])[^>]*>(.*?)<\/h[1-6]>/gi;
+        let m;
+        while ((m = re.exec(html.value)) !== null) { headings.push({ level: parseInt(m[1]), text: m[2].replace(/<[^>]*>/g, "").trim() }); }
+        return _docResult(headings);
+      }
+      if (a === "extract_html") {
+        const result = await mammoth.convertToHtml({ path: vp.resolved });
+        const html = result.value || "";
+        if (html.length > 30000) return _docResult({ html: html.slice(0, 30000), totalChars: html.length, truncated: true });
+        return _docResult({ html });
+      }
+      if (a === "export_text") {
+        const result = await mammoth.extractRawText({ path: vp.resolved });
+        const out = input.output_path ? path.resolve(input.output_path) : vp.resolved.replace(/\.docx$/i, ".txt");
+        fs.writeFileSync(out, result.value || "");
+        return { content: `Exported text → ${out}`, is_error: false };
+      }
+      return _docError(`Unknown action: ${a}`);
+    } catch (e) { return _docError(`Document error: ${e.message}`); }
+  }, { deferred: true });
+}
+
 // ── Browser Tool Pack (CDP-native, enterprise) ────────────────────────────
 
 const BROWSER_READ_ONLY_ACTIONS = new Set(["get_state","get_text","screenshot","pdf","cookies_get","list_tabs","list_sessions","list_frames","get_events","dropdown_options","extract","switch_tab","get_network_log"]);
@@ -10027,6 +10348,9 @@ async function main() {
   registerAskUserQuestion(registry);
   registerDeferredBuiltinTools(registry, cfg);
   registerBrowserTools(registry);
+  registerSpreadsheetTools(registry);
+  registerPdfTools(registry);
+  registerDocumentTools(registry);
   scanCustomTools(registry, cfg);
   cfg._officialToolCatalog = _OFFICIAL_CATALOG; // expose for ink-ui
   if (cfg.briefMode) registerBriefTools(registry, cfg);

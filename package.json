@@ -13,7 +13,7 @@
     "ROADMAP.md"
   ],
   "scripts": {
-    "test": "node test-suite.mjs",
+    "test": "node test-suite.mjs && node test-loop.js && node test-mcp.js",
     "test:ink": "node test-ink-smoke.mjs",
     "test:e2e": "node test-e2e-deferred.mjs"
   },
@@ -30,9 +30,15 @@
   "author": "",
   "license": "MIT",
   "dependencies": {
+    "@huggingface/transformers": "^3.8.1",
+    "docx": "^9.6.1",
     "ink": "^6.8.0",
     "ink-select-input": "^6.2.0",
     "ink-text-input": "^6.0.0",
-    "react": "^19.2.4"
+    "mammoth": "^1.12.0",
+    "pdf-lib": "^1.17.1",
+    "react": "^19.2.4",
+    "unpdf": "^1.4.0",
+    "xlsx": "^0.18.5"
   }
 }
