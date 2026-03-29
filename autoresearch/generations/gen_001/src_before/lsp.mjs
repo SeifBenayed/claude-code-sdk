@@ -521,8 +521,26 @@ class LspManager {
 function formatDiagnostics(diagnostics, filePath, { compact = false } = {}) {
   if (!diagnostics || diagnostics.length === 0) return "";
 
+  const seen = new Set();
+  const deduped = diagnostics.filter((d) => {
+    const key = JSON.stringify([
+      path.resolve(filePath),
+      d.severity || 4,
+      d.message || "",
+      d.source || "",
+      typeof d.code === "object" ? d.code?.value : d.code,
+      d.range?.start?.line ?? null,
+      d.range?.start?.character ?? null,
+      d.range?.end?.line ?? null,
+      d.range?.end?.character ?? null,
+    ]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
   // Sort: errors first, then warnings, then info
-  const sorted = [...diagnostics].sort((a, b) => (a.severity || 4) - (b.severity || 4));
+  const sorted = [...deduped].sort((a, b) => (a.severity || 4) - (b.severity || 4));
 
   const errors = sorted.filter(d => d.severity === 1);
   const warnings = sorted.filter(d => d.severity === 2);

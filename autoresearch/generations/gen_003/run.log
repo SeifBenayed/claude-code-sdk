@@ -1,0 +1,18 @@
+
+╔═══════════════════════════════════════════════════╗
+║  CLOCLO BENCHMARK RUN [gen_003]
+║  Concurrency: 4 query at a time
+╚═══════════════════════════════════════════════════╝
+
+  Model: gpt-5.4
+  Per-question timeout: 600000ms
+
+  Batch log size: 10
+
+  Retries per question: 2
+  Checkpoint cadence: every 1 result(s)
+
+  Running 1000 pending questions with 4 workers...
+
+  [10/1000] batch 1/100 ok=10 empty=0 err=0 avg=10640ms max=10710ms wall=31898ms last=factual ✅ 10589ms attempts=1
+  [20/1000] batch 2/100 ok=10 empty=0 err=0 avg=10625ms max=10651ms wall=21271ms last=factual ✅ 10623ms attempts=1

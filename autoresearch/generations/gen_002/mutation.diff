@@ -1,0 +1,126 @@
+diff -ru /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_before/audit.mjs /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_after/audit.mjs
+--- /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_before/audit.mjs	2026-03-29 15:14:17
++++ /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_after/audit.mjs	2026-03-29 16:14:58
+@@ -78,6 +78,17 @@
+   };
+ }
+ 
++function addCalendarMonth(date) {
++  const result = new Date(date);
++  const day = result.getDate();
++  const targetMonth = result.getMonth() + 1;
++  result.setDate(1);
++  result.setMonth(targetMonth);
++  const lastDayOfTargetMonth = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
++  result.setDate(Math.min(day, lastDayOfTargetMonth));
++  return result;
++}
++
+ // ── Audit Logger ─────────────────────────────────────────────
+ 
+ class AuditLogger {
+diff -ru /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_before/config.mjs /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_after/config.mjs
+--- /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_before/config.mjs	2026-03-29 15:14:17
++++ /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_after/config.mjs	2026-03-29 16:14:58
+@@ -65,7 +65,7 @@
+ 
+   // Helper: require next argv value or die
+   function needValue(flag, i) {
+-    if (i >= argv.length || argv[i].startsWith("-")) {
++    if (i >= argv.length) {
+       process.stderr.write(`Error: ${flag} requires a value\n  cloclo ${flag} <value>\n`);
+       process.exit(EXIT.BAD_ARGS);
+     }
+@@ -146,7 +146,16 @@
+       case "--openai-api-url": cfg.openaiApiUrl = needValue(a, ++i); break;
+       case "--provider": cfg.provider = needValue(a, ++i); break;
+       case "--ndjson": cfg.ndjson = true; cfg.interactive = false; break;
+-      case "-p": case "--print": cfg.prompt = needValue(a, ++i); cfg.interactive = false; break;
++      case "-p": case "--print": {
++        const v = needValue(a, ++i);
++        if (v.startsWith("-")) {
++          process.stderr.write(`Error: ${a} requires a prompt value; got another flag "${v}"\n  Use ${a} "your prompt"\n`);
++          process.exit(EXIT.BAD_ARGS);
++        }
++        cfg.prompt = v;
++        cfg.interactive = false;
++        break;
++      }
+       case "--resume": cfg.resume = true; break;
+       case "--session-id": {
+         const v = needValue(a, ++i);
+diff -ru /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_before/lsp.mjs /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_after/lsp.mjs
+--- /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_before/lsp.mjs	2026-03-29 15:14:17
++++ /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_after/lsp.mjs	2026-03-29 16:14:58
+@@ -521,8 +521,26 @@
+ function formatDiagnostics(diagnostics, filePath, { compact = false } = {}) {
+   if (!diagnostics || diagnostics.length === 0) return "";
+ 
++  const seen = new Set();
++  const deduped = diagnostics.filter(d => {
++    const key = JSON.stringify([
++      path.basename(filePath),
++      d.severity || 4,
++      d.message || "",
++      d.source || "",
++      typeof d.code === "object" ? d.code?.value : d.code || "",
++      d.range?.start?.line ?? null,
++      d.range?.start?.character ?? null,
++      d.range?.end?.line ?? null,
++      d.range?.end?.character ?? null,
++    ]);
++    if (seen.has(key)) return false;
++    seen.add(key);
++    return true;
++  });
++
+   // Sort: errors first, then warnings, then info
+-  const sorted = [...diagnostics].sort((a, b) => (a.severity || 4) - (b.severity || 4));
++  const sorted = [...deduped].sort((a, b) => (a.severity || 4) - (b.severity || 4));
+ 
+   const errors = sorted.filter(d => d.severity === 1);
+   const warnings = sorted.filter(d => d.severity === 2);
+diff -ru /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_before/providers.mjs /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_after/providers.mjs
+--- /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_before/providers.mjs	2026-03-29 15:14:17
++++ /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_after/providers.mjs	2026-03-29 16:14:58
+@@ -13,7 +13,7 @@
+ const PROVIDERS = {
+   anthropic: {
+     name: "Anthropic",
+-    detect: (m) => m.startsWith("claude-"),
++    detect: (m) => m.startsWith("claude-") && !m.startsWith("openrouter/"),
+     envKey: "ANTHROPIC_API_KEY",
+     defaultUrl: "https://api.anthropic.com",
+     oauthSupport: true,
+@@ -860,7 +860,8 @@
+ 
+   _getInstructions(systemBlocks) {
+     if (!systemBlocks?.length) return undefined;
+-    return systemBlocks.map((b) => b.text).join("\n\n");
++    const instructions = systemBlocks.map((b) => b.text).join("\n\n");
++    return instructions.trim() ? instructions : undefined;
+   }
+ 
+   async *stream(body, opts = {}) {
+diff -ru /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_before/utils.mjs /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_after/utils.mjs
+--- /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_before/utils.mjs	2026-03-29 15:14:17
++++ /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_002/src_after/utils.mjs	2026-03-29 16:14:58
+@@ -32,6 +32,18 @@
+ 
+ export function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+ 
++const CASE_FOLD_COLLATOR = new Intl.Collator("und", { sensitivity: "base", usage: "search" });
++
++export function caseInsensitiveIncludes(haystack, needle) {
++  const text = String(haystack);
++  const query = String(needle);
++  if (!query) return true;
++  for (let i = 0; i <= text.length - query.length; i++) {
++    if (CASE_FOLD_COLLATOR.compare(text.slice(i, i + query.length), query) === 0) return true;
++  }
++  return false;
++}
++
+ // ── HTTP helpers ────────────────────────────────────────────────
+ 
+ export function _httpGet(url, extraHeaders) {

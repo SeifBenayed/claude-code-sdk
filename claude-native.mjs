@@ -48,6 +48,18 @@ function log(...args) {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+const CASE_FOLD_COLLATOR = new Intl.Collator("und", { sensitivity: "base", usage: "search" });
+
+function caseInsensitiveIncludes(haystack, needle) {
+  const text = String(haystack);
+  const query = String(needle);
+  if (!query) return true;
+  for (let i = 0; i <= text.length - query.length; i++) {
+    if (CASE_FOLD_COLLATOR.compare(text.slice(i, i + query.length), query) === 0) return true;
+  }
+  return false;
+}
+
 // ── HTTP helpers ────────────────────────────────────────────────
 
 function _httpGet(url, extraHeaders) {
@@ -91,6 +103,16 @@ function ensureMemoryDir(cwd) {
   return dir;
 }
 
+function getUserMemoryDir() {
+  return path.join(os.homedir(), ".claude-native", "user-memory");
+}
+
+function ensureUserMemoryDir() {
+  const dir = getUserMemoryDir();
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 // ── Help ────────────────────────────────────────────────────────
 
 function printHelp() {
@@ -115,6 +137,7 @@ Usage:
   cloclo tool disable <name>            Disable a tool
   cloclo tool test <name>               Test a tool
   cloclo tool install <path>            Install custom tool from TOOL.json
+  cloclo tool update <name|all>         Update an installed tool from its source
   cloclo tool remove <name>             Remove installed custom tool
 
 Examples:
@@ -167,7 +190,7 @@ Options:
   --allowed-tools <list>      Comma-separated tool allowlist
   --disallowed-tools <list>   Comma-separated tool denylist
   --permission-mode <mode>    auto|default|plan|acceptEdits|bypassPermissions|dontAsk
-  --brief                     Enable brief mode (output via SendUserMessage tool)
+  --brief                     Enable brief mode (stricter terse user-facing output guidance)
   --verbose                   Debug logging to stderr
   -h, --help                  Show this help
 
@@ -259,7 +282,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
     permissionMode: "auto",  // auto|default|plan|acceptEdits|bypassPermissions|dontAsk
     permissionRules: [],        // [{tool, pattern, behavior: "allow"|"deny"}]
     permissionCallbacks: false, // forward permission requests to NDJSON agent
-    briefMode: false,           // brief mode: route user-facing output through SendUserMessage
+    briefMode: false,           // brief mode: stricter terse guidance for the user-facing output surface
     outputFormat: "text",       // "text" (default) or "json" for structured output
     timeout: 0,                 // global timeout in seconds (0 = no limit)
     jsonSchema: null,            // JSON Schema for structured output validation
@@ -288,7 +311,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
 
   // Helper: require next argv value or die
   function needValue(flag, i) {
-    if (i >= argv.length || argv[i].startsWith("-")) {
+    if (i >= argv.length) {
       process.stderr.write(`Error: ${flag} requires a value\n  cloclo ${flag} <value>\n`);
       process.exit(EXIT.BAD_ARGS);
     }
@@ -344,10 +367,11 @@ async function parseArgs(argv = process.argv.slice(2)) {
     else if (sub === "disable") { cfg._subcommand = "tool-disable"; cfg._toolDisableName = argv[2]; if (!cfg._toolDisableName) { process.stderr.write("Error: tool disable requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
     else if (sub === "test") { cfg._subcommand = "tool-test"; cfg._toolTestName = argv[2]; if (!cfg._toolTestName) { process.stderr.write("Error: tool test requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
     else if (sub === "install") { cfg._subcommand = "tool-install"; cfg._toolInstallSource = argv[2]; if (!cfg._toolInstallSource) { process.stderr.write("Error: tool install requires a path\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
+    else if (sub === "update") { cfg._subcommand = "tool-update"; cfg._toolUpdateName = argv[2]; if (!cfg._toolUpdateName) { process.stderr.write("Error: tool update requires a tool name or 'all'\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
     else if (sub === "remove") { cfg._subcommand = "tool-remove"; cfg._toolRemoveName = argv[2]; if (!cfg._toolRemoveName) { process.stderr.write("Error: tool remove requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
     else if (sub === "catalog") { cfg._subcommand = "tool-catalog"; cfg._toolCatalogQuery = argv.slice(2).join(" ") || "*"; cfg.interactive = false; return cfg; }
     else if (sub === "publish") { cfg._subcommand = "tool-publish"; cfg._toolPublishName = argv[2]; if (!cfg._toolPublishName) { process.stderr.write("Error: tool publish requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
-    else { process.stderr.write(`Error: Unknown tool subcommand "${sub || ""}"\n  Available: list, info, enable, disable, test, install, remove, catalog, publish\n`); process.exit(EXIT.BAD_ARGS); }
+    else { process.stderr.write(`Error: Unknown tool subcommand "${sub || ""}"\n  Available: list, info, enable, disable, test, install, update, remove, catalog, publish\n`); process.exit(EXIT.BAD_ARGS); }
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -368,7 +392,16 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "--openai-api-url": cfg.openaiApiUrl = needValue(a, ++i); break;
       case "--provider": cfg.provider = needValue(a, ++i); break;
       case "--ndjson": cfg.ndjson = true; cfg.interactive = false; break;
-      case "-p": case "--print": cfg.prompt = needValue(a, ++i); cfg.interactive = false; break;
+      case "-p": case "--print": {
+        const v = needValue(a, ++i);
+        if (v.startsWith("-")) {
+          process.stderr.write(`Error: ${a} requires a prompt value; got another flag "${v}"\n  Use ${a} "your prompt"\n`);
+          process.exit(EXIT.BAD_ARGS);
+        }
+        cfg.prompt = v;
+        cfg.interactive = false;
+        break;
+      }
       case "--resume": cfg.resume = true; break;
       case "--session-id": {
         const v = needValue(a, ++i);
@@ -644,7 +677,7 @@ function resolveModelForWorkload(workload, cfg) {
 const PROVIDERS = {
   anthropic: {
     name: "Anthropic",
-    detect: (m) => m.startsWith("claude-"),
+    detect: (m) => m.startsWith("claude-") && !m.startsWith("openrouter/"),
     envKey: "ANTHROPIC_API_KEY",
     defaultUrl: "https://api.anthropic.com",
     oauthSupport: true,
@@ -877,6 +910,54 @@ const PROVIDERS = {
   },
 };
 
+function _parseRetryAfterMs(resp) {
+  const value = resp?.headers?.get?.("retry-after");
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const target = Date.parse(value);
+  if (!Number.isNaN(target)) return Math.max(0, target - Date.now());
+  return null;
+}
+
+async function _readProviderErrorText(resp) {
+  try {
+    return await resp.text();
+  } catch {
+    return "";
+  }
+}
+
+function _extractProviderErrorMessage(text) {
+  if (!text) return "";
+  try {
+    const parsed = JSON.parse(text);
+    return parsed?.error?.message || parsed?.message || text;
+  } catch {
+    return text;
+  }
+}
+
+function _isQuotaOrBillingError(text) {
+  const lower = (text || "").toLowerCase();
+  return lower.includes("insufficient_quota")
+    || lower.includes("quota")
+    || lower.includes("billing")
+    || lower.includes("credit balance")
+    || lower.includes("exceeded your current quota");
+}
+
+async function _handleRateLimitResponse(providerLabel, resp, attempt) {
+  const text = await _readProviderErrorText(resp);
+  const retryAfterMs = _parseRetryAfterMs(resp);
+  const exhausted = _isQuotaOrBillingError(text);
+  const message = exhausted
+    ? `${providerLabel} quota or billing limit reached${text ? `: ${_extractProviderErrorMessage(text)}` : "."}`
+    : `${providerLabel} rate limit hit.${retryAfterMs ? ` Retry in ${Math.max(1, Math.ceil(retryAfterMs / 1000))}s.` : " Retrying shortly."}`;
+  const delayMs = retryAfterMs ?? (1000 * (1 << (attempt + 1)));
+  return { retryable: !exhausted, delayMs, error: new Error(message) };
+}
+
 // Dynamic instruction placement — reasoning models use "developer" role
 // The pattern is declared in provider.capabilities.reasoningModelPattern (not hardcoded here).
 function getInstructionPlacement(provider, model) {
@@ -988,15 +1069,17 @@ class AnthropicClient {
       : `${this.apiUrl}/v1/messages`;
     const signal = opts.signal;
     let lastError;
+    let retryDelayMs = null;
 
     for (let attempt = 0; attempt < 3; attempt++) {
       if (signal?.aborted) {
         throw signal.reason instanceof Error ? signal.reason : new Error("Request aborted");
       }
       if (attempt > 0) {
-        const delay = 1000 * (1 << attempt);
+        const delay = retryDelayMs ?? (1000 * (1 << attempt));
         log(`Retry ${attempt}/3 after ${delay}ms...`);
         await sleep(delay);
+        retryDelayMs = null;
       }
 
       let resp;
@@ -1020,7 +1103,10 @@ class AnthropicClient {
       }
 
       if (resp.status === 429 || resp.status === 529) {
-        lastError = new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        const rateLimit = await _handleRateLimitResponse("Anthropic", resp, attempt);
+        lastError = rateLimit.error;
+        retryDelayMs = rateLimit.delayMs;
+        if (!rateLimit.retryable) break;
         continue;
       }
 
@@ -1125,12 +1211,11 @@ class OpenAIClient {
             type: "function",
             function: { name: b.name, arguments: JSON.stringify(b.input) },
           }));
-          const oaiMsg = { role: "assistant" };
-          if (text) oaiMsg.content = text;
+          const oaiMsg = { role: "assistant", content: text || "" };
           if (toolCalls.length > 0) oaiMsg.tool_calls = toolCalls;
           out.push(oaiMsg);
         } else {
-          out.push({ role: "assistant", content: msg.content });
+          out.push({ role: "assistant", content: msg.content ?? "" });
         }
       } else if (msg.role === "user") {
         // User messages may be tool_result arrays
@@ -1141,7 +1226,7 @@ class OpenAIClient {
               out.push({
                 role: "tool",
                 tool_call_id: tr.tool_use_id,
-                content: typeof tr.content === "string" ? tr.content : JSON.stringify(tr.content),
+                content: typeof tr.content === "string" ? tr.content : (tr.content == null ? "" : JSON.stringify(tr.content)),
               });
             }
           } else {
@@ -1149,7 +1234,7 @@ class OpenAIClient {
             out.push({ role: "user", content: text || JSON.stringify(msg.content) });
           }
         } else {
-          out.push({ role: "user", content: msg.content });
+          out.push({ role: "user", content: msg.content ?? "" });
         }
       }
     }
@@ -1172,14 +1257,16 @@ class OpenAIClient {
     if (oaiTools?.length > 0) oaiBody.tools = oaiTools;
 
     let lastError;
+    let retryDelayMs = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       if (signal?.aborted) {
         throw signal.reason instanceof Error ? signal.reason : new Error("Request aborted");
       }
       if (attempt > 0) {
-        const delay = 1000 * (1 << attempt);
+        const delay = retryDelayMs ?? (1000 * (1 << attempt));
         log(`[openai] Retry ${attempt}/3 after ${delay}ms...`);
         await sleep(delay);
+        retryDelayMs = null;
       }
 
       let resp;
@@ -1200,8 +1287,21 @@ class OpenAIClient {
       }
 
       if (resp.status === 429 || resp.status === 529) {
-        lastError = new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        const rateLimit = await _handleRateLimitResponse("OpenAI", resp, attempt);
+        lastError = rateLimit.error;
+        retryDelayMs = rateLimit.delayMs;
+        if (!rateLimit.retryable) break;
         continue;
+      }
+
+      if (resp.status >= 500 && resp.status < 600) {
+        const text = await resp.text().catch(() => "");
+        lastError = new Error(`OpenAI API error ${resp.status}: ${text}`);
+        if (attempt < 2) {
+          retryDelayMs = 1000 * (1 << attempt);
+          continue;
+        }
+        throw lastError;
       }
 
       if (!resp.ok) {
@@ -1386,15 +1486,15 @@ class OpenAIResponsesClient {
               input.push({
                 type: "function_call_output",
                 call_id: tr.tool_use_id,
-                output: typeof tr.content === "string" ? tr.content : JSON.stringify(tr.content),
+                output: typeof tr.content === "string" ? tr.content : (tr.content == null ? "" : JSON.stringify(tr.content)),
               });
             }
           } else {
             const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("");
-            input.push({ role: "user", content: text || JSON.stringify(msg.content) });
+            input.push({ role: "user", content: text || JSON.stringify(msg.content) || "" });
           }
         } else {
-          input.push({ role: "user", content: msg.content });
+          input.push({ role: "user", content: msg.content ?? "" });
         }
       } else if (msg.role === "assistant") {
         if (Array.isArray(msg.content)) {
@@ -1415,7 +1515,7 @@ class OpenAIResponsesClient {
             });
           }
         } else {
-          input.push({ type: "message", role: "assistant", content: [{ type: "output_text", text: msg.content }] });
+          input.push({ type: "message", role: "assistant", content: [{ type: "output_text", text: msg.content ?? "" }] });
         }
       }
     }
@@ -1424,7 +1524,8 @@ class OpenAIResponsesClient {
 
   _getInstructions(systemBlocks) {
     if (!systemBlocks?.length) return undefined;
-    return systemBlocks.map((b) => b.text).join("\n\n");
+    const instructions = systemBlocks.map((b) => b.text).join("\n\n");
+    return instructions.trim() ? instructions : undefined;
   }
 
   async *stream(body, opts = {}) {
@@ -1444,14 +1545,16 @@ class OpenAIResponsesClient {
     if (tools?.length > 0) reqBody.tools = tools;
 
     let lastError;
+    let retryDelayMs = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       if (signal?.aborted) {
         throw signal.reason instanceof Error ? signal.reason : new Error("Request aborted");
       }
       if (attempt > 0) {
-        const delay = 1000 * (1 << attempt);
+        const delay = retryDelayMs ?? (1000 * (1 << attempt));
         log(`[openai-responses] Retry ${attempt}/3 after ${delay}ms...`);
         await sleep(delay);
+        retryDelayMs = null;
       }
 
       let resp;
@@ -1472,8 +1575,21 @@ class OpenAIResponsesClient {
       }
 
       if (resp.status === 429 || resp.status === 529) {
-        lastError = new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        const rateLimit = await _handleRateLimitResponse("OpenAI", resp, attempt);
+        lastError = rateLimit.error;
+        retryDelayMs = rateLimit.delayMs;
+        if (!rateLimit.retryable) break;
         continue;
+      }
+
+      if (resp.status >= 500 && resp.status < 600) {
+        const text = await resp.text().catch(() => "");
+        lastError = new Error(`OpenAI Responses API error ${resp.status}: ${text}`);
+        if (attempt < 2) {
+          retryDelayMs = 1000 * (1 << attempt);
+          continue;
+        }
+        throw lastError;
       }
 
       if (!resp.ok) {
@@ -2682,6 +2798,48 @@ const SENSITIVE_FILES = new Set([
 ]);
 
 
+function _securityRealpathOrResolve(targetPath) {
+  const resolved = path.resolve(String(targetPath || ""));
+  try {
+    return fs.realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+function _securityPathWithinRoot(filePath, rootPath) {
+  const rel = path.relative(rootPath, filePath);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+function _checkScopedMemoryFilePath(filePath, cwd) {
+  if (!filePath) return { behavior: "passthrough" };
+
+  const realFile = _securityRealpathOrResolve(filePath);
+  if (path.extname(realFile).toLowerCase() !== ".md" || path.basename(realFile) === "MEMORY.md") {
+    return {
+      behavior: "deny",
+      reason: "invalid_memory_file",
+      message: "Memory file path must point to a markdown memory entry.",
+    };
+  }
+
+  const roots = [
+    _securityRealpathOrResolve(getUserMemoryDir()),
+    _securityRealpathOrResolve(getMemoryDir(cwd || process.cwd())),
+  ];
+
+  for (const root of roots) {
+    if (_securityPathWithinRoot(realFile, root)) return { behavior: "passthrough" };
+  }
+
+  return {
+    behavior: "deny",
+    reason: "outside_memory_scope",
+    message: "Memory file path must stay inside the user or project memory directories.",
+  };
+}
+
 const toolPermissionChecks = {
   // Bash: check if command writes outside workspace, uses pipes to external
   Bash(input, cwd) {
@@ -2771,6 +2929,24 @@ const toolPermissionChecks = {
   Agent(_input, _cwd) {
     return { behavior: "allow", reason: "agent_self_enforcing" };
   },
+
+  // MemoryRead: name-based lookup is fine; direct file paths must stay inside memory dirs
+  MemoryRead(input, cwd) {
+    return _checkScopedMemoryFilePath(input.file_path, cwd);
+  },
+
+  // MemorySave: only explicit user/project scopes are valid
+  MemorySave(input, _cwd) {
+    if (!input?.scope || (input.scope !== "user" && input.scope !== "project")) {
+      return { behavior: "deny", reason: "invalid_memory_scope", message: "MemorySave requires scope=user or scope=project." };
+    }
+    return { behavior: "passthrough" };
+  },
+
+  // MemoryForget: name-based lookup is fine; direct file paths must stay inside memory dirs
+  MemoryForget(input, cwd) {
+    return _checkScopedMemoryFilePath(input.file_path, cwd);
+  },
 };
 
 function _checkFilePath(filePath, cwd, op) {
@@ -2822,8 +2998,8 @@ function _checkFilePath(filePath, cwd, op) {
 // - dontAsk:           deny anything that would normally ask
 // - auto:              allow safe ops, block dangerous, ask for ambiguous
 
-const READ_ONLY_TOOLS = new Set(["Read", "Glob", "Grep", "WebFetch", "WebSearch", "SendUserMessage", "ToolSearch", "TaskCreate", "TaskUpdate", "TaskGet", "TaskList", "EnterPlanMode", "ExitPlanMode", "ListMcpResources", "ReadMcpResource", "AskUserQuestion"]);
-const WRITE_TOOLS = new Set(["Write", "Edit", "NotebookEdit"]);
+const READ_ONLY_TOOLS = new Set(["Read", "Glob", "Grep", "WebFetch", "WebSearch", "SendUserMessage", "TaskOutput", "ToolSearch", "TaskCreate", "TaskUpdate", "TaskGet", "TaskList", "EnterPlanMode", "ExitPlanMode", "ListMcpResources", "ReadMcpResource", "AskUserQuestion", "MemoryList", "MemoryRead"]);
+const WRITE_TOOLS = new Set(["Write", "Edit", "NotebookEdit", "MemorySave", "MemoryForget"]);
 
 // Generate a permission suggestion for a blocked action
 function _suggestPattern(toolName, input) {
@@ -3848,9 +4024,45 @@ const TOOL_MANIFEST_PATH = path.join(os.homedir(), ".claude", "tools", ".cloclo-
 function _loadToolManifest() { try { const d = fs.readFileSync(TOOL_MANIFEST_PATH, "utf-8"); const m = JSON.parse(d); if (!m.tools || typeof m.tools !== "object") return { tools: {} }; return m; } catch { return { tools: {} }; } }
 function _saveToolManifest(manifest) { fs.mkdirSync(path.dirname(TOOL_MANIFEST_PATH), { recursive: true }); fs.writeFileSync(TOOL_MANIFEST_PATH, JSON.stringify(manifest, null, 2) + "\n"); }
 
+function _extractToolEnvRequirements(toolDef) {
+  const envReqs = new Set(toolDef._meta?.env_required || toolDef.env || []);
+  if (toolDef.headers) {
+    for (const value of Object.values(toolDef.headers)) {
+      for (const match of String(value).match(/\$\{([A-Z_][A-Z0-9_]*)\}/g) || []) {
+        envReqs.add(match.slice(2, -1));
+      }
+    }
+  }
+  if (toolDef.url) {
+    for (const match of String(toolDef.url).match(/\$\{([A-Z_][A-Z0-9_]*)\}/g) || []) {
+      envReqs.add(match.slice(2, -1));
+    }
+  }
+  return [...envReqs];
+}
+
+function _buildManifestEntry(toolDef, source, existing = {}, extras = {}) {
+  const disabled = extras.disabled ?? existing.disabled ?? false;
+  return {
+    name: toolDef.name,
+    type: toolDef.type,
+    source,
+    installSource: extras.installSource || existing.installSource || source,
+    installedAt: existing.installedAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    disabled,
+    ...(disabled && existing.disabledAt ? { disabledAt: existing.disabledAt } : {}),
+    version: extras.version || toolDef.version || existing.version || null,
+    publisher: extras.publisher || toolDef._meta?.author || existing.publisher || null,
+    category: extras.category || toolDef._meta?.category || existing.category || null,
+    envRequired: _extractToolEnvRequirements(toolDef),
+    ...(toolDef.type === "ai" ? { backend: toolDef.backend || "provider", model: toolDef.model, task: toolDef.task, device: toolDef.device || null } : {}),
+  };
+}
+
 function _classifyToolType(name) {
   if (name.startsWith("mcp__")) return "connector";
-  if (["Bash","Read","Write","Edit","Glob","Grep","WebFetch","WebSearch","ToolSearch","NotebookEdit","AskUserQuestion","SendUserMessage","Agent","Browser"].includes(name)) return "builtin";
+  if (["Bash","Read","Write","Edit","Glob","Grep","WebFetch","WebSearch","ToolSearch","NotebookEdit","AskUserQuestion","SendUserMessage","TaskOutput","Agent","Browser","MemoryList","MemoryRead","MemorySave","MemoryForget"].includes(name)) return "builtin";
   if (name.startsWith("Task") || name.startsWith("Enter") || name.startsWith("Exit") || name.startsWith("ListMcp") || name.startsWith("ReadMcp")) return "builtin";
   return "custom";
 }
@@ -3901,8 +4113,12 @@ function toolInfo(cfg, registry, name) {
     }
   } catch { /* no TOOL.json on disk — skip type-specific fields */ }
   if (entry.source) process.stderr.write(`  Source:      ${entry.source}\n`);
+  if (entry.installSource && entry.installSource !== entry.source) process.stderr.write(`  Install via: ${entry.installSource}\n`);
+  if (entry.version) process.stderr.write(`  Version:     ${entry.version}\n`);
+  if (entry.publisher) process.stderr.write(`  Publisher:   ${entry.publisher}\n`);
   if (entry.backend) process.stderr.write(`  Backend:     ${entry.backend}\n`);
   if (entry.model) process.stderr.write(`  Model:       ${entry.model}\n`);
+  if (Array.isArray(entry.envRequired) && entry.envRequired.length > 0) process.stderr.write(`  Env req:     ${entry.envRequired.join(", ")}\n`);
   if (entry.installedAt) process.stderr.write(`  Installed:   ${entry.installedAt.slice(0, 10)}\n`);
   process.stderr.write(`\n`);
 }
@@ -4254,7 +4470,9 @@ async function toolInstall(cfg, source) {
   const targetDir = path.join(CUSTOM_TOOLS_DIR, toolDef.name); fs.mkdirSync(targetDir, { recursive: true });
   const srcDir = fs.statSync(resolved).isDirectory() ? resolved : path.dirname(resolved);
   for (const e of fs.readdirSync(srcDir)) { const src = path.join(srcDir, e); if (fs.statSync(src).isFile()) fs.copyFileSync(src, path.join(targetDir, e)); }
-  const manifest = _loadToolManifest(); manifest.tools[toolDef.name] = { name: toolDef.name, type: toolDef.type, source: resolved, installedAt: manifest.tools[toolDef.name]?.installedAt || new Date().toISOString(), updatedAt: new Date().toISOString(), disabled: false, ...(toolDef.type === "ai" ? { backend: toolDef.backend || "provider", model: toolDef.model, task: toolDef.task, device: toolDef.device || null } : {}) }; _saveToolManifest(manifest);
+  const manifest = _loadToolManifest();
+  manifest.tools[toolDef.name] = _buildManifestEntry(toolDef, resolved, manifest.tools[toolDef.name], { installSource: resolved });
+  _saveToolManifest(manifest);
   process.stderr.write(`\x1b[32mInstalled tool: ${toolDef.name}\x1b[0m (${toolDef.type})\n  Restart cloclo or use /tool list to see it.\n`);
 }
 
@@ -4263,6 +4481,38 @@ function toolRemove(cfg, name) {
   const toolDir = path.join(CUSTOM_TOOLS_DIR, name); if (!fs.existsSync(path.join(toolDir, "TOOL.json"))) { if (_classifyToolType(name) === "builtin") process.stderr.write(`Cannot remove ${name}: it's a built-in tool. Use 'tool disable' instead.\n`); else process.stderr.write(`Custom tool not found: ${name}\n`); return; }
   fs.rmSync(toolDir, { recursive: true, force: true }); const manifest = _loadToolManifest(); delete manifest.tools[name]; _saveToolManifest(manifest);
   process.stderr.write(`Removed tool: ${name}\n  Restart cloclo to fully unload.\n`);
+}
+
+async function toolUpdate(cfg, name) {
+  if (!name) { process.stderr.write("Usage: cloclo tool update <name|all>\n"); return; }
+  const manifest = _loadToolManifest();
+  const targets = name === "all"
+    ? Object.values(manifest.tools || {}).filter((entry) => entry.installSource || entry.source)
+    : [manifest.tools[name]].filter(Boolean);
+
+  if (targets.length === 0) {
+    process.stderr.write(name === "all" ? "No installed tools to update.\n" : `Tool not found in manifest: ${name}\n`);
+    return;
+  }
+
+  let updated = 0;
+  for (const entry of targets) {
+    const installSource = entry.installSource || entry.source;
+    if (!installSource) continue;
+    if (String(installSource).startsWith("official:")) {
+      const result = await _installOfficialTool(String(installSource).slice(9), { mode: "update" });
+      if (result?.updated) updated++;
+      continue;
+    }
+    const resolved = path.resolve(String(installSource));
+    if (!fs.existsSync(resolved)) {
+      process.stderr.write(`\x1b[33mSkipping ${entry.name}:\x1b[0m source missing at ${installSource}\n`);
+      continue;
+    }
+    await toolInstall(cfg, resolved);
+    updated++;
+  }
+  process.stderr.write(updated > 0 ? `Updated ${updated} tool(s).\n` : "All targeted tools are already up to date.\n");
 }
 
 // ── Official Tool Catalog ─────────────────────────────────────
@@ -4414,6 +4664,7 @@ async function toolCatalog(query) {
       process.stderr.write(`    \x1b[1m${t.name}\x1b[0m  ${typeBadge}${ro}${badge}\n`);
       process.stderr.write(`    \x1b[2m${(t.description || "").slice(0, w - 8)}\x1b[0m\n`);
       const details = [];
+      if (t.version) details.push(`v${t.version}`);
       if (t.binary) details.push(`binary: ${t.binary}`);
       if (t.url) details.push(`url: ${(t.url || "").slice(0, 40)}`);
       if (t._meta?.author && t._meta.author !== "cloclo") details.push(`by ${t._meta.author}`);
@@ -4428,19 +4679,35 @@ async function toolCatalog(query) {
   process.stderr.write(`  Publish:  \x1b[1mcloclo tool publish <name>\x1b[0m\n\n`);
 }
 
-async function _installOfficialTool(name) {
+async function _installOfficialTool(name, opts = {}) {
+  const mode = opts.mode || "install";
   let toolDef = null;
   let source = "official";
+  let version = null;
+  let publisher = "cloclo";
+  let category = null;
   // Try registry first
   try {
     const registryUrl = process.env.CLOCLO_REGISTRY_URL || "https://cloclo-registry-799190737906.europe-west1.run.app";
     process.stderr.write(`\x1b[2mFetching ${name} from ${registryUrl}...\x1b[0m\n`);
     const resp = await _httpGet(`${registryUrl}/api/tools/${name}`, { Accept: "application/json" });
     const pkg = JSON.parse(resp);
-    if (pkg.toolJson) { toolDef = typeof pkg.toolJson === "string" ? JSON.parse(pkg.toolJson) : pkg.toolJson; toolDef._meta = { category: pkg.category, author: pkg.author, env_required: toolDef.env || [], auth_note: toolDef._meta?.auth_note }; source = "registry"; }
+    if (pkg.toolJson) {
+      toolDef = typeof pkg.toolJson === "string" ? JSON.parse(pkg.toolJson) : pkg.toolJson;
+      toolDef._meta = { category: pkg.category, author: pkg.author, env_required: toolDef.env || [], auth_note: toolDef._meta?.auth_note };
+      source = "registry";
+      version = pkg.version || toolDef.version || "1.0.0";
+      publisher = pkg.author || toolDef._meta?.author || "registry";
+      category = pkg.category || toolDef._meta?.category || null;
+    }
   } catch { /* registry miss or unreachable */ }
   // Fallback to static catalog
-  if (!toolDef) { toolDef = _OFFICIAL_CATALOG[name]; }
+  if (!toolDef) {
+    toolDef = _OFFICIAL_CATALOG[name];
+    version = toolDef?.version || "1.0.0";
+    publisher = toolDef?._meta?.author || "cloclo";
+    category = toolDef?._meta?.category || null;
+  }
   if (!toolDef) {
     process.stderr.write(`\x1b[31mTool not found: ${name}\x1b[0m\n`);
     const suggestions = Object.keys(_OFFICIAL_CATALOG).filter(k => k.includes(name) || name.includes(k.split("-")[0]));
@@ -4448,30 +4715,39 @@ async function _installOfficialTool(name) {
     process.stderr.write(`  Run "cloclo tool catalog ${name}" to browse.\n`);
     return;
   }
+  const manifest = _loadToolManifest();
+  const existing = manifest.tools[toolDef.name] || {};
+  if (mode === "update" && existing.version && version && existing.version === version) {
+    process.stderr.write(`\x1b[2m${toolDef.name} is already up to date (${version}).\x1b[0m\n`);
+    return { updated: false, name: toolDef.name, version };
+  }
   // Show safety-relevant metadata
   process.stderr.write(`\n  \x1b[1m${toolDef.name}\x1b[0m — ${toolDef.description}\n`);
   process.stderr.write(`  Type:       ${toolDef.type}\n`);
   process.stderr.write(`  Read-only:  ${toolDef.read_only ? "\x1b[32myes\x1b[0m" : "\x1b[33mno (mutating)\x1b[0m"}\n`);
+  process.stderr.write(`  Version:    ${version}\n`);
   if (toolDef.type === "cli") process.stderr.write(`  Binary:     ${toolDef.binary}\n`);
   if (toolDef.type === "http") process.stderr.write(`  URL:        ${toolDef.url}\n`);
   // Show env requirements from _meta or by scanning headers/url for ${VAR}
-  const envReqs = toolDef._meta?.env_required || [];
-  if (envReqs.length === 0 && toolDef.headers) { for (const v of Object.values(toolDef.headers)) { const m = String(v).match(/\$\{([A-Z_][A-Z0-9_]*)\}/g) || []; for (const x of m) envReqs.push(x.slice(2, -1)); } }
-  if (envReqs.length === 0 && toolDef.url) { const m = String(toolDef.url).match(/\$\{([A-Z_][A-Z0-9_]*)\}/g) || []; for (const x of m) envReqs.push(x.slice(2, -1)); }
-  if (envReqs.length === 0 && Array.isArray(toolDef.env)) envReqs.push(...toolDef.env);
+  const envReqs = _extractToolEnvRequirements(toolDef);
   if (envReqs.length > 0) process.stderr.write(`  Env needed: ${envReqs.join(", ")}\n`);
   if (toolDef._meta?.auth_note) process.stderr.write(`  Auth:       ${toolDef._meta.auth_note}\n`);
-  process.stderr.write(`  Author:     ${toolDef._meta?.author || "cloclo"}\n`);
+  process.stderr.write(`  Author:     ${publisher}\n`);
   process.stderr.write(`  Source:     ${source}\n`);
   const targetDir = path.join(CUSTOM_TOOLS_DIR, toolDef.name);
   if (fs.existsSync(path.join(targetDir, "TOOL.json"))) process.stderr.write(`  \x1b[33mAlready installed — overwriting.\x1b[0m\n`);
   const cleanDef = { ...toolDef }; delete cleanDef._meta;
   fs.mkdirSync(targetDir, { recursive: true });
   fs.writeFileSync(path.join(targetDir, "TOOL.json"), JSON.stringify(cleanDef, null, 2));
-  const manifest = _loadToolManifest();
-  manifest.tools[toolDef.name] = { name: toolDef.name, type: toolDef.type, source, installedAt: manifest.tools[toolDef.name]?.installedAt || new Date().toISOString(), updatedAt: new Date().toISOString(), disabled: false };
+  manifest.tools[toolDef.name] = _buildManifestEntry(toolDef, source, existing, {
+    installSource: `official:${toolDef.name}`,
+    version,
+    publisher,
+    category,
+  });
   _saveToolManifest(manifest);
-  process.stderr.write(`\n  \x1b[32mInstalled: ${toolDef.name}\x1b[0m\n  Restart cloclo or use /tool list to see it.\n\n`);
+  process.stderr.write(`\n  \x1b[32m${mode === "update" ? "Updated" : "Installed"}: ${toolDef.name}\x1b[0m\n  Restart cloclo or use /tool list to see it.\n\n`);
+  return { updated: true, name: toolDef.name, version };
 }
 
 async function toolPublish(cfg, name) {
@@ -5972,9 +6248,278 @@ function registerAskUserQuestion(registry) {
   });
 }
 
+// ── Memory Tools ──────────────────────────────────────────────
+
+const MEMORY_INDEX_FILE = "MEMORY.md";
+const MEMORY_TYPES = ["user", "feedback", "project", "reference"];
+const MEMORY_SCOPES = ["user", "project", "all"];
+
+function _memoryDirForScope(scope, cwd) {
+  if (scope === "user") return ensureUserMemoryDir();
+  return ensureMemoryDir(cwd);
+}
+
+function _getScopedMemoryRoots(cwd, scope = "all") {
+  const roots = [];
+  if (scope === "user" || scope === "all") roots.push({ scope: "user", dir: getUserMemoryDir() });
+  if (scope === "project" || scope === "all") roots.push({ scope: "project", dir: getMemoryDir(cwd) });
+  return roots;
+}
+
+function _toolsRealpathOrResolve(targetPath) {
+  const resolved = path.resolve(String(targetPath || ""));
+  try {
+    return fs.realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+function _toolsPathWithinRoot(filePath, rootPath) {
+  const rel = path.relative(rootPath, filePath);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+function _resolveScopedMemoryFile(cwd, scope, filePath) {
+  const resolved = path.resolve(String(filePath || ""));
+  if (!fs.existsSync(resolved)) return { error: "Memory not found." };
+
+  const realFile = _toolsRealpathOrResolve(resolved);
+  if (path.extname(realFile).toLowerCase() !== ".md" || path.basename(realFile) === MEMORY_INDEX_FILE) {
+    return { error: "Memory file path must point to a markdown memory entry." };
+  }
+
+  for (const root of _getScopedMemoryRoots(cwd, scope || "all")) {
+    const realRoot = _toolsRealpathOrResolve(root.dir);
+    if (_toolsPathWithinRoot(realFile, realRoot)) {
+      return { file: realFile, scope: root.scope };
+    }
+  }
+
+  return { error: "Memory file path must be inside user or project memory directories." };
+}
+
+function _stripMemoryFrontmatter(raw) {
+  return String(raw || "").replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
+}
+
+function _parseMemoryFrontmatter(raw) {
+  const text = String(raw || "");
+  const match = text.match(/^---\n([\s\S]*?)\n---\n?/);
+  const meta = {};
+  if (!match) return meta;
+  for (const line of match[1].split("\n")) {
+    const idx = line.indexOf(":");
+    if (idx === -1) continue;
+    const key = line.slice(0, idx).trim();
+    const value = line.slice(idx + 1).trim();
+    meta[key] = value;
+  }
+  return meta;
+}
+
+function _listMemoryEntries(cwd, scope = "all") {
+  const scopes = scope === "all" ? ["user", "project"] : [scope];
+  const entries = [];
+  for (const s of scopes) {
+    const dir = _memoryDirForScope(s, cwd);
+    try {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (!entry.isFile() || !entry.name.endsWith(".md") || entry.name === MEMORY_INDEX_FILE) continue;
+        const filePath = path.join(dir, entry.name);
+        const raw = fs.readFileSync(filePath, "utf-8");
+        const meta = _parseMemoryFrontmatter(raw);
+        entries.push({
+          scope: meta.scope || s,
+          type: meta.type || "reference",
+          name: meta.name || entry.name.replace(/\.md$/, ""),
+          description: meta.description || "",
+          file: filePath,
+          saved_at: meta.saved_at || null,
+        });
+      }
+    } catch { /* ignore missing scope dir */ }
+  }
+  entries.sort((a, b) => (a.scope + ":" + a.name).localeCompare(b.scope + ":" + b.name));
+  return entries;
+}
+
+function _rebuildMemoryIndex(dir) {
+  const lines = [];
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".md") || entry.name === MEMORY_INDEX_FILE) continue;
+      const raw = fs.readFileSync(path.join(dir, entry.name), "utf-8");
+      const meta = _parseMemoryFrontmatter(raw);
+      lines.push(`- [${entry.name}](${entry.name}) — ${meta.description || meta.name || entry.name}`);
+    }
+  } catch { /* ignore */ }
+  lines.sort((a, b) => a.localeCompare(b));
+  fs.writeFileSync(path.join(dir, MEMORY_INDEX_FILE), lines.join("\n") + (lines.length ? "\n" : ""));
+}
+
+function _findMemoryEntry(cwd, scope, { name, file_path }) {
+  if (file_path) return _resolveScopedMemoryFile(cwd, scope || "all", file_path);
+  const entries = _listMemoryEntries(cwd, scope || "all");
+  const wanted = String(name || "").trim().toLowerCase();
+  if (!wanted) return null;
+  return entries.find((e) => e.name.toLowerCase() === wanted || path.basename(e.file).toLowerCase() === wanted || path.basename(e.file, ".md").toLowerCase() === wanted) || null;
+}
+
+function _saveMemoryEntry(cwd, scope, type, name, description, content) {
+  const dir = _memoryDirForScope(scope, cwd);
+  const slug = name.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").slice(0, 50).replace(/-$/, "") || "memory";
+  const filename = `${type}_${slug}.md`;
+  const filePath = path.join(dir, filename);
+  const raw = `---
+name: ${name}
+description: ${description}
+scope: ${scope}
+type: ${type}
+saved_at: ${new Date().toISOString()}
+---
+
+${content.trim()}
+`;
+  fs.writeFileSync(filePath, raw);
+  _rebuildMemoryIndex(dir);
+  return filePath;
+}
+
+function _forgetMemoryEntry(cwd, scope, name, file_path) {
+  const found = _findMemoryEntry(cwd, scope, { name, file_path });
+  if (found?.error) return found;
+  if (!found) return null;
+  fs.rmSync(found.file, { force: true });
+  _rebuildMemoryIndex(_memoryDirForScope(found.scope, cwd));
+  return found;
+}
+
+function registerMemoryTools(registry) {
+  registry.register("MemoryList", {
+    description: "List stored memories. Use scope=user for cross-project preferences and feedback, scope=project for this project, or scope=all for both.",
+    input_schema: {
+      type: "object",
+      properties: {
+        scope: { type: "string", enum: MEMORY_SCOPES, description: "Memory scope: user, project, or all (default)." },
+        type: { type: "string", enum: MEMORY_TYPES, description: "Optional memory type filter." },
+        query: { type: "string", description: "Optional substring match on name/description/content filename." },
+      },
+    },
+  }, async (input) => {
+    const cwd = registry._cwd || process.cwd();
+    let entries = _listMemoryEntries(cwd, input.scope || "all");
+    if (input.type) entries = entries.filter((e) => e.type === input.type);
+    if (input.query) {
+      const q = String(input.query).toLowerCase();
+      entries = entries.filter((e) => `${e.name} ${e.description} ${e.file}`.toLowerCase().includes(q));
+    }
+    return { content: JSON.stringify({ count: entries.length, entries }, null, 2), is_error: false };
+  });
+
+  registry.register("MemoryRead", {
+    description: "Read a stored memory entry by name or file path.",
+    input_schema: {
+      type: "object",
+      properties: {
+        scope: { type: "string", enum: MEMORY_SCOPES, description: "Optional memory scope to search." },
+        name: { type: "string", description: "Memory name or filename stem." },
+        file_path: { type: "string", description: "Direct path to a memory file inside the memory directories." },
+      },
+    },
+  }, async (input) => {
+    const cwd = registry._cwd || process.cwd();
+    const found = _findMemoryEntry(cwd, input.scope || "all", input);
+    if (found?.error) return { content: found.error, is_error: true };
+    if (!found) return { content: "Memory not found.", is_error: true };
+    const raw = fs.readFileSync(found.file, "utf-8");
+    const meta = _parseMemoryFrontmatter(raw);
+    return {
+      content: JSON.stringify({
+        scope: meta.scope || found.scope,
+        type: meta.type || "reference",
+        name: meta.name || path.basename(found.file, ".md"),
+        description: meta.description || "",
+        file: found.file,
+        content: _stripMemoryFrontmatter(raw),
+      }, null, 2),
+      is_error: false,
+    };
+  });
+
+  registry.register("MemorySave", {
+    description: "Persist a memory entry. Use scope=user for stable preferences/feedback and scope=project for project-specific context.",
+    input_schema: {
+      type: "object",
+      properties: {
+        scope: { type: "string", enum: ["user", "project"], description: "Memory scope." },
+        type: { type: "string", enum: MEMORY_TYPES, description: "Memory type." },
+        name: { type: "string", description: "Short memory title." },
+        description: { type: "string", description: "One-line description for the memory index." },
+        content: { type: "string", description: "Full memory content." },
+      },
+      required: ["scope", "type", "name", "description", "content"],
+    },
+  }, async (input) => {
+    const cwd = registry._cwd || process.cwd();
+    const file = _saveMemoryEntry(cwd, input.scope, input.type, input.name, input.description, input.content);
+    return { content: JSON.stringify({ saved: true, scope: input.scope, type: input.type, name: input.name, file }, null, 2), is_error: false };
+  });
+
+  registry.register("MemoryForget", {
+    description: "Delete a memory entry by name or file path.",
+    input_schema: {
+      type: "object",
+      properties: {
+        scope: { type: "string", enum: MEMORY_SCOPES, description: "Optional memory scope to search." },
+        name: { type: "string", description: "Memory name or filename stem." },
+        file_path: { type: "string", description: "Direct path to a memory file inside the memory directories." },
+      },
+    },
+  }, async (input) => {
+    const cwd = registry._cwd || process.cwd();
+    const forgotten = _forgetMemoryEntry(cwd, input.scope || "all", input.name, input.file_path);
+    if (forgotten?.error) return { content: forgotten.error, is_error: true };
+    if (!forgotten) return { content: "Memory not found.", is_error: true };
+    return { content: JSON.stringify({ forgotten: true, scope: forgotten.scope, file: forgotten.file }, null, 2), is_error: false };
+  });
+}
+
 // ── Brief Mode Tools ─────────────────────────────────────────
 
+function _resolveOutputAttachments(attachments) {
+  const resolved = [];
+  for (const filePath of attachments || []) {
+    try {
+      const stat = fs.statSync(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const isImage = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"].includes(ext);
+      resolved.push({ path: filePath, size: stat.size, isImage });
+    } catch {
+      return { error: `Attachment not found: ${filePath}` };
+    }
+  }
+  return { attachments: resolved };
+}
+
 function registerBriefTools(registry, cfg) {
+  const resolveAttachments = typeof _resolveOutputAttachments === "function"
+    ? _resolveOutputAttachments
+    : (attachments) => {
+      const resolved = [];
+      for (const filePath of attachments || []) {
+        try {
+          const stat = fs.statSync(filePath);
+          const ext = path.extname(filePath).toLowerCase();
+          const isImage = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"].includes(ext);
+          resolved.push({ path: filePath, size: stat.size, isImage });
+        } catch {
+          return { error: `Attachment not found: ${filePath}` };
+        }
+      }
+      return { attachments: resolved };
+    };
+
   registry.register("SendUserMessage", {
     description: "Send a message the user will read. Text outside this tool is visible in the detail view, but most won't open it — the answer lives here.",
     input_schema: {
@@ -5995,22 +6540,56 @@ function registerBriefTools(registry, cfg) {
   }, async (input) => {
     const message = input.message;
     const status = input.status || "normal";
-    const attachments = [];
+    const attachmentResult = resolveAttachments(input.attachments);
+    if (attachmentResult.error) return { content: attachmentResult.error, is_error: true };
 
-    if (input.attachments) {
-      for (const filePath of input.attachments) {
-        try {
-          const stat = fs.statSync(filePath);
-          const ext = path.extname(filePath).toLowerCase();
-          const isImage = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"].includes(ext);
-          attachments.push({ path: filePath, size: stat.size, isImage });
-        } catch {
-          return { content: `Attachment not found: ${filePath}`, is_error: true };
-        }
-      }
-    }
+    const result = { kind: "user_message", message, attachments: attachmentResult.attachments, status, sentAt: new Date().toISOString() };
+    return { content: JSON.stringify(result), is_error: false };
+  });
 
-    const result = { message, attachments, status, sentAt: new Date().toISOString() };
+  registry.register("TaskOutput", {
+    description: "Send a structured task update the user will read. Use for background launches, progress checkpoints, remote launches, completions, failures, or blockers. This is the user-facing surface for async/proactive task status.",
+    input_schema: {
+      type: "object",
+      properties: {
+        task_id: { type: "string", description: "Task or agent identifier, if available." },
+        status: {
+          type: "string",
+          enum: ["queued", "running", "async_launched", "remote_launched", "completed", "failed", "blocked", "cancelled"],
+          description: "Current task lifecycle state.",
+        },
+        message: { type: "string", description: "User-visible task update. Supports markdown." },
+        summary: { type: "string", description: "Optional compact summary or outcome." },
+        prompt: { type: "string", description: "Optional original prompt or task description." },
+        output_file: { type: "string", description: "Optional output file path for async work." },
+        session_url: { type: "string", description: "Optional remote session URL." },
+        attachments: {
+          type: "array", items: { type: "string" },
+          description: "Optional file paths to attach (images, logs, diffs).",
+        },
+        metadata: {
+          type: "object",
+          description: "Optional structured metadata for downstream renderers.",
+        },
+      },
+      required: ["status", "message"],
+    },
+  }, async (input) => {
+    const attachmentResult = resolveAttachments(input.attachments);
+    if (attachmentResult.error) return { content: attachmentResult.error, is_error: true };
+    const result = {
+      kind: "task_output",
+      task_id: input.task_id || null,
+      status: input.status,
+      message: input.message,
+      summary: input.summary || null,
+      prompt: input.prompt || null,
+      output_file: input.output_file || null,
+      session_url: input.session_url || null,
+      attachments: attachmentResult.attachments,
+      metadata: input.metadata || null,
+      sentAt: new Date().toISOString(),
+    };
     return { content: JSON.stringify(result), is_error: false };
   });
 }
@@ -6796,8 +7375,26 @@ class LspManager {
 function formatDiagnostics(diagnostics, filePath, { compact = false } = {}) {
   if (!diagnostics || diagnostics.length === 0) return "";
 
+  const seen = new Set();
+  const deduped = diagnostics.filter(d => {
+    const key = JSON.stringify([
+      path.basename(filePath),
+      d.severity || 4,
+      d.message || "",
+      d.source || "",
+      typeof d.code === "object" ? d.code?.value : d.code || "",
+      d.range?.start?.line ?? null,
+      d.range?.start?.character ?? null,
+      d.range?.end?.line ?? null,
+      d.range?.end?.character ?? null,
+    ]);
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
   // Sort: errors first, then warnings, then info
-  const sorted = [...diagnostics].sort((a, b) => (a.severity || 4) - (b.severity || 4));
+  const sorted = [...deduped].sort((a, b) => (a.severity || 4) - (b.severity || 4));
 
   const errors = sorted.filter(d => d.severity === 1);
   const warnings = sorted.filter(d => d.severity === 2);
@@ -7005,6 +7602,10 @@ Memory types:
 - "project": ongoing work, deadlines, team structure, architecture decisions, business context
 - "reference": pointers to external systems (URLs, tools, dashboards, where things are tracked)
 
+Memory scopes:
+- "user": survives across projects and sessions for this user (preferences, workflow, corrections, stable identity)
+- "project": specific to the current working directory/project (architecture, deadlines, systems, project references)
+
 Rules:
 - Only save things that will be useful in FUTURE conversations, not ephemeral task details
 - Don't save things derivable from code, git history, or project files
@@ -7014,7 +7615,7 @@ Rules:
 Respond with EXACTLY one JSON object (no markdown, no explanation):
 {"save":false}
 or
-{"save":true,"type":"feedback","name":"short slug","description":"one-line description for index","content":"the actual memory content to persist"}
+{"save":true,"scope":"user","type":"feedback","name":"short slug","description":"one-line description for index","content":"the actual memory content to persist"}
 
 User message:
 {MESSAGE}
@@ -7066,6 +7667,9 @@ async function classifyWithLLM(client, provider, userMessage, assistantContext) 
     if (!["user", "feedback", "project", "reference"].includes(result.type)) return null;
 
     return {
+      scope: (result.scope === "user" || result.scope === "project")
+        ? result.scope
+        : (result.type === "user" || result.type === "feedback" ? "user" : "project"),
       type: result.type,
       name: result.name.slice(0, 60),
       description: (result.description || result.content).slice(0, 100),
@@ -7133,8 +7737,8 @@ function _memoryExists(memDir, slug) {
   return false;
 }
 
-function saveAutoMemory(cwd, type, name, description, content) {
-  const dir = ensureMemoryDir(cwd);
+function saveAutoMemory(cwd, scope, type, name, description, content) {
+  const dir = scope === "user" ? ensureUserMemoryDir() : ensureMemoryDir(cwd);
   const slug = _slugify(name);
   const filename = `auto_${type}_${slug}.md`;
   const filepath = path.join(dir, filename);
@@ -7142,6 +7746,7 @@ function saveAutoMemory(cwd, type, name, description, content) {
   const fileContent = `---
 name: ${name}
 description: ${description}
+scope: ${scope}
 type: ${type}
 auto_saved: true
 saved_at: ${new Date().toISOString()}
@@ -7209,17 +7814,17 @@ class AutoMemory {
 
     // Dedup check
     const slug = _slugify(result.name);
-    const memDir = getMemoryDir(this.cwd);
+    const memDir = result.scope === "user" ? getUserMemoryDir() : getMemoryDir(this.cwd);
     if (_memoryExists(memDir, slug)) return [];
     if (!this._tracker.shouldSave(result.type, result.name)) return [];
 
     // Save
     const filepath = saveAutoMemory(
-      this.cwd, result.type, result.name, result.description, result.content
+      this.cwd, result.scope, result.type, result.name, result.description, result.content
     );
     this._tracker.markSaved(result.type, result.name);
 
-    return [{ type: result.type, name: result.name, filepath }];
+    return [{ scope: result.scope, type: result.type, name: result.name, filepath }];
   }
 }
 
@@ -7300,6 +7905,17 @@ function createEvent(type, data = {}) {
     pid: process.pid,
     ...data,
   };
+}
+
+function addCalendarMonth(date) {
+  const result = new Date(date);
+  const day = result.getDate();
+  const targetMonth = result.getMonth() + 1;
+  result.setDate(1);
+  result.setMonth(targetMonth);
+  const lastDayOfTargetMonth = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  result.setDate(Math.min(day, lastDayOfTargetMonth));
+  return result;
 }
 
 // ── Audit Logger ─────────────────────────────────────────────
@@ -9693,7 +10309,7 @@ class SubAgentRunner {
     const subRegistry = new ToolRegistry();
     for (const toolDef of this.parentRegistry.getAllDefinitions()) {
       // Brief-mode output is a top-level UX concern; sub-agents should return plain text.
-      if (toolDef.name === "SendUserMessage") continue;
+      if (toolDef.name === "SendUserMessage" || toolDef.name === "TaskOutput") continue;
 
       // Skip disallowed tools for this agent type
       if (agentDef.disallowedTools.includes(toolDef.name)) continue;
@@ -9987,8 +10603,8 @@ const MEMORY_INDEX = "MEMORY.md";
 const MEMORY_MAX_LINES = 200;
 
 
-function loadMemoryIndex(cwd) {
-  const dir = getMemoryDir(cwd);
+function loadMemoryIndex(cwd, scope = "project") {
+  const dir = scope === "user" ? getUserMemoryDir() : getMemoryDir(cwd);
   const indexPath = path.join(dir, MEMORY_INDEX);
   try {
     const content = fs.readFileSync(indexPath, "utf-8");
@@ -10002,16 +10618,27 @@ function loadMemoryIndex(cwd) {
 }
 
 function buildMemoryPrompt(cwd) {
-  const memDir = ensureMemoryDir(cwd);
-  const memContent = loadMemoryIndex(cwd);
+  const projectMemDir = ensureMemoryDir(cwd);
+  const userMemDir = ensureUserMemoryDir();
+  const projectMemContent = loadMemoryIndex(cwd, "project");
+  const userMemContent = loadMemoryIndex(cwd, "user");
 
   return `# Memory
 
-You have a persistent, file-based memory system at \`${memDir}/\`.
+You have a persistent, file-based memory system with two explicit scopes:
 
-You should build up this memory system over time so that future conversations can have a complete picture of who the user is, how they'd like to collaborate with you, what behaviors to avoid or repeat, and the context behind the work the user gives you.
+- User memory: \`${userMemDir}/\`
+- Project memory: \`${projectMemDir}/\`
+
+You should build up these memory stores over time so that future conversations can have a complete picture of who the user is, how they'd like to collaborate with you, what behaviors to avoid or repeat, and the context behind the work the user gives you.
 
 If the user explicitly asks you to remember something, save it immediately. If they ask you to forget something, find and remove the relevant entry.
+
+Use the dedicated memory tools when available:
+- \`MemoryList\` to inspect stored memories
+- \`MemoryRead\` to read a memory file
+- \`MemorySave\` to persist a new memory
+- \`MemoryForget\` to remove an outdated or incorrect memory
 
 ## Types of memory
 
@@ -10027,6 +10654,11 @@ If the user explicitly asks you to remember something, save it immediately. If t
 - When the user seems to refer to work from a prior conversation
 - You MUST access memory when the user explicitly asks you to check, recall, or remember
 
+## Memory scopes
+- Save to **user** memory for stable preferences, role, workflow, and feedback that should follow the user across projects
+- Save to **project** memory for project-specific architecture, deadlines, references, and context tied to this working directory
+- If unsure, prefer project memory unless the information is clearly about the user rather than the current project
+
 ## When to save memories
 - When you learn the user's role, preferences, or goals
 - When the user corrects your approach ("don't do X", "always do Y")
@@ -10041,21 +10673,22 @@ If the user explicitly asks you to remember something, save it immediately. If t
 - Anything already in CLAUDE.md
 - Ephemeral task details only useful in this conversation
 
-## How to save memories
+## Memory file format
 
-**Step 1** — Write the memory to its own file using this frontmatter format:
+Each memory lives in its own markdown file with this frontmatter format:
 
 \`\`\`markdown
 ---
 name: {{memory name}}
 description: {{one-line description — used to decide relevance in future conversations}}
+scope: {{user|project}}
 type: {{user, feedback, project, reference}}
 ---
 
 {{memory content}}
 \`\`\`
 
-**Step 2** — Add a pointer to that file in \`${MEMORY_INDEX}\`. The index should contain only links to memory files with brief descriptions. Never write memory content directly into \`${MEMORY_INDEX}\`.
+Each scope has its own \`${MEMORY_INDEX}\`. The index should contain only links to memory files with brief descriptions. Never write full memory content directly into \`${MEMORY_INDEX}\`.
 
 - \`${MEMORY_INDEX}\` is loaded into your system prompt — lines after ${MEMORY_MAX_LINES} will be truncated, so keep the index concise
 - Organize memory semantically by topic, not chronologically
@@ -10064,7 +10697,8 @@ type: {{user, feedback, project, reference}}
 
 ## Staleness warning
 Memory records are point-in-time observations, not live state. Before asserting facts from memory, verify: if a memory names a file path, check it exists; if it names a function, grep for it.
-${memContent ? `\n## Current Memory Index (${MEMORY_INDEX})\n\n${memContent}` : ""}`;
+${userMemContent ? `\n## Current User Memory Index (${MEMORY_INDEX})\n\n${userMemContent}` : ""}
+${projectMemContent ? `\n## Current Project Memory Index (${MEMORY_INDEX})\n\n${projectMemContent}` : ""}`;
 }
 
 // ── Settings Loader (.claude/settings.json) ─────────────────────
@@ -11747,8 +12381,11 @@ If you can say it in one sentence, don't use three.`;
 
 - You are running in one-shot CLI mode. Prefer solving the user's request directly in your response rather than exploring the workspace by default.
 - If the prompt is self-contained and does not mention existing files, repositories, project structure, or current environment state, do NOT inspect the workspace or talk about looking for files, setup, or tests. Just produce the requested answer.
+- Treat filenames, schemas, columns, paths, and constraints written directly in the prompt as sufficient context unless the user explicitly says something is omitted or unknown. Do not claim those details are missing when they are already present inline.
 - For standalone coding tasks, return runnable code and any requested tests directly in the response. Do not replace the solution with meta-commentary such as "I'm locating the right file" or "I need to inspect the test setup first."
+- If the prompt clearly targets repo code but omits a few specifics, infer the most likely target from the current codebase and proceed with the best justified assumption instead of stopping for clarification unless the ambiguity blocks all reasonable progress.
 - Only use tools in one-shot mode when the prompt explicitly requires interacting with the local workspace, running commands, reading/modifying files, or fetching external information that is not present in the prompt.
+- For short factual or math questions, answer in a complete sentence that includes the result directly instead of returning only a bare token.
 - When you choose not to use tools, still fully complete the task with concrete output. Avoid empty or partial responses.` : "";
 
   const dynamicPrompt = `# Environment
@@ -11775,21 +12412,31 @@ ${cfg.appendSystemPrompt ? `\n${cfg.appendSystemPrompt}` : ""}`;
   // Load memory system
   const memoryPrompt = buildMemoryPrompt(cfg.cwd);
 
+  const outputSection = `
+
+# User-Facing Output
+
+SendUserMessage and TaskOutput are the canonical user-facing output surface.
+
+Rules:
+- Every direct reply the user should read goes through SendUserMessage
+- Every async, proactive, remote, or background update the user should read goes through TaskOutput
+- Plain text outside these tools is fallback trace output only. The runtime may wrap it into a fallback user message, but you should prefer the explicit tools
+- If you can answer immediately, send the answer through SendUserMessage
+- If you need to work first, send a one-line acknowledgement through SendUserMessage, then do the work, then send the final result
+- Attachments: use for images, diffs, logs, reports, and files the user should see alongside your message
+- SendUserMessage.status: 'normal' when replying, 'proactive' when initiating
+- TaskOutput.status: queued, running, async_launched, remote_launched, completed, failed, blocked, cancelled`;
+
   // Brief mode instructions
   const briefSection = cfg.briefMode ? `
 
 # Brief Mode
 
-SendUserMessage is where your replies go. Text outside it is visible if the user expands the detail view, but most won't — assume unread.
-
-Rules:
-- Every time the user says something, the reply they read comes through SendUserMessage
-- If you can answer immediately, send the answer
-- If you need to work first (read files, run commands), ack first in one line ("On it — checking..."), then work, then send the result
-- For longer work: ack → work → result. Send a checkpoint when something useful happened
-- Keep messages tight — the decision, the file:line, the finding
-- Attachments: use for images, diffs, logs the user should see alongside your message
-- Status: 'normal' when replying, 'proactive' when initiating (task done, blocker found)` : "";
+- Keep SendUserMessage and TaskOutput content tight and high-signal
+- Prefer one-line acknowledgements before longer work
+- For longer work: ack → work → result. Send checkpoints through TaskOutput when something useful happened
+- Keep messages tight — the decision, the file:line, the finding` : "";
 
   const blocks = [
     ...billingBlock,
@@ -11805,6 +12452,7 @@ Rules:
         + (globalRules ? `\n\n# Project Rules\n${globalRules}` : "")
         + (skillIndex ? `\n\n${skillIndex}` : "")
         + (memoryPrompt ? `\n\n${memoryPrompt}` : "")
+        + outputSection
         + briefSection,
     },
   ];
@@ -11824,6 +12472,7 @@ class AgentLoop {
     this.skillContext = cfg._skillContext || null; // Active SkillExecutionContext
     this.totalUsage = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
     this.toolUseCount = 0; // Progress tracking (CC baseline: tokenCount + toolUseCount)
+    this.userFacingOutputs = [];
     // Provider is stored on cfg.provider (the provider object, not the string name)
     this.provider = cfg._provider || detectProvider(cfg.model);
   }
@@ -11853,6 +12502,31 @@ class AgentLoop {
     throw this.cfg.abortSignal.reason instanceof Error
       ? this.cfg.abortSignal.reason
       : new Error("Agent run aborted");
+  }
+
+  _recordUserFacingOutput(toolName, result) {
+    if (result?.is_error) return;
+    if (toolName !== "SendUserMessage" && toolName !== "TaskOutput") return;
+    try {
+      const parsed = JSON.parse(result.content);
+      if (parsed && typeof parsed === "object") this.userFacingOutputs.push(parsed);
+    } catch {
+      // Ignore malformed structured output and fall back to plain text output.
+    }
+  }
+
+  _finalizeUserFacingOutputs(textContent) {
+    if (this.userFacingOutputs.length > 0) return [...this.userFacingOutputs];
+    const text = (textContent || "").trim();
+    if (!text) return [];
+    return [{
+      kind: "user_message",
+      message: text,
+      attachments: [],
+      status: "normal",
+      sentAt: new Date().toISOString(),
+      source: "plain_text_fallback",
+    }];
   }
 
   // Context window limits by model family (tokens)
@@ -12095,6 +12769,7 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
           .filter((b) => b.type === "text")
           .map((b) => b.text)
           .join("");
+        const userFacingOutputs = this._finalizeUserFacingOutputs(textContent);
 
         // Stop hook (global + skill-scoped)
         if (this.cfg._hookRunner?.hasHooksFor("Stop", this.skillContext)) {
@@ -12107,7 +12782,7 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
           }, { skillContext: this.skillContext });
         }
 
-        return { text: textContent, usage: this.totalUsage, turns: turnCount, toolUseCount: this.toolUseCount, stopReason };
+        return { text: textContent, usage: this.totalUsage, turns: turnCount, toolUseCount: this.toolUseCount, stopReason, userFacingOutputs };
       }
 
       // Execute tools (only client-side tool_use, not server_tool_use)
@@ -12228,6 +12903,7 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
           const result = await this.registry.execute(block.name, block.input);
           if (this.cfg._audit) this.cfg._audit.toolResult(block.name, result?.is_error || false, (result?.content || "").length, Date.now() - _toolStart);
           this._recordUsage(result?.usage);
+          this._recordUserFacingOutput(block.name, result);
           this.cb.onToolResult?.(block.id, result, block.name);
           // Prepend path-scoped rules to tool result content if activated
           const pathRulesPrefix = block._pathRules || "";
@@ -12270,7 +12946,7 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
       await this._autoCompact(messages, systemBlocks);
     }
 
-    return { text: "(max turns reached)", usage: this.totalUsage, turns: turnCount, toolUseCount: this.toolUseCount, stopReason: "max_turns" };
+    return { text: "(max turns reached)", usage: this.totalUsage, turns: turnCount, toolUseCount: this.toolUseCount, stopReason: "max_turns", userFacingOutputs: this._finalizeUserFacingOutputs("(max turns reached)") };
   }
 }
 
@@ -12282,6 +12958,35 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
 // src/session.mjs — SessionManager, CheckpointStore, NdjsonBridge, SlashCommandRegistry, RemoteSessionManager, InteractiveMode
 
 
+
+function _parseStructuredOutput(toolName, result) {
+  if (result?.is_error) return null;
+  if (toolName !== "SendUserMessage" && toolName !== "TaskOutput") return null;
+  try {
+    return JSON.parse(result.content);
+  } catch {
+    return null;
+  }
+}
+
+function _renderStructuredOutput(parsed, toolName) {
+  if (!parsed) return "";
+  if (toolName === "TaskOutput") {
+    const status = parsed.status ? `[${parsed.status}] ` : "";
+    return `${status}${parsed.message || ""}`.trim();
+  }
+  return parsed.message || "";
+}
+
+function _flattenUserFacingOutputs(outputs, fallbackText = "") {
+  if (!Array.isArray(outputs) || outputs.length === 0) return fallbackText || "";
+  const parts = outputs.map((output) => {
+    if (!output || typeof output !== "object") return "";
+    if (output.kind === "task_output") return output.message || output.summary || "";
+    return output.message || "";
+  }).filter(Boolean);
+  return parts.length > 0 ? parts.join("\n") : (fallbackText || "");
+}
 
 // ── SessionManager ──────────────────────────────────────────────
 
@@ -12740,11 +13445,6 @@ class NdjsonBridge {
 
         case "set_brief":
           this.cfg.briefMode = !!msg.enabled;
-          if (this.cfg.briefMode) {
-            registerBriefTools(this.registry, this.cfg);
-          } else {
-            this.registry.unregister("SendUserMessage");
-          }
           registerToolSearch(this.registry); // Re-evaluate ToolSearch availability
           this.emit({ type: "brief_mode", enabled: this.cfg.briefMode });
           break;
@@ -12803,11 +13503,22 @@ class NdjsonBridge {
         });
       },
       onToolResult: (id, result, toolName) => {
-        if (toolName === "SendUserMessage" && !result.is_error) {
-          try {
-            const parsed = JSON.parse(result.content);
-            this.emit({ type: "user_message", message: parsed.message, attachments: parsed.attachments, status: parsed.status, sentAt: parsed.sentAt });
-          } catch { /* ignore: non-JSON tool result from SendUserMessage */ }
+        const parsed = _parseStructuredOutput(toolName, result);
+        if (toolName === "SendUserMessage" && parsed) {
+          this.emit({ type: "user_message", message: parsed.message, attachments: parsed.attachments, status: parsed.status, sentAt: parsed.sentAt });
+        } else if (toolName === "TaskOutput" && parsed) {
+          this.emit({
+            type: "task_output",
+            task_id: parsed.task_id,
+            status: parsed.status,
+            message: parsed.message,
+            summary: parsed.summary,
+            output_file: parsed.output_file,
+            session_url: parsed.session_url,
+            attachments: parsed.attachments,
+            metadata: parsed.metadata,
+            sentAt: parsed.sentAt,
+          });
         }
       },
       onPermissionDeny: (block, msg) => {
@@ -12831,6 +13542,17 @@ class NdjsonBridge {
 
     try {
       const result = await loop.run(messages, systemBlocks);
+      const fallbackOutputs = (result.userFacingOutputs || []).filter((output) => output?.source === "plain_text_fallback");
+      for (const output of fallbackOutputs) {
+        this.emit({
+          type: "user_message",
+          message: output.message,
+          attachments: output.attachments || [],
+          status: output.status || "normal",
+          sentAt: output.sentAt,
+          source: output.source,
+        });
+      }
 
       // Save messages to session
       for (const m of messages) {
@@ -12840,6 +13562,7 @@ class NdjsonBridge {
       this.emit({
         type: "response",
         content: result.text,
+        user_facing_outputs: result.userFacingOutputs || [],
         session_id: sessionId,
         iterations: result.turns,
         usage: result.usage,
@@ -13279,13 +14002,38 @@ class InteractiveMode {
     s.register({ name: "thinking", argumentHint: "[budget]", description: "Toggle extended thinking", immediate: true,
       handler: (args) => { const b = parseInt(args[0], 10); self.cfg.thinkingBudget = b || (self.cfg.thinkingBudget ? 0 : 10000); process.stderr.write(`\x1b[2mThinking: ${self.cfg.thinkingBudget ? `enabled (${self.cfg.thinkingBudget} tokens)` : "disabled"}\x1b[0m\n`); } });
     s.register({ name: "brief", description: "Toggle brief mode", immediate: true,
-      handler: () => { self.cfg.briefMode = !self.cfg.briefMode; if (self.cfg.briefMode) { registerBriefTools(self.registry, self.cfg); self.messages.push({ role: "user", content: "<system-reminder>Brief mode enabled. Use SendUserMessage for all user-facing output.</system-reminder>" }); } else { self.registry.unregister("SendUserMessage"); self.messages.push({ role: "user", content: "<system-reminder>Brief mode disabled. Reply with plain text.</system-reminder>" }); } registerToolSearch(self.registry); process.stderr.write(`\x1b[2mBrief mode: ${self.cfg.briefMode ? "enabled" : "disabled"}\x1b[0m\n`); } });
+      handler: () => { self.cfg.briefMode = !self.cfg.briefMode; self.messages.push({ role: "user", content: self.cfg.briefMode ? "<system-reminder>Brief mode enabled. Use SendUserMessage for all direct replies and TaskOutput for async/proactive task updates.</system-reminder>" : "<system-reminder>Brief mode disabled. Plain text replies are allowed, but SendUserMessage and TaskOutput remain available.</system-reminder>" }); registerToolSearch(self.registry); process.stderr.write(`\x1b[2mBrief mode: ${self.cfg.briefMode ? "enabled" : "disabled"}\x1b[0m\n`); } });
     s.register({ name: "permission", aliases: ["permissions", "mode"], argumentHint: "[mode]", description: "Get/set permission mode", immediate: true,
       handler: (args) => { if (args[0]) { self.permissions?.setMode(args[0]); process.stderr.write(`\x1b[2mPermission mode: ${args[0]}\x1b[0m\n`); } else { process.stderr.write(`\x1b[2mPermission mode: ${self.permissions?.mode || "default"}\x1b[0m\n`); process.stderr.write(`\x1b[2mModes: default, plan, acceptEdits, bypassPermissions, dontAsk\x1b[0m\n`); } } });
 
     // Memory / Checkpoints
-    s.register({ name: "memory", aliases: ["mem"], description: "Show memory index", immediate: true,
-      handler: () => { const d = ensureMemoryDir(self.cfg.cwd); const idx = loadMemoryIndex(self.cfg.cwd); process.stderr.write(`\x1b[2mMemory directory: ${d}\x1b[0m\n`); if (idx) { process.stderr.write(`\x1b[2m${idx.split("\n").length} lines in MEMORY.md:\x1b[0m\n`); process.stderr.write(`\x1b[2m${idx.substring(0, 500)}\x1b[0m\n`); } else { process.stderr.write(`\x1b[2mNo memories yet.\x1b[0m\n`); } } });
+    s.register({ name: "memory", aliases: ["mem"], description: "Show user/project memory indexes", immediate: true,
+      handler: (args) => {
+        const scope = args[0] || "all";
+        const projectDir = ensureMemoryDir(self.cfg.cwd);
+        const userDir = path.join(os.homedir(), ".claude-native", "user-memory");
+        const projectIdx = loadMemoryIndex(self.cfg.cwd, "project");
+        const userIdx = loadMemoryIndex(self.cfg.cwd, "user");
+        if (scope === "user" || scope === "all") {
+          process.stderr.write(`\x1b[2mUser memory: ${userDir}\x1b[0m\n`);
+          if (userIdx) {
+            process.stderr.write(`\x1b[2m${userIdx.split("\n").length} lines in user MEMORY.md:\x1b[0m\n`);
+            process.stderr.write(`\x1b[2m${userIdx.substring(0, 500)}\x1b[0m\n`);
+          } else {
+            process.stderr.write(`\x1b[2mNo user memories yet.\x1b[0m\n`);
+          }
+        }
+        if (scope === "all") process.stderr.write("\n");
+        if (scope === "project" || scope === "all") {
+          process.stderr.write(`\x1b[2mProject memory: ${projectDir}\x1b[0m\n`);
+          if (projectIdx) {
+            process.stderr.write(`\x1b[2m${projectIdx.split("\n").length} lines in project MEMORY.md:\x1b[0m\n`);
+            process.stderr.write(`\x1b[2m${projectIdx.substring(0, 500)}\x1b[0m\n`);
+          } else {
+            process.stderr.write(`\x1b[2mNo project memories yet.\x1b[0m\n`);
+          }
+        }
+      } });
     s.register({ name: "checkpoints", aliases: ["ckpt"], description: "List file checkpoints", immediate: true,
       handler: () => { if (!self.checkpoints) { process.stderr.write("\x1b[2mCheckpointing not enabled.\x1b[0m\n"); return; } const snaps = self.checkpoints.getSnapshots(); if (snaps.length === 0) { process.stderr.write("\x1b[2mNo checkpoints yet.\x1b[0m\n"); return; } for (const sn of snaps) { const ago = Math.floor((Date.now() - new Date(sn.timestamp).getTime()) / 1000); const agoStr = ago < 60 ? `${ago}s ago` : ago < 3600 ? `${Math.floor(ago/60)}m ago` : `${Math.floor(ago/3600)}h ago`; process.stderr.write(`\x1b[2m  [${sn.messageId.slice(0,8)}] ${sn.fileCount} files | ${agoStr}\x1b[0m\n`); } } });
     s.register({ name: "rewind", argumentHint: "[id]", description: "Rewind to a checkpoint",
@@ -13829,10 +14577,11 @@ class InteractiveMode {
         else if (sub === "disable") toolDisable(self.cfg, self.registry, args[1]);
         else if (sub === "test") await toolTest(self.cfg, self.registry, args[1]);
         else if (sub === "install") { await toolInstall(self.cfg, args.slice(1).join(" ")); scanCustomTools(self.registry, self.cfg); }
+        else if (sub === "update") { await toolUpdate(self.cfg, args[1]); scanCustomTools(self.registry, self.cfg); }
         else if (sub === "remove") { toolRemove(self.cfg, args[1]); if (args[1] && self.registry.has(args[1])) self.registry.unregister(args[1]); }
         else if (sub === "catalog") { await toolCatalog(args.slice(1).join(" ") || "*"); }
         else if (sub === "publish") { await toolPublish(self.cfg, args[1]); }
-        else process.stderr.write("Usage: /tool <subcommand>\n  list, info, enable, disable, test, install, remove, catalog, publish\n");
+        else process.stderr.write("Usage: /tool <subcommand>\n  list, info, enable, disable, test, install, update, remove, catalog, publish\n");
       } });
 
     // Catalog shortcut — /catalog [query]
@@ -14459,9 +15208,13 @@ class InteractiveMode {
         if (remote) remote.emit({ type: "tool_use", name: block.name, input: block.input, id: block.id });
       },
       onToolResult: (id, result, toolName) => {
-        if (toolName === "SendUserMessage" && brief && !result.is_error) {
-          try { const parsed = JSON.parse(result.content); process.stderr.write(`\n${parsed.message}\n`); } catch { /* ignore */ }
-        } else if (result.is_error) { process.stderr.write(`\x1b[31m[Error]\x1b[0m\n`); }
+        const parsed = _parseStructuredOutput(toolName, result);
+        if (parsed) {
+          const rendered = _renderStructuredOutput(parsed, toolName);
+          if (rendered) process.stderr.write(`\n${rendered}\n`);
+        } else if (result.is_error) {
+          process.stderr.write(`\x1b[31m[Error]\x1b[0m\n`);
+        }
         if (remote) remote.emit({ type: "tool_result", id, tool_name: toolName, is_error: result.is_error });
       },
       onPermissionDeny: (block, msg) => {
@@ -14514,16 +15267,17 @@ class InteractiveMode {
 
     try {
       const result = await loop.run(this.messages, systemBlocks);
+      const assistantVisibleText = _flattenUserFacingOutputs(result.userFacingOutputs, result.text);
 
       // Save assistant message
-      this.sessions.append(this.sessionId, { role: "assistant", content: result.text });
+      this.sessions.append(this.sessionId, { role: "assistant", content: assistantVisibleText });
 
       // Auto-memory: LLM-based classification of what to remember
       try {
         if (!this._autoMemory) this._autoMemory = new AutoMemory(this.cfg.cwd, this.client, this.cfg._provider);
         const userText = typeof input === "string" ? input : JSON.stringify(input);
         // Fire and forget — don't block the REPL on memory classification
-        this._autoMemory.processExchange(userText, result.text || "").then(saved => {
+        this._autoMemory.processExchange(userText, assistantVisibleText || "").then(saved => {
           for (const s of saved) log(`[auto-memory] Saved ${s.type}: ${s.name}`);
         }).catch(e => log(`[auto-memory] Error: ${e.message}`));
       } catch (e) { /* ignore: auto-memory is non-fatal */
@@ -14633,11 +15387,10 @@ class InteractiveMode {
         process.stderr.write(`\n\x1b[2m[${block.name}: ${inputStr}]\x1b[0m\n`);
       },
       onToolResult: (id, result, toolName) => {
-        if (toolName === "SendUserMessage" && brief && !result.is_error) {
-          try {
-            const parsed = JSON.parse(result.content);
-            process.stderr.write(`\n${parsed.message}\n`);
-          } catch { /* ignore: non-JSON tool result from SendUserMessage */ }
+        const parsed = _parseStructuredOutput(toolName, result);
+        if (parsed) {
+          const rendered = _renderStructuredOutput(parsed, toolName);
+          if (rendered) process.stderr.write(`\n${rendered}\n`);
         } else if (result.is_error) {
           process.stderr.write(`\x1b[31m[Error]\x1b[0m\n`);
         }
@@ -14668,9 +15421,10 @@ class InteractiveMode {
 
     try {
       const result = await loop.run(this.messages, systemBlocks);
+      const assistantVisibleText = _flattenUserFacingOutputs(result.userFacingOutputs, result.text);
 
       // Save assistant message
-      this.sessions.append(this.sessionId, { role: "assistant", content: result.text });
+      this.sessions.append(this.sessionId, { role: "assistant", content: assistantVisibleText });
 
       // Cost estimate
       const costIn = (result.usage.input_tokens / 1_000_000) * 3;
@@ -14697,6 +15451,16 @@ class InteractiveMode {
 
 
 // ── McpManager ──────────────────────────────────────────────────
+
+function flattenUserFacingOutputs(outputs, fallbackText = "") {
+  if (!Array.isArray(outputs) || outputs.length === 0) return fallbackText || "";
+  const parts = outputs.map((output) => {
+    if (!output || typeof output !== "object") return "";
+    if (output.kind === "task_output") return output.message || output.summary || "";
+    return output.message || "";
+  }).filter(Boolean);
+  return parts.length > 0 ? parts.join("\n") : (fallbackText || "");
+}
 
 class McpManager {
   constructor() {
@@ -14904,6 +15668,7 @@ async function main() {
   registry._currentModel = cfg.model; // Used by WebFetch to pick summary model
   registry._provider = provider; // Used by WebFetch for summary model selection
   registerBuiltinTools(registry);
+  registerMemoryTools(registry);
 
   // Sandbox: replace Bash executor with sandboxed version
   cfg._sandboxSettings = { mode: cfg.sandboxMode || "auto" };
@@ -14934,7 +15699,7 @@ async function main() {
   registerDesktopTools(registry);
   scanCustomTools(registry, cfg);
   cfg._officialToolCatalog = _OFFICIAL_CATALOG; // expose for ink-ui
-  if (cfg.briefMode) registerBriefTools(registry, cfg);
+  registerBriefTools(registry, cfg);
 
   if (cfg.allowedTools || cfg.disallowedTools) {
     registry.setFilter(cfg.allowedTools, cfg.disallowedTools);
@@ -15125,6 +15890,7 @@ Important:
   if (cfg._subcommand === "tool-disable") { toolDisable(cfg, registry, cfg._toolDisableName); mcpManager.shutdown(); process.exit(0); }
   if (cfg._subcommand === "tool-test") { await toolTest(cfg, registry, cfg._toolTestName); mcpManager.shutdown(); process.exit(0); }
   if (cfg._subcommand === "tool-install") { await toolInstall(cfg, cfg._toolInstallSource); process.exit(0); }
+  if (cfg._subcommand === "tool-update") { await toolUpdate(cfg, cfg._toolUpdateName); process.exit(0); }
   if (cfg._subcommand === "tool-remove") { toolRemove(cfg, cfg._toolRemoveName); process.exit(0); }
   if (cfg._subcommand === "tool-catalog") { await toolCatalog(cfg._toolCatalogQuery); process.exit(0); }
   if (cfg._subcommand === "tool-publish") { await toolPublish(cfg, cfg._toolPublishName); process.exit(0); }
@@ -15159,20 +15925,21 @@ Important:
     const isJsonOutput = cfg.outputFormat === "json";
 
     const loop = new AgentLoop(client, registry, cfg, {
-      onText: isJsonOutput ? () => {} : (delta) => process.stdout.write(delta),
+      onText: () => {},
       onToolUse: (block) => {
         if (_verbose) process.stderr.write(`\x1b[2m[${block.name}]\x1b[0m\n`);
       },
     }, permissions);
 
     const result = await loop.run(messages, systemBlocks);
+    const assistantVisibleText = flattenUserFacingOutputs(result.userFacingOutputs, result.text);
 
     // If --json-schema, validate output against schema
     let schemaResult = null;
-    if (cfg.jsonSchema && result.text) {
+    if (cfg.jsonSchema && assistantVisibleText) {
       try {
         // Extract JSON from response (strip markdown fences if model adds them)
-        let raw = result.text.trim();
+        let raw = assistantVisibleText.trim();
         if (raw.startsWith("```")) raw = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
         schemaResult = JSON.parse(raw);
 
@@ -15208,6 +15975,8 @@ Important:
       const jsonOutput = {
         version: cfg.outputVersion || "1",
         message: result.text,
+        user_facing_message: assistantVisibleText,
+        user_facing_outputs: result.userFacingOutputs || [],
         result: schemaResult,  // parsed+validated object (null if no schema or parse failed)
         model: cfg.model,
         provider: provider.name,
@@ -15224,6 +15993,7 @@ Important:
       if (cfg.jsonSchema) jsonOutput.schema_valid = schemaResult !== null;
       process.stdout.write(JSON.stringify(jsonOutput) + "\n");
     } else {
+      if (assistantVisibleText) process.stdout.write(assistantVisibleText);
       process.stdout.write("\n");
     }
 

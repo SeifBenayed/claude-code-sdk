@@ -1,14 +1,16 @@
 # cloclo — Project Conventions
 
 ## Project
-cloclo is an open-source Claude Code alternative: a multi-provider AI coding agent CLI. The main runtime is `claude-native.mjs`, a deliberately single-file Node.js CLI with zero native dependencies. Supporting parity/reference implementations exist in `claude-native.py`, `claude-native.go`, and `rust-sdk/`.
+cloclo is an open-source Claude Code alternative: a multi-provider AI coding agent CLI. The shipped runtime is `claude-native.mjs`, a bundled single-file Node.js CLI with zero native dependencies. The editable source lives in `src/`. Supporting parity/reference implementations exist in `claude-native.py`, `claude-native.go`, and `rust-sdk/`.
 
 ## Architecture
-- Main product logic lives in `claude-native.mjs`; prefer small, surgical edits over broad rewrites.
+- **CRITICAL: `claude-native.mjs` is a build output. Do not edit it directly for normal feature or bug work.** Make source changes in `src/`, then rebuild `claude-native.mjs` with `node build.mjs`.
+- Main source modules live in `src/` (`utils.mjs`, `config.mjs`, `providers.mjs`, `auth.mjs`, `security-rules.mjs`, `security.mjs`, `browser.mjs`, `tools.mjs`, `lsp.mjs`, `auto-memory.mjs`, `audit.mjs`, `teams.mjs`, `sandbox.mjs`, `context-refs.mjs`, `smart-routing.mjs`, `cron.mjs`, `engine.mjs`, `session.mjs`, `index.mjs`). Start there before touching bundled output.
 - Keep core agent logic provider-agnostic. Provider differences belong in the `PROVIDERS` contract and client conversion layers, not in `AgentLoop`.
 - Built-in tools are registered through `ToolRegistry`; some tools are eager, others deferred and surfaced via `ToolSearch`.
 - Extensibility features are built into the main CLI: `CLAUDE.md` loading, `.claude/settings*.json`, rules, skills, hooks, memory, sessions, and MCP integration.
 - `ink-ui.mjs` contains the Ink terminal UI; avoid coupling UI-only behavior into non-interactive/NDJSON paths.
+- `claude-tool-loop.js` is the NDJSON bridge/runtime wrapper; keep bridge-specific behavior there rather than in provider code.
 - `gstack/` is a separate subtree with its own docs/conventions; do not assume its patterns apply to the root CLI unless files explicitly integrate.
 
 ## Key Patterns
@@ -19,6 +21,7 @@ cloclo is an open-source Claude Code alternative: a multi-provider AI coding age
 - Maintain backward-compatible CLI behavior and help text for user-facing flags where possible.
 
 ## Build / Run
+- `node build.mjs` — rebuild `claude-native.mjs` from `src/`
 - `node claude-native.mjs` — interactive REPL
 - `node claude-native.mjs -p "explain this code"` — one-shot mode
 - `npm test` or `node test-suite.mjs` — main test suite
@@ -29,7 +32,7 @@ cloclo is an open-source Claude Code alternative: a multi-provider AI coding age
 ## Testing Conventions
 - Add tests before changing behavior; do not ship untested changes.
 - Primary tests live in `test-suite.mjs`; this file mixes extraction-based unit tests with spawned-process E2E checks.
-- Unit tests commonly extract code blocks from `claude-native.mjs` and eval them in isolation; preserve stable function/class boundaries where practical.
+- Unit tests often validate the bundled output in `claude-native.mjs`, so source edits in `src/` usually need a rebuild before those tests reflect the change.
 - E2E tests spawn `node claude-native.mjs`; keep CLI I/O and exit codes deterministic.
 - API-backed E2E in `test-suite.mjs --e2e` require credentials; keep non-E2E tests runnable without API keys.
 - If you change NDJSON, deferred tools, provider detection, permissions, skills/hooks, or CLAUDE.md loading, update or add targeted tests.

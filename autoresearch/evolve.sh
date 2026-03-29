@@ -28,7 +28,10 @@ HOURS="${1:-8}"
 MODEL="${2:-gpt-5.4}"
 MUTATOR_MODEL="${MUTATOR_MODEL:-gpt-5.4}"
 BENCH_CONCURRENCY="${BENCH_CONCURRENCY:-4}"
+BENCH_TIMEOUT_MS="${BENCH_TIMEOUT_MS:-600000}"
 BENCH_LOG_EVERY="${BENCH_LOG_EVERY:-10}"
+BENCH_CHECKPOINT_EVERY="${BENCH_CHECKPOINT_EVERY:-1}"
+BENCH_RETRIES="${BENCH_RETRIES:-2}"
 END_TIME=$(($(date +%s) + HOURS * 3600))
 
 mkdir -p "$GEN_DIR" "$RESULTS_DIR"
@@ -46,17 +49,24 @@ echo "║                                                       ║"
 echo "║  Candidate:    cloclo --model $MODEL                  ║"
 echo "║  Ground truth: ground-truth.json (existing)           ║"
 echo "║  Mutator:      cloclo --model $MUTATOR_MODEL          ║"
-echo "║  Benchmark:    concurrency=$BENCH_CONCURRENCY logs=$BENCH_LOG_EVERY        ║"
+echo "║  Benchmark:    concurrency=$BENCH_CONCURRENCY timeout=${BENCH_TIMEOUT_MS}ms ║"
 echo "║  Duration:     ${HOURS}h                              ║"
 echo "║  Best score:   ${BEST_SCORE}%                         ║"
 echo "╚═══════════════════════════════════════════════════════╝"
 echo ""
 
-GEN=0
+LAST_GEN_NUM=$(find "$GEN_DIR" -maxdepth 1 -type d -name 'gen_*' -exec basename {} \; 2>/dev/null | sed -E 's/^gen_0*//' | awk 'NF { print $1 + 0 }' | sort -n | tail -1)
+GEN="${LAST_GEN_NUM:-0}"
 
 while [ "$(date +%s)" -lt "$END_TIME" ]; do
-  GEN=$((GEN + 1))
-  GEN_LABEL="gen_$(printf '%03d' $GEN)"
+  CURRENT_MAX_LABEL="gen_$(printf '%03d' "$GEN")"
+  if [ "$GEN" -gt 0 ] && [ -d "$GEN_DIR/$CURRENT_MAX_LABEL" ] && [ ! -f "$RESULTS_DIR/${CURRENT_MAX_LABEL}_scores.json" ]; then
+    GEN_LABEL="$CURRENT_MAX_LABEL"
+    echo "  ↺ Resuming incomplete generation $GEN_LABEL"
+  else
+    GEN=$((GEN + 1))
+    GEN_LABEL="gen_$(printf '%03d' "$GEN")"
+  fi
   GEN_SNAPSHOT="$GEN_DIR/$GEN_LABEL"
   REMAINING=$(( (END_TIME - $(date +%s)) / 60 ))
 
@@ -71,12 +81,16 @@ while [ "$(date +%s)" -lt "$END_TIME" ]; do
 
   # ── Step 2: Run cloclo on 1000 questions (parallel) ──
   echo "  → Running cloclo ($MODEL) on 1000 questions..."
-  node "$DIR/run-cloclo-parallel.mjs" \
+  if ! node "$DIR/run-cloclo-parallel.mjs" \
     --model="$MODEL" \
     --concurrency="$BENCH_CONCURRENCY" \
-    --timeout-ms=0 \
+    --timeout-ms="$BENCH_TIMEOUT_MS" \
     --log-every="$BENCH_LOG_EVERY" \
-    --gen="$GEN_LABEL" 2>&1 | tee "$GEN_SNAPSHOT/run.log"
+    --checkpoint-every="$BENCH_CHECKPOINT_EVERY" \
+    --retries="$BENCH_RETRIES" \
+    --gen="$GEN_LABEL" 2>&1 | tee "$GEN_SNAPSHOT/run.log"; then
+    echo "  ⚠ Benchmark command exited non-zero. If a checkpoint exists, the next loop pass will resume it."
+  fi
 
   # ── Step 3: Extract score ──
   SCORES_FILE="$RESULTS_DIR/${GEN_LABEL}_scores.json"
@@ -127,7 +141,7 @@ while [ "$(date +%s)" -lt "$END_TIME" ]; do
   ")
 
   # Use cloclo with GPT-5.4 to make the mutation
-  node "$PROJECT/claude-native.mjs" --model "$MUTATOR_MODEL" -p "You are optimizing cloclo CLI to score better on benchmarks.
+  if ! node "$PROJECT/claude-native.mjs" --model "$MUTATOR_MODEL" -p "You are optimizing cloclo CLI to score better on benchmarks.
 
 Current score: ${NUMERIC_SCORE}%. Best: ${BEST_SCORE}%.
 Weakest categories: $WEAK_CATS
@@ -141,7 +155,9 @@ Then:
 3. Run: cd ~/claude-tool-loop && npm run build
 4. Run: cd ~/claude-tool-loop && npm test (verify nothing broke)
 
-Focus on '$WEAK_CAT'. Small, surgical change only." 2>&1 | tee "$GEN_SNAPSHOT/mutation.log"
+Focus on '$WEAK_CAT'. Small, surgical change only." 2>&1 | tee "$GEN_SNAPSHOT/mutation.log"; then
+    echo "  ⚠ Mutation step exited non-zero. Continuing with the current src/ state."
+  fi
 
   # ── Step 6: Save snapshot AFTER ──
   mkdir -p "$GEN_SNAPSHOT/src_after"
@@ -161,6 +177,7 @@ Focus on '$WEAK_CAT'. Small, surgical change only." 2>&1 | tee "$GEN_SNAPSHOT/mu
   node -e "
     const fs = require('fs');
     const sb = JSON.parse(fs.readFileSync('$SCOREBOARD','utf-8'));
+    sb.generations = (sb.generations || []).filter((g) => g.gen !== '$GEN_LABEL');
     sb.generations.push({
       gen: '$GEN_LABEL',
       score: parseFloat('$NUMERIC_SCORE'),
