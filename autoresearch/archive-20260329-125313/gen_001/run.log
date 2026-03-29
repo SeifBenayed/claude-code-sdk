@@ -1,0 +1,80 @@
+
+╔═══════════════════════════════════════════════════╗
+║  CLOCLO BENCHMARK RUN [gen_001]
+║  Concurrency: 10 parallel queries
+╚═══════════════════════════════════════════════════╝
+
+  Running 1000 questions with 10 workers...
+
+  [20/1000] ❌ factual — 759ms
+  [40/1000] ✅ math — 1120ms
+  [60/1000] ✅ cs_theory — 1811ms
+  [80/1000] ✅ cs_theory — 1502ms
+  [100/1000] ✅ language — 2379ms
+  [120/1000] ✅ coding_trivia — 1863ms
+  [140/1000] ❌ logic_puzzles — 6733ms
+  [160/1000] ✅ api_knowledge — 1527ms
+  [180/1000] ✅ devops — 828ms
+  [200/1000] ✅ devops — 7965ms
+  [220/1000] ✅ code_js — 2552ms
+  [240/1000] ✅ code_js — 12211ms
+  [260/1000] ❌ code_python — 6852ms
+  [280/1000] ❌ bash_tasks — 6832ms
+  [300/1000] ❌ bash_tasks — 10014ms
+  [320/1000] ❌ file_ops — 6815ms
+  [340/1000] ✅ file_ops — 7835ms
+  [360/1000] ❌ file_ops — 23274ms
+  [380/1000] ✅ sql — 3369ms
+  [400/1000] ✅ data_transform — 6138ms
+  [420/1000] ❌ data_transform — 6741ms
+  [440/1000] ❌ git_ops — 8672ms
+  [460/1000] ❌ debug — 11358ms
+  [480/1000] ✅ web_fetch — 3696ms
+  [500/1000] ✅ web_fetch — 8165ms
+  [520/1000] ❌ build_and_test — 14887ms
+  [540/1000] ❌ build_and_test — 7136ms
+  [560/1000] ❌ research_and_code — 6747ms
+  [580/1000] ❌ research_and_code — 6765ms
+  [600/1000] ✅ research_and_code — 24388ms
+  [620/1000] ✅ refactor — 10555ms
+  [640/1000] ❌ refactor — 26205ms
+  [660/1000] ✅ system_design — 26998ms
+  [680/1000] ✅ system_design — 10509ms
+  [700/1000] ✅ system_design — 19557ms
+  [720/1000] ✅ pipeline — 10537ms
+  [740/1000] ✅ pipeline — 10554ms
+  [760/1000] ✅ explain_and_implement — 10545ms
+  [780/1000] ✅ explain_and_implement — 17944ms
+  [800/1000] ❌ edge_cases — 6698ms
+  [820/1000] ❌ edge_cases — 6752ms
+  [840/1000] ❌ error_recovery — 6741ms
+  [860/1000] ✅ error_recovery — 10679ms
+  [880/1000] ✅ error_recovery — 10554ms
+  [900/1000] ✅ security — 10523ms
+  [920/1000] ✅ trick_questions — 10557ms
+  [940/1000] ✅ performance — 10557ms
+  [960/1000] ✅ performance — 10533ms
+  [980/1000] ❌ multi_tool_chain — 27762ms
+  [1000/1000] ✅ multi_tool_chain — 27247ms
+
+════════════════════════════════════════════════════════════
+  SCORE: 32.51% (1000 questions)
+════════════════════════════════════════════════════════════
+
+  Tier Breakdown:
+    T1   ████████░░░░░░░░░░░░ 41.1%
+    T2   ██████░░░░░░░░░░░░░░ 32.0%
+    T3   █████░░░░░░░░░░░░░░░ 26.1%
+    T4   ███████░░░░░░░░░░░░░ 34.3%
+
+  Weakest Categories:
+    build_and_test         1.0%
+    edge_cases             4.9%
+    refactor               7.4%
+    multi_tool_chain       8.3%
+    pipeline               16.4%
+
+  Results → /Users/seifbenayed/claude-tool-loop/autoresearch/results/gen_001_cloclo.json
+  Scores  → /Users/seifbenayed/claude-tool-loop/autoresearch/results/gen_001_scores.json
+
+SCORE:32.51

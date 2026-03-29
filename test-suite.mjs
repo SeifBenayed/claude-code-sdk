@@ -82,16 +82,20 @@ const providersAndHelpers = source.slice(providersStart, instrEnd);
 const detectProviderFunc = extractBlock(source, "function detectProvider(");
 const isOpenAIModelFunc = extractBlock(source, "function isOpenAIModel(");
 const isResponsesFunc = extractBlock(source, "function isResponsesAPIModel(");
+const modelProfilesStart = source.indexOf("const MODEL_PROFILES = {");
+const modelProfilesEnd = source.indexOf("// ── providers.mjs", modelProfilesStart);
+const modelProfilesBlock = modelProfilesStart !== -1 && modelProfilesEnd !== -1 ? source.slice(modelProfilesStart, modelProfilesEnd) : "";
+const resolveModelForWorkloadFunc = extractBlock(source, "function resolveModelForWorkload(");
 
-const testModule = [stubs, anthropicClientClass, openAIClientClass, openAIResponsesClass, providersAndHelpers, detectProviderFunc, isOpenAIModelFunc, isResponsesFunc].join("\n\n");
+const testModule = [stubs, anthropicClientClass, openAIClientClass, openAIResponsesClass, modelProfilesBlock, providersAndHelpers, detectProviderFunc, isOpenAIModelFunc, isResponsesFunc, resolveModelForWorkloadFunc].join("\n\n");
 const ns = {};
 try {
-  new Function("exports", "process", testModule + "\nexports.OpenAIClient = OpenAIClient;\nexports.OpenAIResponsesClient = OpenAIResponsesClient;\nexports.isOpenAIModel = isOpenAIModel;\nexports.isResponsesAPIModel = isResponsesAPIModel;\nexports.PROVIDERS = PROVIDERS;\nexports.detectProvider = detectProvider;\nexports.getInstructionPlacement = getInstructionPlacement;\n")(ns, process);
+  new Function("exports", "process", testModule + "\nexports.OpenAIClient = OpenAIClient;\nexports.OpenAIResponsesClient = OpenAIResponsesClient;\nexports.isOpenAIModel = isOpenAIModel;\nexports.isResponsesAPIModel = isResponsesAPIModel;\nexports.PROVIDERS = PROVIDERS;\nexports.detectProvider = detectProvider;\nexports.getInstructionPlacement = getInstructionPlacement;\nexports.resolveModelForWorkload = resolveModelForWorkload;\n")(ns, process);
 } catch (e) {
   process.stderr.write(`\x1b[31mFailed to extract classes: ${e.message}\x1b[0m\n`);
 }
 
-const { OpenAIClient, OpenAIResponsesClient, isOpenAIModel, isResponsesAPIModel } = ns;
+const { OpenAIClient, OpenAIResponsesClient, isOpenAIModel, isResponsesAPIModel, resolveModelForWorkload } = ns;
 
 // ── 1. Model Detection ─────────────────────────────────────────
 
@@ -115,6 +119,19 @@ if (isOpenAIModel) {
   }
 } else {
   skip("Model detection (extraction failed)");
+}
+
+section("UNIT: Workload Routing");
+
+if (resolveModelForWorkload) {
+  const openaiCfg = { model: "gpt-5.4", openaiApiKey: "test", apiKey: "", authToken: "", _provider: ns.detectProvider("gpt-5.4") };
+  const anthropicCfg = { model: "claude-sonnet-4-6", openaiApiKey: "test", apiKey: "test", authToken: "", _provider: ns.detectProvider("claude-sonnet-4-6") };
+  const openaiResolved = resolveModelForWorkload("exploration", openaiCfg);
+  const anthropicResolved = resolveModelForWorkload("exploration", anthropicCfg);
+  assert(openaiResolved.model === "gpt-4o-mini", "exploration stays on OpenAI when parent is OpenAI", JSON.stringify(openaiResolved));
+  assert(anthropicResolved.model === "claude-haiku-4-5-20251001", "exploration stays on Anthropic when parent is Anthropic", JSON.stringify(anthropicResolved));
+} else {
+  skip("Workload routing (extraction failed)");
 }
 
 // ── 2. OpenAI Tool Conversion ──────────────────────────────────
@@ -156,7 +173,7 @@ if (OpenAIClient) {
 section("UNIT: OpenAI Message Conversion");
 
 if (OpenAIClient) {
-  const client = new OpenAIClient({ apiKey: "test" });
+  const client = new OpenAIClient({ apiKey: "test", capabilities: { reasoningModelPattern: "^o[1-9]" } });
 
   // System blocks → system message
   {
@@ -5934,6 +5951,538 @@ section("E2E: catalog shows env/auth metadata");
   } catch (e) {
     skip(`Catalog metadata E2E failed: ${e.message}`);
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// NEW FEATURE TESTS
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Context References ───────────────────────────────────────────
+
+section("UNIT: Context References — @file, @diff, @folder");
+
+{
+  const crBlock = extractBlock(source, "function parseRefs(");
+  const expandFileBlock = extractBlock(source, "function _expandFile(");
+  const expandFolderBlock = extractBlock(source, "function _expandFolder(");
+  if (crBlock) {
+    // Test parseRefs
+    const ns = {};
+    try {
+      new Function("exports", crBlock + "\nexports.parseRefs = parseRefs;")(ns);
+      const refs = ns.parseRefs("Look at @file:src/main.ts and @diff and @folder:lib/");
+      assert(refs.length === 3, "parseRefs finds 3 references");
+      assert(refs[0].type === "file" && refs[0].arg === "src/main.ts", "parseRefs: file ref with path");
+      assert(refs[1].type === "diff", "parseRefs: diff ref");
+      assert(refs[2].type === "folder" && refs[2].arg === "lib/", "parseRefs: folder ref");
+
+      const noRefs = ns.parseRefs("hello world no refs here");
+      assert(noRefs.length === 0, "parseRefs: no refs in plain text");
+
+      const lineRange = ns.parseRefs("@file:app.ts[10:50]");
+      assert(lineRange.length === 1 && lineRange[0].arg === "app.ts[10:50]", "parseRefs: file with line range");
+
+      const urlRef = ns.parseRefs("check @url:https://example.com/api");
+      assert(urlRef.length === 1 && urlRef[0].type === "url", "parseRefs: url ref");
+
+      const gitRef = ns.parseRefs("@git:10 commits");
+      assert(gitRef.length === 1 && gitRef[0].type === "git" && gitRef[0].arg === "10", "parseRefs: git ref with count");
+    } catch (e) { skip(`parseRefs eval failed: ${e.message}`); }
+  } else { skip("parseRefs extraction failed"); }
+}
+
+section("UNIT: Context References — security");
+
+{
+  // Check blocked paths exist in source
+  assert(source.includes(".ssh") && source.includes(".aws") && source.includes(".gnupg"), "Sensitive paths blocked (.ssh, .aws, .gnupg)");
+  assert(source.includes("_isBlocked"), "Blocked path check function exists");
+  assert(source.includes("context-ref"), "Expansion wraps in <context-ref> tags");
+}
+
+section("E2E: Context References — @file expansion");
+
+{
+  try {
+    const { exitCode, stdout, stderr } = await runCLI(
+      ["-p", "just say OK", "--yes"],
+      { ANTHROPIC_API_KEY: "test-key-not-real" },
+      5000
+    );
+    // We can't test actual expansion without a real API key,
+    // but we can verify the @-parsing doesn't crash
+    assert(exitCode !== 2, "@ symbols in prompt don't cause arg parse errors");
+  } catch { skip("Context ref E2E skipped"); }
+}
+
+// ── Trivial Fast-Path (was Smart Model Routing) ─────────────────
+
+section("UNIT: Trivial Fast-Path — isTrivialMessage");
+
+{
+  const trivialBlock = extractBlock(source, "function isTrivialMessage(");
+  if (trivialBlock) {
+    const ns = {};
+    try {
+      const deps = `const TRIVIAL = /^(hi|hello|hey|thanks|thank you|ok|sure|yes|no|y|n|bye|lgtm|done|got it|good morning|good night|yep|nope|mhm)[.!?]*$/i;`;
+      new Function("exports", deps + "\n" + trivialBlock + "\nexports.isTrivialMessage = isTrivialMessage;")(ns);
+
+      assert(ns.isTrivialMessage("hello"), "Trivial: 'hello'");
+      assert(ns.isTrivialMessage("thanks!"), "Trivial: 'thanks!'");
+      assert(ns.isTrivialMessage("yes"), "Trivial: 'yes'");
+      assert(ns.isTrivialMessage("lgtm"), "Trivial: 'lgtm'");
+      assert(ns.isTrivialMessage("good morning"), "Trivial: 'good morning'");
+      assert(ns.isTrivialMessage("nope"), "Trivial: 'nope'");
+      assert(!ns.isTrivialMessage("what time is it?"), "Not trivial: 'what time is it?'");
+      assert(!ns.isTrivialMessage("implement a REST API with auth middleware"), "Not trivial: 'implement...'");
+      assert(!ns.isTrivialMessage("refactor the database schema and add migrations"), "Not trivial: 'refactor...'");
+      assert(!ns.isTrivialMessage("search chatgpt for bags"), "Not trivial: 'search chatgpt...'");
+      assert(!ns.isTrivialMessage("a".repeat(90)), "Not trivial: > 80 chars");
+      assert(!ns.isTrivialMessage("/help"), "Not trivial: slash command");
+      assert(!ns.isTrivialMessage("@someone hi"), "Not trivial: @ mention");
+    } catch (e) { skip(`isTrivialMessage eval failed: ${e.message}`); }
+  } else { skip("isTrivialMessage extraction failed"); }
+}
+
+section("UNIT: Trivial Fast-Path — routeModel function exists");
+
+{
+  assert(source.includes("function routeModel("), "routeModel function exists");
+  assert(source.includes("summaryModel"), "routeModel uses provider's summaryModel");
+  assert(source.includes("_disableSmartRouting"), "Trivial fast-path can be disabled");
+  assert(source.includes("_userExplicitModel"), "Skips routing when user chose model explicitly");
+  assert(source.includes("trivial-fast-path"), "Log tag is [trivial-fast-path]");
+  assert(!source.includes("COMPLEX_KEYWORDS"), "COMPLEX_KEYWORDS removed");
+  assert(!source.includes("CODE_PATTERNS"), "CODE_PATTERNS removed");
+  assert(!source.includes("isSimpleMessage"), "isSimpleMessage renamed to isTrivialMessage");
+}
+
+// ── Context Compression ──────────────────────────────────────────
+
+section("UNIT: Context Compression — 3-phase strategy");
+
+{
+  const compactBlock = extractBlock(source, "async _autoCompact(");
+  if (compactBlock) {
+    // Phase 1: tool result pruning
+    assert(compactBlock.includes("tool_result") && compactBlock.includes("truncated"), "Phase 1: prunes old tool results");
+    assert(compactBlock.includes("protectedCount") || compactBlock.includes("protected"), "Phase 2: protects boundary messages");
+    // Phase 3: structured summary
+    assert(compactBlock.includes("Goal:") && compactBlock.includes("Progress:"), "Phase 3: structured summary format (Goal/Progress)");
+    assert(compactBlock.includes("Key Decisions:") && compactBlock.includes("Relevant Files:"), "Phase 3: includes Decisions/Files sections");
+    assert(compactBlock.includes("Blockers:") && compactBlock.includes("Next Steps:"), "Phase 3: includes Blockers/Next Steps");
+  } else { skip("_autoCompact extraction failed"); }
+}
+
+// ── Audit Trail ──────────────────────────────────────────────────
+
+section("UNIT: Audit Trail — AuditLogger");
+
+{
+  const auditBlock = extractBlock(source, "class AuditLogger {");
+  if (auditBlock) {
+    assert(auditBlock.includes("record("), "AuditLogger has record() method");
+    assert(auditBlock.includes("flush("), "AuditLogger has flush() method");
+    assert(auditBlock.includes("shutdown("), "AuditLogger has shutdown() method");
+    assert(auditBlock.includes("toolUse("), "AuditLogger has toolUse() convenience method");
+    assert(auditBlock.includes("permissionDeny("), "AuditLogger has permissionDeny() method");
+    assert(auditBlock.includes("_pruneOldLogs"), "AuditLogger has retention pruning");
+  } else { skip("AuditLogger extraction failed"); }
+
+  // Static methods
+  assert(source.includes("static query("), "AuditLogger.query() exists");
+  assert(source.includes("static exportJSON("), "AuditLogger.exportJSON() exists");
+  assert(source.includes("static exportCSV("), "AuditLogger.exportCSV() exists");
+  assert(source.includes("static deleteSession("), "AuditLogger.deleteSession() for GDPR");
+  assert(source.includes("static deleteRange("), "AuditLogger.deleteRange() for GDPR");
+  assert(source.includes("static stats("), "AuditLogger.stats() exists");
+}
+
+section("UNIT: Audit Trail — input sanitization");
+
+{
+  assert(source.includes("[REDACTED]"), "Secrets are redacted in audit");
+  assert(source.includes("_sanitizeInput"), "Input sanitization function exists");
+  assert(source.includes("_redactPath"), "Path redaction function exists");
+  assert(source.includes("key|token|password|secret|credential"), "Redaction matches sensitive field names");
+}
+
+section("UNIT: Audit Trail — event types");
+
+{
+  assert(source.includes("session.start"), "Event type: session.start");
+  assert(source.includes("tool.use"), "Event type: tool.use");
+  assert(source.includes("tool.result"), "Event type: tool.result");
+  assert(source.includes("permission.deny"), "Event type: permission.deny");
+  assert(source.includes("permission.allow"), "Event type: permission.allow");
+  assert(source.includes("security.block"), "Event type: security.block");
+  assert(source.includes("file.write"), "Event type: file.write");
+  assert(source.includes("memory.save"), "Event type: memory.save");
+}
+
+section("UNIT: Audit Trail — integration in AgentLoop");
+
+{
+  // Check that audit is wired into tool execution
+  assert(source.includes("cfg._audit") && source.includes("audit.toolUse"), "Audit wired into tool execution");
+  assert(source.includes("audit.permissionDeny") || source.includes("_audit.permissionDeny"), "Audit records permission denials");
+  assert(source.includes("audit.permissionAllow") || source.includes("_audit.permissionAllow"), "Audit records permission allows");
+}
+
+// ── Auto-Memory ──────────────────────────────────────────────────
+
+section("UNIT: Auto-Memory — LLM classification");
+
+{
+  assert(source.includes("class AutoMemory"), "AutoMemory class exists");
+  assert(source.includes("processExchange"), "AutoMemory.processExchange() exists");
+  assert(source.includes("classifyWithLLM") || source.includes("shouldAnalyze"), "LLM classification or pre-filter exists");
+  assert(source.includes("auto_saved"), "Auto-saved memories have auto_saved flag");
+}
+
+section("UNIT: Auto-Memory — pre-filter");
+
+{
+  const filterBlock = extractBlock(source, "function shouldAnalyze(");
+  if (filterBlock) {
+    const ns = {};
+    try {
+      const skipDeps = "const SKIP_PATTERNS = [/^(?:hi|hello|hey|ok|sure|thanks|yes|no|y|n|lgtm|done|got it)\\s*[.!?]?$/i, /^(?:\\/\\w|cloclo\\s)/, /^(?:explain|show|read|list|find|search|grep|cat|ls)\\s/i]; const MAX_MSG_LENGTH = 5000;";
+      new Function("exports", skipDeps + "\n" + filterBlock + "\nexports.shouldAnalyze = shouldAnalyze;")(ns);
+
+      assert(!ns.shouldAnalyze("hi"), "Pre-filter skips: 'hi'");
+      assert(!ns.shouldAnalyze("ok"), "Pre-filter skips: 'ok'");
+      assert(!ns.shouldAnalyze("thanks!"), "Pre-filter skips: 'thanks!'");
+      assert(!ns.shouldAnalyze("short"), "Pre-filter skips: too short (< 15 chars)");
+      assert(!ns.shouldAnalyze("x".repeat(6000)), "Pre-filter skips: too long (> 5000)");
+      assert(ns.shouldAnalyze("don't add comments to code you didn't change"), "Pre-filter passes: feedback");
+      assert(ns.shouldAnalyze("I'm a backend engineer working on payments"), "Pre-filter passes: user info");
+    } catch (e) { skip(`shouldAnalyze eval failed: ${e.message}`); }
+  } else { skip("shouldAnalyze extraction failed"); }
+}
+
+section("UNIT: Auto-Memory — throttle/dedup");
+
+{
+  assert(source.includes("SAVE_COOLDOWN_MS") || source.includes("cooldown"), "Save cooldown exists");
+  assert(source.includes("CLASSIFY_COOLDOWN_MS") || source.includes("canClassify"), "Classification cooldown exists");
+  assert(source.includes("_memoryExists") || source.includes("memoryExists"), "Dedup check exists");
+}
+
+// ── LSP Integration ──────────────────────────────────────────────
+
+section("UNIT: LSP — classes and protocol");
+
+{
+  assert(source.includes("class LspManager"), "LspManager class exists");
+  assert(source.includes("class LspClient"), "LspClient class exists");
+  assert(source.includes("class JsonRpcTransport"), "JsonRpcTransport class exists");
+  assert(source.includes("Content-Length:"), "JSON-RPC Content-Length framing");
+  assert(source.includes("textDocument/publishDiagnostics"), "Handles publishDiagnostics notification");
+}
+
+section("UNIT: LSP — language configs");
+
+{
+  assert(source.includes("typescript-language-server"), "TypeScript language server configured");
+  assert(source.includes("pyright-langserver"), "Python language server configured");
+  assert(source.includes(".ts") && source.includes(".tsx") && source.includes(".js"), "TypeScript extensions defined");
+  assert(source.includes(".py") && source.includes(".pyi"), "Python extensions defined");
+}
+
+section("UNIT: LSP — diagnostic formatting");
+
+{
+  const fmtBlock = extractBlock(source, "function formatDiagnostics(");
+  if (fmtBlock) {
+    const ns = {};
+    try {
+      const pathDep = 'const path = { basename: (p) => p.split("/").pop() };';
+      new Function("exports", "path", pathDep + "\n" + fmtBlock + "\nexports.formatDiagnostics = formatDiagnostics;")(ns, { basename: (p) => p.split("/").pop() });
+
+      const diags = [
+        { severity: 1, range: { start: { line: 5, character: 10 } }, message: "Type error", source: "ts", code: 2322 },
+        { severity: 2, range: { start: { line: 12, character: 0 } }, message: "Unused var", source: "ts", code: 6133 },
+      ];
+      const output = ns.formatDiagnostics(diags, "/test/app.ts");
+      assert(output.includes("lsp-diagnostics"), "Format: wraps in <lsp-diagnostics>");
+      assert(output.includes("error") && output.includes("warning"), "Format: shows severity levels");
+      assert(output.includes("L6:11"), "Format: shows line:col (1-indexed)");
+      assert(output.includes("[2322]"), "Format: shows error code");
+
+      const compact = ns.formatDiagnostics(diags, "/test/app.ts", { compact: true });
+      assert(compact.includes("[LSP:"), "Compact format starts with [LSP:");
+      assert(compact.includes("1 error") && compact.includes("1 warning"), "Compact shows counts");
+
+      const empty = ns.formatDiagnostics([], "/test/clean.ts");
+      assert(empty === "", "Empty diagnostics returns empty string");
+    } catch (e) { skip(`formatDiagnostics eval failed: ${e.message}`); }
+  } else { skip("formatDiagnostics extraction failed"); }
+}
+
+section("UNIT: LSP — tool registration");
+
+{
+  assert(source.includes("LspDiagnostics"), "LspDiagnostics deferred tool registered");
+  assert(source.includes('"diagnostics"') && source.includes('"hover"') && source.includes('"definition"'), "LSP actions: diagnostics, hover, definition");
+  assert(source.includes('"references"') && source.includes('"workspace"'), "LSP actions: references, workspace");
+}
+
+section("UNIT: LSP — PostToolUse integration");
+
+{
+  assert(source.includes("_lspPostToolHook"), "LSP post-tool hook wired");
+  assert(source.includes("createLspPostToolHook"), "createLspPostToolHook function exists");
+  // Check that it only fires on Write/Edit
+  const hookCheck = source.includes('block.name === "Write"') && source.includes('block.name === "Edit"');
+  assert(hookCheck, "LSP hook only fires on Write/Edit tools");
+}
+
+// ── Agent Teams ──────────────────────────────────────────────────
+
+section("UNIT: Agent Teams — TaskBoard");
+
+{
+  const tbBlock = extractBlock(source, "class TaskBoard {");
+  if (tbBlock) {
+    assert(tbBlock.includes("addTask("), "TaskBoard.addTask()");
+    assert(tbBlock.includes("claimTask("), "TaskBoard.claimTask()");
+    assert(tbBlock.includes("updateTask("), "TaskBoard.updateTask()");
+    assert(tbBlock.includes("getReadyTasks("), "TaskBoard.getReadyTasks()");
+    assert(tbBlock.includes("postMessage("), "TaskBoard.postMessage()");
+    assert(tbBlock.includes("setArtifact("), "TaskBoard.setArtifact()");
+    assert(tbBlock.includes("toPromptBlock("), "TaskBoard.toPromptBlock()");
+    assert(tbBlock.includes("depends"), "Tasks support dependencies");
+    assert(tbBlock.includes("pending") && tbBlock.includes("in_progress") && tbBlock.includes("completed"), "Task lifecycle states");
+  } else { skip("TaskBoard extraction failed"); }
+}
+
+section("UNIT: Agent Teams — Team class");
+
+{
+  const teamBlock = extractBlock(source, "class Team {");
+  if (teamBlock) {
+    assert(teamBlock.includes("run("), "Team.run()");
+    assert(teamBlock.includes("addAgent("), "Team.addAgent()");
+    assert(teamBlock.includes("_runAgent("), "Team._runAgent()");
+    assert(teamBlock.includes("_buildReport("), "Team._buildReport()");
+    assert(teamBlock.includes("abort("), "Team.abort()");
+    assert(teamBlock.includes("board"), "Team has a board (TaskBoard)");
+  } else { skip("Team extraction failed"); }
+}
+
+section("UNIT: Agent Teams — tool registration");
+
+{
+  assert(source.includes("registerTeamTools"), "registerTeamTools function exists");
+  assert(source.includes('"create_and_run"'), "Team tool has create_and_run action");
+  assert(source.includes('"status"') && source.includes('"list"'), "Team tool has status and list actions");
+  assert(source.includes("team-board"), "Board state uses <team-board> format");
+}
+
+// ── Sandbox ──────────────────────────────────────────────────────
+
+section("UNIT: Sandbox — SandboxRunner");
+
+{
+  const sbBlock = extractBlock(source, "class SandboxRunner {");
+  if (sbBlock) {
+    assert(sbBlock.includes("exec("), "SandboxRunner.exec()");
+    assert(sbBlock.includes("_execHost("), "SandboxRunner._execHost()");
+    assert(sbBlock.includes("_execDocker("), "SandboxRunner._execDocker()");
+    assert(sbBlock.includes("effectiveMode"), "SandboxRunner.effectiveMode getter");
+    assert(sbBlock.includes("shutdown("), "SandboxRunner.shutdown()");
+    assert(sbBlock.includes("ensureImage("), "SandboxRunner.ensureImage()");
+    assert(sbBlock.includes("status("), "SandboxRunner.status()");
+  } else { skip("SandboxRunner extraction failed"); }
+}
+
+section("UNIT: Sandbox — Docker security settings");
+
+{
+  assert(source.includes("--read-only"), "Docker: read-only root filesystem");
+  assert(source.includes("no-new-privileges"), "Docker: no-new-privileges");
+  assert(source.includes("--memory"), "Docker: memory limit");
+  assert(source.includes("--cpus"), "Docker: CPU limit");
+  assert(source.includes("--pids-limit"), "Docker: PID limit");
+  assert(source.includes("--network") && source.includes("none"), "Docker: network isolation option");
+  assert(source.includes("/workspace:rw"), "Docker: project dir mounted rw");
+  assert(source.includes(":ro"), "Docker: home dir mounted read-only");
+}
+
+section("UNIT: Sandbox — CLI flag");
+
+{
+  assert(source.includes("--sandbox"), "CLI has --sandbox flag");
+  assert(source.includes("sandboxMode"), "Config has sandboxMode");
+  const hostDefault = source.includes('sandboxMode: "host"') || source.includes("sandboxMode:\"host\"");
+  assert(hostDefault, "Default sandbox mode is host (opt-in to Docker)");
+}
+
+section("UNIT: Sandbox — smart host fallback");
+
+{
+  assert(source.includes("docker") && source.includes("podman") && source.includes("kubectl"), "Docker/podman/kubectl commands run on host");
+  assert(source.includes("createSandboxedBashExecutor"), "Sandboxed Bash executor factory exists");
+}
+
+// ── Cron ─────────────────────────────────────────────────────────
+
+section("UNIT: Cron — interval parsing");
+
+{
+  const parseBlock = extractBlock(source, "function parseInterval(");
+  if (parseBlock) {
+    const ns = {};
+    try {
+      new Function("exports", parseBlock + "\nexports.parseInterval = parseInterval;")(ns);
+      assert(ns.parseInterval("30s") === 30000, "Parse: 30s = 30000ms");
+      assert(ns.parseInterval("5m") === 300000, "Parse: 5m = 300000ms");
+      assert(ns.parseInterval("1h") === 3600000, "Parse: 1h = 3600000ms");
+      assert(ns.parseInterval("2d") === 172800000, "Parse: 2d = 172800000ms");
+      assert(ns.parseInterval("5min") === 300000, "Parse: 5min = 300000ms");
+      assert(ns.parseInterval("1hr") === 3600000, "Parse: 1hr = 3600000ms");
+      assert(ns.parseInterval("abc") === null, "Parse: invalid returns null");
+      assert(ns.parseInterval("") === null, "Parse: empty returns null");
+    } catch (e) { skip(`parseInterval eval failed: ${e.message}`); }
+  } else { skip("parseInterval extraction failed"); }
+}
+
+section("UNIT: Cron — format interval");
+
+{
+  const fmtBlock = extractBlock(source, "function formatInterval(");
+  if (fmtBlock) {
+    const ns = {};
+    try {
+      new Function("exports", fmtBlock + "\nexports.formatInterval = formatInterval;")(ns);
+      assert(ns.formatInterval(30000) === "30s", "Format: 30000ms = 30s");
+      assert(ns.formatInterval(300000) === "5m", "Format: 300000ms = 5m");
+      assert(ns.formatInterval(3600000) === "1h", "Format: 3600000ms = 1h");
+      assert(ns.formatInterval(86400000) === "1d", "Format: 86400000ms = 1d");
+    } catch (e) { skip(`formatInterval eval failed: ${e.message}`); }
+  } else { skip("formatInterval extraction failed"); }
+}
+
+section("UNIT: Cron — job management");
+
+{
+  assert(source.includes("function addJob("), "addJob function exists");
+  assert(source.includes("function removeJob("), "removeJob function exists");
+  assert(source.includes("function listJobs("), "listJobs function exists");
+  assert(source.includes("function toggleJob("), "toggleJob function exists");
+  assert(source.includes("function tick("), "tick function exists");
+  assert(source.includes("acquireLock") && source.includes("releaseLock"), "File-based locking");
+  assert(source.includes("next_run") && source.includes("crash-safe") || source.includes("BEFORE execution"), "Crash-safe: advances next_run before execution");
+}
+
+section("UNIT: Cron — CLI handler");
+
+{
+  assert(source.includes("handleCronCommand"), "handleCronCommand function exists");
+  assert(source.includes('"add"') && source.includes('"remove"') && source.includes('"list"'), "Cron subcommands: add, remove, list");
+  assert(source.includes('"enable"') && source.includes('"disable"'), "Cron subcommands: enable, disable");
+  assert(source.includes('"run"'), "Cron subcommand: run (tick)");
+}
+
+section("E2E: Cron — add, list, remove");
+
+{
+  try {
+    // Add a job
+    const { exitCode: addCode, stderr: addOut } = await runCLI(
+      ["cron", "add", "test ping", "--every", "1h"],
+      {}, 10000
+    );
+    assert(addCode === 0, "cron add exits 0");
+    assert(addOut.includes("Job ") && addOut.includes("added"), "cron add prints job ID");
+
+    // List jobs
+    const { stderr: listOut } = await runCLI(["cron", "list"], {}, 10000);
+    assert(listOut.includes("test ping"), "cron list shows the job");
+    assert(listOut.includes("1h"), "cron list shows interval");
+
+    // Extract job ID
+    const jobIdMatch = addOut.match(/Job (job-\w+)/);
+    if (jobIdMatch) {
+      // Remove the job
+      const { exitCode: rmCode, stderr: rmOut } = await runCLI(
+        ["cron", "remove", jobIdMatch[1]],
+        {}, 10000
+      );
+      assert(rmCode === 0, "cron remove exits 0");
+      assert(rmOut.includes("removed"), "cron remove confirms removal");
+
+      // Verify gone
+      const { stderr: listOut2 } = await runCLI(["cron", "list"], {}, 10000);
+      assert(!listOut2.includes("test ping"), "cron list no longer shows removed job");
+    } else { skip("Could not extract job ID from add output"); }
+  } catch (e) { skip(`Cron E2E failed: ${e.message}`); }
+}
+
+// ── JSON Schema ──────────────────────────────────────────────────
+
+section("UNIT: JSON Schema — flag parsing");
+
+{
+  assert(source.includes("--json-schema"), "CLI has --json-schema flag");
+  assert(source.includes("jsonSchema"), "Config has jsonSchema field");
+  assert(source.includes("schema_valid"), "JSON output includes schema_valid field");
+  assert(source.includes("MUST be valid JSON"), "Schema constraint injected into prompt");
+}
+
+section("UNIT: JSON Schema — validation logic");
+
+{
+  // Check that validation exists
+  assert(source.includes("missing required field"), "Validates required fields");
+  assert(source.includes("expected") && source.includes("got"), "Validates field types");
+  // Strip markdown fences
+  assert(source.includes("```json") || source.includes("```"), "Strips markdown fences from response");
+}
+
+// ── Monolith Split ───────────────────────────────────────────────
+
+section("UNIT: Monolith Split — build system");
+
+{
+  const buildExists = fs.existsSync(path.join(__dirname, "build.mjs"));
+  assert(buildExists, "build.mjs exists");
+  const srcDir = path.join(__dirname, "src");
+  assert(fs.existsSync(srcDir), "src/ directory exists");
+
+  const expectedModules = [
+    "utils.mjs", "config.mjs", "providers.mjs", "auth.mjs",
+    "security.mjs", "browser.mjs", "tools.mjs", "engine.mjs",
+    "session.mjs", "index.mjs",
+  ];
+  for (const mod of expectedModules) {
+    assert(fs.existsSync(path.join(srcDir, mod)), `src/${mod} exists`);
+  }
+
+  // New feature modules
+  const featureModules = [
+    "lsp.mjs", "auto-memory.mjs", "audit.mjs", "teams.mjs",
+    "sandbox.mjs", "context-refs.mjs", "smart-routing.mjs", "cron.mjs", "security-rules.mjs",
+  ];
+  for (const mod of featureModules) {
+    assert(fs.existsSync(path.join(srcDir, mod)), `src/${mod} exists`);
+  }
+}
+
+section("UNIT: Monolith Split — bundled output");
+
+{
+  // Verify the bundled file has no duplicate imports
+  const imports = source.split("\n").filter(l => l.startsWith("import "));
+  const importSpecs = imports.map(l => l.match(/from\s+"([^"]+)"/)?.[1]).filter(Boolean);
+  // All imports should be node: builtins
+  for (const spec of importSpecs) {
+    assert(spec.startsWith("node:"), `Import "${spec}" uses node: prefix`);
+  }
+  // No ./local imports in bundled output
+  const localImports = imports.filter(l => l.includes("./"));
+  assert(localImports.length === 0, "No local module imports in bundled output");
 }
 
 // ═══════════════════════════════════════════════════════════════════

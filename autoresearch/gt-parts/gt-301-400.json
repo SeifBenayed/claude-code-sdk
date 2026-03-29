@@ -1,0 +1,704 @@
+{
+  "answers": {
+    "301": {
+      "id": 301,
+      "answer": "nproc",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Print the number of CPU cores available on the system."
+    },
+    "302": {
+      "id": 302,
+      "answer": "sudo lsof -iTCP -sTCP:LISTEN -n -P",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Show all listening TCP ports with the process names that own them."
+    },
+    "303": {
+      "id": 303,
+      "answer": "awk -F',' 'NR>1 && $2==\"<VALUE>\" {sum+=$5} END {print sum}' <file.csv>",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "In <file.csv>, sum the values in the fifth column for rows where the second column is <VALUE>, skipping the header."
+    },
+    "304": {
+      "id": 304,
+      "answer": "grep -E 'pattern1|pattern2' <file> | head -20",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Print the first 20 lines of <file> that match either <pattern1> or <pattern2>."
+    },
+    "305": {
+      "id": 305,
+      "answer": "find <dir> -name '* *' | while IFS= read -r f; do mv \"$f\" \"$(dirname \"$f\")/$(basename \"$f\" | tr ' ' '_')\"; done",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Find files under <dir> whose names contain spaces and rename them by replacing spaces with underscores."
+    },
+    "306": {
+      "id": 306,
+      "answer": "mkdir -p a/b/c",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Create the directory tree a/b/c if it does not already exist."
+    },
+    "307": {
+      "id": 307,
+      "answer": "cp -p <src>/*.log <dest>/",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Copy all .log files from <src> into <dest>, preserving timestamps."
+    },
+    "308": {
+      "id": 308,
+      "answer": "mv *.csv <dest>/",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Move all .csv files from the current directory into <dest>."
+    },
+    "309": {
+      "id": 309,
+      "answer": "find <dir> -name '*.txt' -exec sha256sum {} \\;",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Print the SHA-256 checksum of every .txt file in <dir>."
+    },
+    "310": {
+      "id": 310,
+      "answer": "sort <file> | uniq -d",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Find duplicate lines in <file> and print each duplicated value once."
+    },
+    "311": {
+      "id": 311,
+      "answer": "git log -1 --pretty=format:'%h %an %s'",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Show the most recent commit on the current Git branch as: abbreviated hash, author name, and subject."
+    },
+    "312": {
+      "id": 312,
+      "answer": "git diff --name-only <commit1> <commit2>",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Print the list of files changed between <commit1> and <commit2> in Git."
+    },
+    "313": {
+      "id": 313,
+      "answer": "git branch --merged | grep -v '\\*'",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Show all Git branches already merged into the current branch, excluding the current branch itself."
+    },
+    "314": {
+      "id": 314,
+      "answer": "git log --oneline --all | grep -ic '<keyword>'",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Count how many commits in the current Git repository have <keyword> in the commit message, case-insensitive."
+    },
+    "315": {
+      "id": 315,
+      "answer": "git checkout <branch> -- <file>",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Restore <file> from the version in <branch>, discarding local unstaged changes to that file only."
+    },
+    "316": {
+      "id": 316,
+      "answer": "git ls-files --deleted",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Print the names of files tracked by Git that are currently deleted from the working tree."
+    },
+    "317": {
+      "id": 317,
+      "answer": "grep -rn '<pattern>' <dir>/**/*.log",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "In all .log files under <dir>, print lines containing <pattern> with filenames and line numbers."
+    },
+    "318": {
+      "id": 318,
+      "answer": "head -1 <dir>/file1.csv > output.csv; for f in <dir>/*.csv; do tail -n +2 \"$f\"; done >> output.csv",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Concatenate all .csv files in <dir> into output.csv, keeping the header only from the first file."
+    },
+    "319": {
+      "id": 319,
+      "answer": "tail -50f <logfile>",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Print the last 50 lines of <logfile> and continue following new lines as they are appended."
+    },
+    "320": {
+      "id": 320,
+      "answer": "find . -type l -exec sh -c 'echo \"$1 -> $(readlink \"$1\")\"' _ {} \\;",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Find every symbolic link under the current directory and print the link path along with its target path."
+    },
+    "321": {
+      "id": 321,
+      "answer": "with open('notes.txt', 'w') as f:\n    f.write('line one\\nline two\\nline three\\nline four\\n')",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Create a file named notes.txt containing exactly these 4 lines."
+    },
+    "322": {
+      "id": 322,
+      "answer": "import json\ndata = {\"name\": \"Alice\", \"age\": 30, \"city\": \"New York\"}\nwith open('person.json', 'w') as f:\n    json.dump(data, f, indent=2)",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Create a file named person.json with the exact JSON content provided."
+    },
+    "323": {
+      "id": 323,
+      "answer": "with open('data.txt', 'w') as f:\n    f.write('the exact content as specified in the task\\n')",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Create a file named data.txt with the exact content provided."
+    },
+    "324": {
+      "id": 324,
+      "answer": "with open('input.txt') as f:\n    lines = f.readlines()\nwith open('output.txt', 'w') as f:\n    for line in lines:\n        f.write(line.upper())",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read input.txt and create output.txt where every line is converted to uppercase, preserving line order."
+    },
+    "325": {
+      "id": 325,
+      "answer": "with open('input.txt') as f:\n    lines = f.readlines()\nwith open('reversed.txt', 'w') as f:\n    f.writelines(reversed(lines))",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read input.txt and create reversed.txt where the lines appear in reverse order."
+    },
+    "326": {
+      "id": 326,
+      "answer": "with open('input.txt') as f:\n    lines = f.readlines()\nwith open('numbered.txt', 'w') as f:\n    for i, line in enumerate(lines, 1):\n        f.write(f'{i}. {line}')",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read input.txt and create numbered.txt where each line is prefixed with its 1-based line number and a period, for example '1. first line'."
+    },
+    "327": {
+      "id": 327,
+      "answer": "import csv\nwith open('employees.csv') as f:\n    reader = csv.DictReader(f)\n    names = [row['name'] for row in reader]\nwith open('names.txt', 'w') as f:\n    f.write('\\n'.join(names) + '\\n')",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read employees.csv and create names.txt containing only the name column values, one name per line, in the original order."
+    },
+    "328": {
+      "id": 328,
+      "answer": "import csv\nwith open('employees.csv') as f:\n    reader = csv.DictReader(f)\n    rows = [row for row in reader if int(row['age']) >= 28]\nwith open('filtered.csv', 'w', newline='') as f:\n    writer = csv.DictWriter(f, fieldnames=reader.fieldnames)\n    writer.writeheader()\n    writer.writerows(rows)",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read employees.csv and create filtered.csv containing only rows where age is greater than or equal to 28, including the header row."
+    },
+    "329": {
+      "id": 329,
+      "answer": "import csv\nwith open('employees.csv') as f:\n    reader = csv.DictReader(f)\n    rows = list(reader)\n    fieldnames = reader.fieldnames\nrows.sort(key=lambda r: int(r['age']))\nwith open('sorted.csv', 'w', newline='') as f:\n    writer = csv.DictWriter(f, fieldnames=fieldnames)\n    writer.writeheader()\n    writer.writerows(rows)",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read employees.csv and create sorted.csv with all rows sorted by age in ascending numeric order, keeping the header first."
+    },
+    "330": {
+      "id": 330,
+      "answer": "import json\nwith open('data.json') as f:\n    data = json.load(f)\nformatted = [{k: item[k] for k in ['name', 'age', 'city']} for item in data] if isinstance(data, list) else {k: data[k] for k in ['name', 'age', 'city']}\nwith open('formatted.json', 'w') as f:\n    json.dump(formatted, f, indent=2)",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read data.json and create formatted.json with the same data but formatted with 2-space indentation and keys in the order name, age, city."
+    },
+    "331": {
+      "id": 331,
+      "answer": "import json\nwith open('config.json') as f:\n    data = json.load(f)\ndata['status'] = 'active'\ndata['version'] = '2.0'\nwith open('updated.json', 'w') as f:\n    json.dump(data, f, indent=2)",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read config.json and create updated.json by changing status to 'active' and version to '2.0', leaving all other fields unchanged."
+    },
+    "332": {
+      "id": 332,
+      "answer": "with open('input.txt') as f:\n    for i, line in enumerate(f, 1):\n        if 'target_word' in line.split():\n            with open('line_number.txt', 'w') as out:\n                out.write(str(i) + '\\n')\n            break",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Search for the exact word in input.txt and write the 1-based line number where it appears into a file named line_number.txt."
+    },
+    "333": {
+      "id": 333,
+      "answer": "import csv\nwith open('data.csv') as f:\n    for line in f:\n        if 'search_value' in line:\n            with open('found_row.csv', 'w') as out:\n                out.write(line)\n            break",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Search for the row containing search_value in data.csv and write that entire row exactly as-is into found_row.csv."
+    },
+    "334": {
+      "id": 334,
+      "answer": "import json\ndata = [\n    {\"id\": 1, \"name\": \"Alice\", \"score\": 95},\n    {\"id\": 2, \"name\": \"Bob\", \"score\": 87},\n    {\"id\": 3, \"name\": \"Carol\", \"score\": 92}\n]\nwith open('records.json', 'w') as f:\n    json.dump(data, f, indent=2)",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Create a file named records.json with the exact JSON array provided."
+    },
+    "335": {
+      "id": 335,
+      "answer": "import json\nwith open('data.json') as f:\n    data = json.load(f)\ntotal = sum(item['value'] for item in data)\nwith open('sum.txt', 'w') as f:\n    f.write(str(total) + '\\n')",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read data.json and create sum.txt containing only the sum of all value fields as plain text."
+    },
+    "336": {
+      "id": 336,
+      "answer": "import json\nwith open('data.json') as f:\n    data = json.load(f)\nfiltered = [item for item in data if item['quantity'] < 10]\nwith open('filtered.json', 'w') as f:\n    json.dump(filtered, f, indent=2)",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read data.json and create filtered.json containing only objects where quantity is less than 10, preserving original order."
+    },
+    "337": {
+      "id": 337,
+      "answer": "import csv\nwith open('products.csv') as f:\n    reader = csv.DictReader(f)\n    rows = list(reader)\n    fieldnames = reader.fieldnames\nfor row in rows:\n    row['total'] = str(round(float(row['price']) * float(row['quantity']), 2))\nwith open('products_total.csv', 'w', newline='') as f:\n    writer = csv.DictWriter(f, fieldnames=fieldnames + ['total'])\n    writer.writeheader()\n    writer.writerows(rows)",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read products.csv and create products_total.csv by adding a new column total equal to price * quantity, rounded to 2 decimal places."
+    },
+    "338": {
+      "id": 338,
+      "answer": "import json\nwith open('items.json') as f:\n    data = json.load(f)\nresult = {item['id']: item['name'] for item in data}\nwith open('id_to_name.json', 'w') as f:\n    json.dump(result, f, indent=2)",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read items.json and create id_to_name.json as a JSON object where each key is the id and each value is the corresponding name."
+    },
+    "339": {
+      "id": 339,
+      "answer": "with open('config.txt', 'w') as f:\n    f.write('host=localhost\\nport=8080\\nmode=production\\ntimeout=30\\ndebug=false\\n')",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Create a file named config.txt containing exactly these 5 lines: host=localhost, port=8080, mode=production, timeout=30, debug=false."
+    },
+    "340": {
+      "id": 340,
+      "answer": "with open('input.txt') as f:\n    lines = [line for line in f if line.startswith('ERROR')]\nwith open('errors.txt', 'w') as f:\n    f.writelines(lines)",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read input.txt and create errors.txt containing only the lines that start with ERROR, in the same order."
+    },
+    "341": {
+      "id": 341,
+      "answer": "import json\ncounts = {'INFO': 0, 'WARN': 0, 'ERROR': 0}\nwith open('log.txt') as f:\n    for line in f:\n        for prefix in counts:\n            if line.startswith(prefix):\n                counts[prefix] += 1\nwith open('counts.json', 'w') as f:\n    json.dump(counts, f, indent=2)",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read log.txt and create counts.json with exact keys INFO, WARN, and ERROR, where each value is the count of lines with that prefix."
+    },
+    "342": {
+      "id": 342,
+      "answer": "import csv\nwith open('employees.csv') as f:\n    reader = csv.DictReader(f)\n    names = [row['name'] for row in reader if row['department'] == 'Engineering']\nwith open('engineering_names.txt', 'w') as f:\n    f.write('\\n'.join(names) + '\\n')",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read employees.csv and create engineering_names.txt containing the names of employees in the Engineering department, one per line, in original order."
+    },
+    "343": {
+      "id": 343,
+      "answer": "import csv, json\nfrom collections import defaultdict\ncounts = defaultdict(int)\nwith open('employees.csv') as f:\n    reader = csv.DictReader(f)\n    for row in reader:\n        counts[row['department']] += 1\nwith open('dept_counts.json', 'w') as f:\n    json.dump(dict(counts), f, indent=2)",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read employees.csv and create dept_counts.json as a JSON object mapping each department to its employee count."
+    },
+    "344": {
+      "id": 344,
+      "answer": "with open('output.txt', 'w') as f:\n    f.write('the exact content as specified in the task\\n')",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Create a file named output.txt containing exactly the content specified."
+    },
+    "345": {
+      "id": 345,
+      "answer": "import json\nfrom collections import Counter\nwith open('words.txt') as f:\n    words = f.read().split()\ncounts = dict(Counter(words))\nwith open('word_counts.json', 'w') as f:\n    json.dump(counts, f, indent=2)",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read words.txt and create word_counts.json containing the count of each distinct word as a JSON object."
+    },
+    "346": {
+      "id": 346,
+      "answer": "seen = set()\nresult = []\nwith open('words.txt') as f:\n    for word in f.read().split():\n        if word not in seen:\n            seen.add(word)\n            result.append(word)\nwith open('unique_words.txt', 'w') as f:\n    f.write('\\n'.join(result) + '\\n')",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read words.txt and create unique_words.txt containing the distinct words in first-appearance order, one per line."
+    },
+    "347": {
+      "id": 347,
+      "answer": "import json, csv\nwith open('items.json') as f:\n    data = json.load(f)\nrows = []\nfor item in data:\n    for tag in item.get('tags', []):\n        rows.append({'id': item['id'], 'tag': tag})\nwith open('tags.csv', 'w', newline='') as f:\n    writer = csv.DictWriter(f, fieldnames=['id', 'tag'])\n    writer.writeheader()\n    writer.writerows(rows)",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read items.json and create tags.csv with header id,tag and one row per tag from the tags array, in order."
+    },
+    "348": {
+      "id": 348,
+      "answer": "import json, csv\n# Create employees.json\nemployees = [{\"id\": 1, \"name\": \"Alice\", \"department\": \"Engineering\"}, {\"id\": 2, \"name\": \"Bob\", \"department\": \"Marketing\"}, {\"id\": 3, \"name\": \"Carol\", \"department\": \"Engineering\"}]\nwith open('employees.json', 'w') as f:\n    json.dump(employees, f, indent=2)\n# Create departments.csv\nwith open('departments.csv', 'w', newline='') as f:\n    writer = csv.writer(f)\n    writer.writerow(['department', 'location'])\n    writer.writerow(['Engineering', 'Building A'])\n    writer.writerow(['Marketing', 'Building B'])\n# Read and report\nwith open('employees.json') as f:\n    emp_data = json.load(f)\nprint(f'Total employees: {len(emp_data)}')\nwith open('departments.csv') as f:\n    reader = csv.DictReader(f)\n    for row in reader:\n        if row['department'] == 'Engineering':\n            print(f'Engineering location: {row[\"location\"]}')\neng_names = [e['name'] for e in emp_data if e['department'] == 'Engineering']\nprint(f'Engineering employees: {eng_names}')",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Create a JSON file and a CSV file with exact contents, then verify them."
+    },
+    "349": {
+      "id": 349,
+      "answer": "# Create source.txt with exact content\nlines = ['Hello World', 'hello world', 'Foo Bar', 'foo bar', 'Hello World', 'Baz']\nwith open('source.txt', 'w') as f:\n    f.write('\\n'.join(lines) + '\\n')\n# Read, transform, write result.txt\nwith open('source.txt') as f:\n    original_lines = f.read().splitlines()\nlowered = [l.lower() for l in original_lines]\nunique_sorted = sorted(set(lowered))\nwith open('result.txt', 'w') as f:\n    f.write('\\n'.join(unique_sorted) + '\\n')\nprint(f'Original line count: {len(original_lines)}')\nprint(f'Final line count: {len(unique_sorted)}')",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Read a text file, transform its contents, and write the result to a new file. All lines converted to lowercase, duplicates removed, sorted alphabetically."
+    },
+    "350": {
+      "id": 350,
+      "answer": "import csv, json\nfrom collections import defaultdict\n# Create orders.csv\nwith open('orders.csv', 'w', newline='') as f:\n    writer = csv.writer(f)\n    writer.writerow(['order_id', 'sku', 'quantity', 'status'])\n    writer.writerow(['1', 'A001', '5', 'shipped'])\n    writer.writerow(['2', 'B002', '3', 'pending'])\n    writer.writerow(['3', 'A001', '2', 'shipped'])\n# Create products.json\nproducts = [{'sku': 'A001', 'name': 'Widget'}, {'sku': 'B002', 'name': 'Gadget'}]\nwith open('products.json', 'w') as f:\n    json.dump(products, f)\n# Search and aggregate\nwith open('orders.csv') as f:\n    reader = csv.DictReader(f)\n    shipped = [r for r in reader if r['status'] == 'shipped']\ntotals = defaultdict(int)\nfor row in shipped:\n    totals[row['sku']] += int(row['quantity'])\nwith open('sku_totals.csv', 'w', newline='') as f:\n    writer = csv.DictWriter(f, fieldnames=['sku', 'total_quantity'])\n    writer.writeheader()\n    for sku in sorted(totals):\n        writer.writerow({'sku': sku, 'total_quantity': totals[sku]})",
+      "tier": "T2",
+      "category": "file_ops",
+      "task": "Search within files and manipulate structured data. Create orders.csv and products.json, then compute total ordered quantity per SKU and write sorted output."
+    },
+    "351": {
+      "id": 351,
+      "answer": "Pattern: ^[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9.\\-]+\\.[a-zA-Z]{2,}$\n\nExplanation: Matches a basic email address. The local part allows alphanumeric characters plus ._%+-, then @, then the domain with alphanumeric and hyphens, then a dot and TLD of 2+ letters.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match a basic email address"
+    },
+    "352": {
+      "id": 352,
+      "answer": "Pattern: ^[a-zA-Z0-9._%+\\-]+@[a-zA-Z0-9\\-]+\\.(?:com|org|net|io|co)$\n\nExplanation: Matches a corporate email. Local part allows standard characters, domain must be a single-part corporate domain (no subdomains), with a common corporate TLD. For a specific company (e.g., example.com): ^[a-zA-Z0-9._%+\\-]+@example\\.com$",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match a corporate email only"
+    },
+    "353": {
+      "id": 353,
+      "answer": "Pattern: https?://[^\\s/$.?#].[^\\s]*\n\nExplanation: Matches URLs starting with http:// or https://. https? makes the 's' optional. Then matches any non-whitespace sequence that forms a URL path. The [^\\s] anchors prevent matching whitespace.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Extract URLs starting with http or https"
+    },
+    "354": {
+      "id": 354,
+      "answer": "Pattern: https?://(?:[a-zA-Z0-9\\-]+\\.)*example\\.com(?:/[^\\s]*)?\n\nExplanation: Matches URLs from example.com (replace with actual domain). Allows http or https, optional subdomains, the specific domain, and an optional path. The (?:...)* handles nested subdomains.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match URLs from a specific domain"
+    },
+    "355": {
+      "id": 355,
+      "answer": "Pattern: \\b(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){3}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\b\n\nExplanation: Matches valid IPv4 addresses. Each octet matches 0-255: 25[0-5] for 250-255, 2[0-4]\\d for 200-249, [01]?\\d\\d? for 0-199. Four octets separated by dots, bounded by word boundaries.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match IPv4 addresses"
+    },
+    "356": {
+      "id": 356,
+      "answer": "Pattern: \\b(?:10\\.(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){2}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)|172\\.(?:1[6-9]|2\\d|3[01])\\.(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){1}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)|192\\.168\\.(?:(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?)\\.){1}(?:25[0-5]|2[0-4]\\d|[01]?\\d\\d?))\\b\n\nExplanation: Matches the three private IPv4 ranges: 10.0.0.0/8, 172.16.0.0/12 (172.16-31.x.x), and 192.168.0.0/16.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match private IPv4 addresses only"
+    },
+    "357": {
+      "id": 357,
+      "answer": "Pattern: \\(?\\d{3}\\)?[\\s.\\-]?\\d{3}[\\s.\\-]?\\d{4}\n\nExplanation: Matches North American phone numbers in formats like (555) 123-4567, 555-123-4567, 555.123.4567, or 5551234567. The area code may be parenthesized, separators are optional and can be space, dot, or hyphen.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match North American phone numbers"
+    },
+    "358": {
+      "id": 358,
+      "answer": "Pattern: \\+\\d{1,3}[\\s\\-]?(?:\\(\\d{1,4}\\)[\\s\\-]?)?\\d{1,4}[\\s\\-]?\\d{1,4}[\\s\\-]?\\d{1,9}\n\nExplanation: Matches international phone numbers with country code. Starts with + followed by 1-3 digit country code, optional area code in parens, and groups of digits. Separators can be space or hyphen.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match international phone numbers with country code"
+    },
+    "359": {
+      "id": 359,
+      "answer": "Pattern: \\d{4}-\\d{2}-\\d{2}\n\nExplanation: Matches dates in YYYY-MM-DD format. Four digits for year, two for month, two for day, separated by hyphens. This is a basic match without range validation.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match dates in YYYY-MM-DD format"
+    },
+    "360": {
+      "id": 360,
+      "answer": "Pattern: \\d{4}-(?:0[1-9]|1[0-2])-(?:0[1-9]|[12]\\d|3[01])\n\nExplanation: Matches YYYY-MM-DD dates with valid month (01-12) and day (01-31) ranges. Month: 0[1-9] for Jan-Sep, 1[0-2] for Oct-Dec. Day: 0[1-9], [12]\\d, or 3[01].",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match dates in YYYY-MM-DD with valid month/day ranges"
+    },
+    "361": {
+      "id": 361,
+      "answer": "Pattern: (?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d)?\n\nExplanation: Matches 24-hour times like HH:MM or HH:MM:SS. Hours: [01]\\d for 00-19, 2[0-3] for 20-23. Minutes and seconds: [0-5]\\d for 00-59. Seconds are optional.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match times in 24-hour format"
+    },
+    "362": {
+      "id": 362,
+      "answer": "Pattern: \\b\\d{5}(?:-\\d{4})?\\b\n\nExplanation: Matches US ZIP codes. The basic 5-digit format (\\d{5}) and the extended ZIP+4 format (\\d{5}-\\d{4}) are both matched. Word boundaries prevent partial matches within longer numbers.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match US ZIP codes"
+    },
+    "363": {
+      "id": 363,
+      "answer": "Pattern: #(?:[0-9A-Fa-f]{6}|[0-9A-Fa-f]{3})\\b\n\nExplanation: Matches CSS hexadecimal color codes. Starts with #, followed by either 6 hex digits (full form like #FF5733) or 3 hex digits (shorthand like #F53). Case-insensitive hex characters.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match hexadecimal color codes"
+    },
+    "364": {
+      "id": 364,
+      "answer": "Pattern: (?:[0-9A-Fa-f]{2}[:\\-]){5}[0-9A-Fa-f]{2}\n\nExplanation: Matches MAC addresses in formats like AA:BB:CC:DD:EE:FF or AA-BB-CC-DD-EE-FF. Six groups of exactly 2 hex characters, separated by either colons or hyphens.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match MAC addresses"
+    },
+    "365": {
+      "id": 365,
+      "answer": "Pattern: [0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\n\nExplanation: Matches UUIDs (RFC 4122) in the standard 8-4-4-4-12 hex format. Groups of 8, 4, 4, 4, and 12 hexadecimal characters separated by hyphens.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match UUIDs"
+    },
+    "366": {
+      "id": 366,
+      "answer": "Pattern: ^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>\\/?]).{8,}$\n\nExplanation: Matches strong passwords with at least 8 characters, containing at least one lowercase letter, one uppercase letter, one digit, and one special character. Uses lookaheads to enforce all requirements simultaneously.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match strong passwords"
+    },
+    "367": {
+      "id": 367,
+      "answer": "Pattern: ^[a-zA-Z][a-zA-Z0-9_]{2,19}$\n\nExplanation: Matches usernames of 3-20 characters that start with a letter, followed by letters, digits, or underscores. The total length is 3-20 chars (1 mandatory letter + 2-19 more chars).",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match usernames"
+    },
+    "368": {
+      "id": 368,
+      "answer": "Pattern: INV-\\d{4,6}\n\nExplanation: Matches invoice IDs in the format INV- followed by 4 to 6 digits, e.g., INV-0001, INV-12345, INV-999999. The prefix 'INV-' is literal; adjust prefix as needed for different invoice formats.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match invoice IDs"
+    },
+    "369": {
+      "id": 369,
+      "answer": "Pattern: [A-Z]{2,4}-\\d{3,6}\n\nExplanation: Matches product codes consisting of 2-4 uppercase letters, a hyphen, and 3-6 digits, e.g., AB-123, PROD-4567. Adjust the character class and quantifiers to match the specific product code format required.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match product codes"
+    },
+    "370": {
+      "id": 370,
+      "answer": "Pattern: &#x[0-9A-Fa-f]+;\n\nExplanation: Matches HTML hexadecimal character entities like &#x0041; (A) or &#x1F600; (emoji). Starts with &#x, followed by one or more hex digits, ends with semicolon.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match HTML hex entities"
+    },
+    "371": {
+      "id": 371,
+      "answer": "Pattern: ^[\\w,\\s\\-]+\\.(?:jpg|jpeg|png|gif|pdf|docx?|xlsx?|txt|csv)$\n\nExplanation: Matches file names with allowed extensions. The base name allows word characters, spaces, commas, and hyphens. Then a dot followed by one of the allowed extensions (case-sensitive as written; use /i flag for case-insensitive).",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match file names with allowed extensions"
+    },
+    "372": {
+      "id": 372,
+      "answer": "Pattern: \\bv?\\d+\\.\\d+(?:\\.\\d+)?(?:-[a-zA-Z0-9.]+)?\\b\n\nExplanation: Matches semantic version strings like 1.0, 2.3.1, v1.2.3, or 1.0.0-alpha.1. The optional 'v' prefix, major.minor required, optional patch, and optional pre-release label with alphanumeric characters.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match version strings"
+    },
+    "373": {
+      "id": 373,
+      "answer": "Pattern: \\b(\\w+)\\s+\\1\\b\n\nExplanation: Matches repeated consecutive words like 'the the' or 'hello hello'. Group 1 captures a word (\\w+), \\s+ matches whitespace, and \\1 backreferences group 1 to match the same word again. Word boundaries prevent partial matches.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match repeated words"
+    },
+    "374": {
+      "id": 374,
+      "answer": "Pattern: ^\\s*$\n\nExplanation: Matches lines that are blank or contain only whitespace. ^ anchors to start of line, \\s* matches zero or more whitespace characters (spaces, tabs), $ anchors to end. In multiline mode this matches each blank line.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match lines that are blank or whitespace only"
+    },
+    "375": {
+      "id": 375,
+      "answer": "Pattern: \"[^\"]*\"|'[^']*'\n\nExplanation: Matches quoted strings enclosed in double quotes (\"[^\"]*\") or single quotes ('[^']*'). The [^\"]* and [^']* match any characters except the closing quote. This handles simple quoted strings without escaped quotes.",
+      "tier": "T2",
+      "category": "regex",
+      "task": "Match quoted strings"
+    },
+    "376": {
+      "id": 376,
+      "answer": "SELECT name, salary FROM employees WHERE department = 'Engineering' AND salary > 80000;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Write a query to return name and salary for employees in the Engineering department with salary greater than 80000."
+    },
+    "377": {
+      "id": 377,
+      "answer": "SELECT product_name, price FROM products ORDER BY price DESC LIMIT 2;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Return the 2 most expensive products, showing product_name and price, ordered by price descending."
+    },
+    "378": {
+      "id": 378,
+      "answer": "SELECT o.order_id, c.customer_name, o.total_amount FROM orders o JOIN customers c ON o.customer_id = c.customer_id;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Return each order with order_id, customer_name, and total_amount."
+    },
+    "379": {
+      "id": 379,
+      "answer": "SELECT s.student_id, s.student_name FROM students s LEFT JOIN enrollments e ON s.student_id = e.student_id WHERE e.student_id IS NULL;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Return the students who are not enrolled in any course. Show student_id and student_name."
+    },
+    "380": {
+      "id": 380,
+      "answer": "SELECT priority, COUNT(*) AS ticket_count FROM tickets GROUP BY priority ORDER BY priority ASC;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Count how many tickets exist for each priority. Return priority and ticket_count, ordered by priority ascending."
+    },
+    "381": {
+      "id": 381,
+      "answer": "SELECT salesperson, SUM(amount) AS total_sales FROM sales GROUP BY salesperson HAVING SUM(amount) > 1000;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Return salespeople whose total sales amount is greater than 1000. Show salesperson and total_sales."
+    },
+    "382": {
+      "id": 382,
+      "answer": "SELECT a.author_name, b.title, b.copies_sold FROM books b JOIN authors a ON b.author_id = a.author_id;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Return author_name, title, and copies_sold for all books sold."
+    },
+    "383": {
+      "id": 383,
+      "answer": "SELECT name, salary FROM employees WHERE salary > (SELECT AVG(salary) FROM employees) ORDER BY salary ASC;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Return employees whose salary is greater than the average salary of all employees. Show name and salary, ordered by salary ascending."
+    },
+    "384": {
+      "id": 384,
+      "answer": "SELECT department, name, salary FROM employees WHERE (department, salary) IN (SELECT department, MAX(salary) FROM employees GROUP BY department);",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Return the highest-paid employee in each department. Show department, name, and salary."
+    },
+    "385": {
+      "id": 385,
+      "answer": "SELECT e.name FROM employees e JOIN departments d ON e.department_id = d.department_id WHERE d.department_name LIKE 'E%';",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Return employees who work in departments whose name starts with 'E'. Show name."
+    },
+    "386": {
+      "id": 386,
+      "answer": "SELECT DISTINCT c.customer_id, c.customer_name FROM customers c JOIN orders o ON c.customer_id = o.customer_id;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Return customers who have at least one order. Show customer_id and customer_name."
+    },
+    "387": {
+      "id": 387,
+      "answer": "SELECT order_id, total_amount, CASE WHEN total_amount < 100 THEN 'Small' WHEN total_amount <= 500 THEN 'Medium' ELSE 'Large' END AS size_category FROM orders;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Return order_id, total_amount, and a derived column size_category using these rules: total_amount < 100 => Small, 100 to 500 => Medium, total_amount > 500 => Large."
+    },
+    "388": {
+      "id": 388,
+      "answer": "SELECT DATE(view_date) AS view_date, COUNT(*) AS view_count FROM page_views GROUP BY DATE(view_date) ORDER BY view_date;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Count page views per day. Return view_date and view_count, ordered by view_date."
+    },
+    "389": {
+      "id": 389,
+      "answer": "SELECT DATE(login_date) AS login_date, COUNT(DISTINCT user_id) AS distinct_user_count FROM logins GROUP BY DATE(login_date) ORDER BY login_date;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "For each login_date, return the number of distinct users who logged in. Show login_date and distinct_user_count."
+    },
+    "390": {
+      "id": 390,
+      "answer": "SELECT e.name AS employee_name, m.name AS manager_name FROM employees e JOIN employees m ON e.manager_id = m.employee_id;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Return each employee who has a manager, showing employee_name and manager_name."
+    },
+    "391": {
+      "id": 391,
+      "answer": "SELECT region, salesperson, amount, RANK() OVER (PARTITION BY region ORDER BY amount DESC) AS rank_in_region FROM sales;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Rank salespeople within each region by amount descending using RANK(). Return region, salesperson, amount, and rank_in_region."
+    },
+    "392": {
+      "id": 392,
+      "answer": "SELECT account_id, txn_date, amount, SUM(amount) OVER (PARTITION BY account_id ORDER BY txn_date ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running_total FROM transactions;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "For each account, compute a running total of amount ordered by txn_date. Return account_id, txn_date, amount, and running_total."
+    },
+    "393": {
+      "id": 393,
+      "answer": "SELECT price_date, close_price, LAG(close_price) OVER (ORDER BY price_date) AS prev_close_price FROM stock_prices WHERE symbol = 'XYZ';",
+      "tier": "T2",
+      "category": "sql",
+      "task": "For symbol 'XYZ', return price_date, close_price, and the previous day's closing price as prev_close_price using LAG()."
+    },
+    "394": {
+      "id": 394,
+      "answer": "SELECT student_name, score, DENSE_RANK() OVER (ORDER BY score DESC) AS score_rank FROM students;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Rank students by score descending using DENSE_RANK(). Return student_name, score, and score_rank."
+    },
+    "395": {
+      "id": 395,
+      "answer": "WITH order_totals AS (SELECT order_id, SUM(quantity * unit_price) AS order_total FROM order_items GROUP BY order_id) SELECT order_id, order_total FROM order_totals;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Using a CTE, compute the total value of each order as quantity * unit_price summed per order_id. Return order_id and order_total."
+    },
+    "396": {
+      "id": 396,
+      "answer": "SELECT customer_id, SUM(amount) AS total_paid FROM payments GROUP BY customer_id HAVING SUM(amount) = (SELECT MAX(total) FROM (SELECT SUM(amount) AS total FROM payments GROUP BY customer_id) AS sub);",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Using a subquery in the HAVING clause, return the customer with the highest total payment amount. Show customer_id and total_paid."
+    },
+    "397": {
+      "id": 397,
+      "answer": "SELECT p.product_id, p.product_name FROM products p LEFT JOIN order_items oi ON p.product_id = oi.product_id WHERE oi.product_id IS NULL;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Return products that have never appeared in any order. Show product_id and product_name."
+    },
+    "398": {
+      "id": 398,
+      "answer": "SELECT SUM(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) AS completed_count, SUM(CASE WHEN status = 'pending' THEN 1 ELSE 0 END) AS pending_count, SUM(CASE WHEN status = 'cancelled' THEN 1 ELSE 0 END) AS cancelled_count FROM orders;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Return a single row with three columns: completed_count, pending_count, and cancelled_count."
+    },
+    "399": {
+      "id": 399,
+      "answer": "SELECT d.department_name, AVG(e.salary) AS avg_salary FROM employees e JOIN departments d ON e.department_id = d.department_id GROUP BY d.department_name;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Return each department's average salary. Show department_name and avg_salary."
+    },
+    "400": {
+      "id": 400,
+      "answer": "SELECT name, department, salary, AVG(salary) OVER (PARTITION BY department) AS dept_avg_salary FROM employees;",
+      "tier": "T2",
+      "category": "sql",
+      "task": "Return each employee with their department average salary using a window function. Show name, department, salary, and dept_avg_salary."
+    }
+  }
+}

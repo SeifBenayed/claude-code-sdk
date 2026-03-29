@@ -1,0 +1,32 @@
+{
+  "version": "1.0",
+  "total_tasks": 1000,
+  "tiers": {
+    "T1_knowledge": { "range": [1, 200], "weight": 1, "timeout": 15 },
+    "T2_single_tool": { "range": [201, 500], "weight": 2, "timeout": 30 },
+    "T3_multi_step": { "range": [501, 800], "weight": 3, "timeout": 60 },
+    "T4_adversarial": { "range": [801, 1000], "weight": 4, "timeout": 90 }
+  },
+  "scoring": {
+    "correctness": 0.35,
+    "tool_usage": 0.25,
+    "speed": 0.15,
+    "token_efficiency": 0.15,
+    "error_recovery": 0.10
+  },
+  "task_schema": {
+    "id": "number",
+    "tier": "T1|T2|T3|T4",
+    "category": "string",
+    "task": "string",
+    "tools_required": ["string"],
+    "skills_required": ["string"],
+    "setup": "string|null (bash command to prepare environment)",
+    "verify": "string (bash command that exits 0 on success)",
+    "expected_keywords": ["string (for Q&A grading)"],
+    "expected_file": "string|null (path to check)",
+    "expected_output": "string|null (regex to match)",
+    "difficulty": "1-5",
+    "tags": ["string"]
+  }
+}

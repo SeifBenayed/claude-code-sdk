@@ -1,0 +1,2085 @@
+[
+  {
+    "id": 401,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Convert the JSON array below to CSV with columns in this exact order: . Use an empty field for missing .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "csv",
+      "conversion"
+    ]
+  },
+  {
+    "id": 402,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Convert the nested JSON below to CSV with columns: . Output one row per item.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "csv",
+      "flattening"
+    ]
+  },
+  {
+    "id": 403,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Convert this JSON object of metrics into a two-column CSV with header . Preserve the key order shown.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "csv",
+      "metrics"
+    ]
+  },
+  {
+    "id": 404,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Parse the log lines below and extract , , and  into CSV with header .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "logs",
+      "csv",
+      "parsing"
+    ]
+  },
+  {
+    "id": 405,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Parse the Apache-style access logs below and output CSV with header .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "apache",
+      "logs",
+      "csv",
+      "parsing"
+    ]
+  },
+  {
+    "id": 406,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "From the JSON array below, extract only records where  is  and output CSV with columns .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "filtering",
+      "csv"
+    ]
+  },
+  {
+    "id": 407,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Reformat the dates in the CSV below from  to . Keep all other fields unchanged.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "csv",
+      "dates",
+      "reformatting"
+    ]
+  },
+  {
+    "id": 408,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Reformat the timestamps in the JSON array below from ISO 8601 UTC to  without the trailing .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "timestamps",
+      "date-formatting"
+    ]
+  },
+  {
+    "id": 409,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Sort the JSON array below by  in descending order. If two prices are equal, sort by  ascending.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "sorting"
+    ]
+  },
+  {
+    "id": 410,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Filter the CSV below to include only rows where  and . Preserve the original column order.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "csv",
+      "filtering"
+    ]
+  },
+  {
+    "id": 411,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "From the JSON below, extract the fields uid=501(seifbenayed) gid=20(staff) groups=20(staff),12(everyone),61(localaccounts),79(_appserverusr),80(admin),81(_appserveradm),98(_lpadmin),33(_appstore),100(_lpoperator),204(_developer),250(_analyticsusers),395(com.apple.access_ftp),398(com.apple.access_screensharing),399(com.apple.access_ssh),400(com.apple.access_remote_ae), , , and  into CSV with header .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "csv",
+      "field-extraction"
+    ]
+  },
+  {
+    "id": 412,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Parse the pipe-delimited records below and convert them to CSV with header .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "delimited-data",
+      "csv",
+      "parsing"
+    ]
+  },
+  {
+    "id": 413,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Given the JSON array below, compute a new field  for each record and output CSV with columns .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "csv",
+      "computed-fields"
+    ]
+  },
+  {
+    "id": 414,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Parse the log lines below, keep only  entries, and output JSON array objects with fields , , and .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "logs",
+      "json",
+      "filtering",
+      "parsing"
+    ]
+  },
+  {
+    "id": 415,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Convert the CSV below to JSON array objects. Interpret  as a boolean and  as a number.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "csv",
+      "json",
+      "type-conversion"
+    ]
+  },
+  {
+    "id": 416,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "From the JSON array below, keep only the latest record for each  based on the  field. Output the result as JSON sorted by  ascending.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "deduplication",
+      "sorting"
+    ]
+  },
+  {
+    "id": 417,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Transform the JSON array below into CSV, but flatten the  array into a semicolon-separated string in a  column.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "csv",
+      "flattening",
+      "arrays"
+    ]
+  },
+  {
+    "id": 418,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Parse the event logs below and count how many times each  appears. Output CSV with header , sorted by  descending, then  ascending.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "logs",
+      "aggregation",
+      "csv",
+      "counting",
+      "sorting"
+    ]
+  },
+  {
+    "id": 419,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Filter the JSON array below to records where , then sort by  descending, and output only the fields  and  as CSV.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "filtering",
+      "sorting",
+      "csv"
+    ]
+  },
+  {
+    "id": 420,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Convert the JSON below into a normalized CSV with columns . Output one row per team member.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "csv",
+      "normalization"
+    ]
+  },
+  {
+    "id": 421,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Parse the mixed-format dates below and standardize them to . Output JSON array objects with fields uid=501(seifbenayed) gid=20(staff) groups=20(staff),12(everyone),61(localaccounts),79(_appserverusr),80(admin),81(_appserveradm),98(_lpadmin),33(_appstore),100(_lpoperator),204(_developer),250(_analyticsusers),395(com.apple.access_ftp),398(com.apple.access_screensharing),399(com.apple.access_ssh),400(com.apple.access_remote_ae) and Sun Mar 29 00:16:32 CET 2026.\n\nAssume  is in  format.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "dates",
+      "json",
+      "standardization",
+      "parsing"
+    ]
+  },
+  {
+    "id": 422,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "From the CSV below, remove duplicate rows based on , keeping only the first occurrence. Output the deduplicated CSV unchanged otherwise.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "csv",
+      "deduplication"
+    ]
+  },
+  {
+    "id": 423,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Parse the JSON Lines input below and convert it to a CSV with header .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "jsonl",
+      "csv",
+      "conversion"
+    ]
+  },
+  {
+    "id": 424,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "From the transaction CSV below, compute the sum of  by . Output CSV with header , sorted by  ascending.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "csv",
+      "aggregation",
+      "group-by",
+      "sorting"
+    ]
+  },
+  {
+    "id": 425,
+    "tier": "T2",
+    "category": "data_transform",
+    "task": "Parse the records below, trim surrounding whitespace from all fields, convert  to lowercase, and output CSV with header .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "data-cleaning",
+      "csv",
+      "normalization",
+      "parsing"
+    ]
+  },
+  {
+    "id": 426,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Create and switch to a new branch named from the current branch.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "branch"
+    ]
+  },
+  {
+    "id": 427,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "List all local branches and show which branch is currently checked out.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "branch"
+    ]
+  },
+  {
+    "id": 428,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Create a new branch named from without first switching to .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "branch"
+    ]
+  },
+  {
+    "id": 429,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Rename the current branch to .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "branch"
+    ]
+  },
+  {
+    "id": 430,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Delete the local branch , assuming it has already been fully merged.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "branch"
+    ]
+  },
+  {
+    "id": 431,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Force-delete the local branch even if it has unmerged commits.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "branch"
+    ]
+  },
+  {
+    "id": 432,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Show all local and remote-tracking branches.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "branch",
+      "remote"
+    ]
+  },
+  {
+    "id": 433,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Merge branch into the currently checked out branch using a non-fast-forward merge commit.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "merge"
+    ]
+  },
+  {
+    "id": 434,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Abort an in-progress merge that has conflicts.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "merge",
+      "conflict-resolution"
+    ]
+  },
+  {
+    "id": 435,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Rebase the current branch onto .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "rebase"
+    ]
+  },
+  {
+    "id": 436,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Interactively rebase the last 4 commits on the current branch.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "rebase",
+      "interactive-rebase"
+    ]
+  },
+  {
+    "id": 437,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Continue a rebase after resolving conflicts.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "rebase",
+      "conflict-resolution"
+    ]
+  },
+  {
+    "id": 438,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Abort an in-progress rebase and return to the pre-rebase state.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "rebase"
+    ]
+  },
+  {
+    "id": 439,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Cherry-pick commit onto the current branch.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "cherry-pick"
+    ]
+  },
+  {
+    "id": 440,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Cherry-pick a range of commits from through onto the current branch.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "cherry-pick"
+    ]
+  },
+  {
+    "id": 441,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Show the commit history for the current branch as a one-line graph including branch decorations.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "log",
+      "history"
+    ]
+  },
+  {
+    "id": 442,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Show the commits that are on but not on .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "log",
+      "history",
+      "comparison"
+    ]
+  },
+  {
+    "id": 443,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Find which commit last modified the file .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "history",
+      "file"
+    ]
+  },
+  {
+    "id": 444,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Show the changes introduced by commit .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "commit",
+      "diff"
+    ]
+  },
+  {
+    "id": 445,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Compare the file-level differences between branches and .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "diff",
+      "comparison",
+      "branch"
+    ]
+  },
+  {
+    "id": 446,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Start resolving a conflict by checking out the version of .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "conflict-resolution",
+      "checkout"
+    ]
+  },
+  {
+    "id": 447,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Instead resolve a conflict by checking out the version of .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "conflict-resolution",
+      "checkout"
+    ]
+  },
+  {
+    "id": 448,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "After manually resolving all merge conflicts, mark and as resolved.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "conflict-resolution"
+    ]
+  },
+  {
+    "id": 449,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Show a list of files that are currently in a conflicted state during a merge or rebase.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "conflict-resolution",
+      "status"
+    ]
+  },
+  {
+    "id": 450,
+    "tier": "T2",
+    "category": "git_ops",
+    "task": "Continue a cherry-pick after resolving conflicts.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "cherry-pick",
+      "conflict-resolution"
+    ]
+  },
+  {
+    "id": 451,
+    "tier": "T2",
+    "category": "debug",
+    "task": "JavaScript — off-by-one loop bound: Identify why this returns for normal numeric arrays and fix the loop so it only sums valid elements.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "loops",
+      "off-by-one",
+      "arrays",
+      "debugging"
+    ]
+  },
+  {
+    "id": 452,
+    "tier": "T2",
+    "category": "debug",
+    "task": "Python — mutable default argument: Identify why repeated calls keep accumulating old values and fix the function so each call gets a fresh list unless one is explicitly provided.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "python",
+      "functions",
+      "mutable-default-argument",
+      "debugging"
+    ]
+  },
+  {
+    "id": 453,
+    "tier": "T2",
+    "category": "debug",
+    "task": "JavaScript — assignment instead of comparison: Identify why this always returns and fix the conditional.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "conditionals",
+      "comparison",
+      "assignment",
+      "debugging"
+    ]
+  },
+  {
+    "id": 454,
+    "tier": "T2",
+    "category": "debug",
+    "task": "Python — wrong dictionary key access: Identify why this raises an error and fix it so missing keys are handled by printing.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "python",
+      "dictionary",
+      "key-access",
+      "exceptions",
+      "debugging"
+    ]
+  },
+  {
+    "id": 455,
+    "tier": "T2",
+    "category": "debug",
+    "task": "JavaScript — callback missing return: Identify why becomes and fix the callback.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "callbacks",
+      "array-methods",
+      "return-values",
+      "debugging"
+    ]
+  },
+  {
+    "id": 456,
+    "tier": "T2",
+    "category": "debug",
+    "task": "Python — string/int concatenation: Identify why this raises a and fix the string construction.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "python",
+      "strings",
+      "typeerror",
+      "concatenation",
+      "debugging"
+    ]
+  },
+  {
+    "id": 457,
+    "tier": "T2",
+    "category": "debug",
+    "task": "JavaScript — wrong property name: Identify why this prints and fix the property access.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "objects",
+      "property-access",
+      "debugging"
+    ]
+  },
+  {
+    "id": 458,
+    "tier": "T2",
+    "category": "debug",
+    "task": "Python — using instead of for value comparison: Identify why this comparison is unreliable and fix it to compare values correctly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "python",
+      "comparison",
+      "identity-vs-equality",
+      "debugging"
+    ]
+  },
+  {
+    "id": 459,
+    "tier": "T2",
+    "category": "debug",
+    "task": "JavaScript — forgetting to a promise: Identify why this throws at runtime and fix so it logs.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "async-await",
+      "promises",
+      "runtime-errors",
+      "debugging"
+    ]
+  },
+  {
+    "id": 460,
+    "tier": "T2",
+    "category": "debug",
+    "task": "Python — file opened in wrong mode: Identify why this fails and fix the file mode so the string can be written.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "python",
+      "file-io",
+      "file-modes",
+      "debugging"
+    ]
+  },
+  {
+    "id": 461,
+    "tier": "T2",
+    "category": "debug",
+    "task": "JavaScript — accidental global due to misspelled variable: Identify why this throws a and fix the returned variable name.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "variables",
+      "typos",
+      "referenceerror",
+      "debugging"
+    ]
+  },
+  {
+    "id": 462,
+    "tier": "T2",
+    "category": "debug",
+    "task": "Python — incorrect list index: Identify why this raises an and fix it to print the last element.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "python",
+      "lists",
+      "indexing",
+      "indexerror",
+      "debugging"
+    ]
+  },
+  {
+    "id": 463,
+    "tier": "T2",
+    "category": "debug",
+    "task": "JavaScript — with bug: Identify why the output is not and fix the mapping logic.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "arrays",
+      "map",
+      "logic-errors",
+      "debugging"
+    ]
+  },
+  {
+    "id": 464,
+    "tier": "T2",
+    "category": "debug",
+    "task": "Python — indentation causes early return: Identify why this returns too early for many inputs and fix the indentation so it checks the full list.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "python",
+      "indentation",
+      "control-flow",
+      "loops",
+      "debugging"
+    ]
+  },
+  {
+    "id": 465,
+    "tier": "T2",
+    "category": "debug",
+    "task": "JavaScript — using on an array: Identify why this produces the wrong result and fix the loop to sum array values.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "arrays",
+      "loops",
+      "for-in",
+      "debugging"
+    ]
+  },
+  {
+    "id": 466,
+    "tier": "T2",
+    "category": "debug",
+    "task": "Python — shadowing built-in: Identify why this crashes and fix the variable naming so converting the string to a list works.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "python",
+      "builtins",
+      "variable-shadowing",
+      "debugging"
+    ]
+  },
+  {
+    "id": 467,
+    "tier": "T2",
+    "category": "debug",
+    "task": "JavaScript — wrong logical operator: Identify why this always returns and fix the logic.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "logical-operators",
+      "conditionals",
+      "debugging"
+    ]
+  },
+  {
+    "id": 468,
+    "tier": "T2",
+    "category": "debug",
+    "task": "Python — modifying a string by index: Identify why this raises an error and fix it so the output is.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "python",
+      "strings",
+      "immutability",
+      "debugging"
+    ]
+  },
+  {
+    "id": 469,
+    "tier": "T2",
+    "category": "debug",
+    "task": "JavaScript — missing in: Identify why returns and fix the branch.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "functions",
+      "return-values",
+      "conditionals",
+      "debugging"
+    ]
+  },
+  {
+    "id": 470,
+    "tier": "T2",
+    "category": "debug",
+    "task": "Python — wrong exception type caught: Identify why the exception is not handled and fix the clause.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "python",
+      "exceptions",
+      "error-handling",
+      "debugging"
+    ]
+  },
+  {
+    "id": 471,
+    "tier": "T2",
+    "category": "debug",
+    "task": "JavaScript — array mutation with instead of misunderstanding: Identify why the array is unchanged and fix the code to remove from.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "arrays",
+      "mutation",
+      "slice-vs-splice",
+      "debugging"
+    ]
+  },
+  {
+    "id": 472,
+    "tier": "T2",
+    "category": "debug",
+    "task": "Python — using instead of for integer indexing: Identify why this raises an error and fix the index calculation.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "python",
+      "indexing",
+      "division",
+      "typeerror",
+      "debugging"
+    ]
+  },
+  {
+    "id": 473,
+    "tier": "T2",
+    "category": "debug",
+    "task": "JavaScript — comparing floating point values directly: Identify why this condition fails and fix it using a tolerance-based comparison.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "floating-point",
+      "comparison",
+      "numeric-precision",
+      "debugging"
+    ]
+  },
+  {
+    "id": 474,
+    "tier": "T2",
+    "category": "debug",
+    "task": "Python — forgetting parentheses when calling method: Identify why this prints the method object instead of and fix the call.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "python",
+      "methods",
+      "function-calls",
+      "debugging"
+    ]
+  },
+  {
+    "id": 475,
+    "tier": "T2",
+    "category": "debug",
+    "task": "JavaScript — wrong array method for existence check: Identify why this condition is buggy for some positions and fix the existence check so it works reliably.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "arrays",
+      "existence-check",
+      "array-methods",
+      "debugging"
+    ]
+  },
+  {
+    "id": 476,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "A client sends with header to an API. The resource exists. What is the most appropriate success status code, and which header should the server return?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "status-codes",
+      "headers"
+    ]
+  },
+  {
+    "id": 477,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "An API endpoint creates a new order with ID. What status code should the server return, and what should the header be set to?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "status-codes",
+      "headers",
+      "rest"
+    ]
+  },
+  {
+    "id": 478,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "A client sends with a complete replacement document. The resource already exists and is updated successfully. Should the API return or ? State one valid choice and the condition for using it.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "put",
+      "status-codes",
+      "rest"
+    ]
+  },
+  {
+    "id": 479,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "A client sends to remove a session that exists. What is the most appropriate status code if the server returns no response body?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "delete",
+      "status-codes"
+    ]
+  },
+  {
+    "id": 480,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "An unauthenticated client calls . The API requires a bearer token. Should the server return or ? Also name the response header commonly included to describe the auth scheme.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "authentication",
+      "authorization",
+      "status-codes",
+      "headers"
+    ]
+  },
+  {
+    "id": 481,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "An authenticated user with a valid token calls , but their role lacks permission. Should the API return or ?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "authorization",
+      "status-codes",
+      "security"
+    ]
+  },
+  {
+    "id": 482,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "A client sends with body and . The JSON is syntactically valid, but the email fails validation. What status code is most appropriate?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "validation",
+      "status-codes",
+      "json"
+    ]
+  },
+  {
+    "id": 483,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "A client sends malformed JSON in a request body with header . The server cannot parse it. Should the API return or ?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "json",
+      "status-codes",
+      "parsing"
+    ]
+  },
+  {
+    "id": 484,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "An API supports only and on , but a client sends . What status code should be returned, and which response header should list the permitted methods?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "methods",
+      "status-codes",
+      "headers"
+    ]
+  },
+  {
+    "id": 485,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "A client requests with header , but the API can only produce JSON. What status code is most appropriate?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "content-negotiation",
+      "status-codes",
+      "headers"
+    ]
+  },
+  {
+    "id": 486,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "A client sends with , but the endpoint only accepts . What status code should the server return?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "content-type",
+      "status-codes",
+      "headers"
+    ]
+  },
+  {
+    "id": 487,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "A rate-limited API receives too many requests from one API key in a short time. What status code should it return, and which response header can indicate when the client may retry?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "rate-limiting",
+      "status-codes",
+      "headers"
+    ]
+  },
+  {
+    "id": 488,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "An API is temporarily offline for maintenance and wants clients to retry after 10 minutes. What status code and header should it return?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "maintenance",
+      "status-codes",
+      "headers"
+    ]
+  },
+  {
+    "id": 489,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "A client sends with header . The current ETag of the file is also . What status code should the server return?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "etag",
+      "conditional-requests",
+      "status-codes",
+      "headers"
+    ]
+  },
+  {
+    "id": 490,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "A client downloads a large file and sends . The server supports byte ranges and can fulfill the request. What status code should be returned, and which header describes the returned byte segment?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "range-requests",
+      "status-codes",
+      "headers"
+    ]
+  },
+  {
+    "id": 491,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "A browser sends a CORS preflight request: with and . Name two response headers the server should include to allow the actual cross-origin request.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "cors",
+      "headers",
+      "browser"
+    ]
+  },
+  {
+    "id": 492,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "Write a command to send a JSON request to with body and header .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "curl",
+      "http",
+      "api",
+      "json",
+      "request"
+    ]
+  },
+  {
+    "id": 493,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "Write a command to call using bearer token .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "curl",
+      "http",
+      "api",
+      "authentication",
+      "bearer-token"
+    ]
+  },
+  {
+    "id": 494,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "Write a command to send header in a request to .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "curl",
+      "http",
+      "api",
+      "headers",
+      "request"
+    ]
+  },
+  {
+    "id": 495,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "A request must follow HTTP redirects when requesting . Which flag should be added?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "curl",
+      "http",
+      "redirects",
+      "cli"
+    ]
+  },
+  {
+    "id": 496,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "A REST API endpoint is named . Rewrite it into a more conventional resource-oriented path and method.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "rest",
+      "api-design",
+      "http",
+      "resources"
+    ]
+  },
+  {
+    "id": 497,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "An API response includes pagination metadata in headers. Name one commonly used header for the total number of items and one common way to expose navigation links for next/prev pages.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "api",
+      "pagination",
+      "headers",
+      "rest"
+    ]
+  },
+  {
+    "id": 498,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "A client submits and, due to a network timeout, retries the same request. What header is commonly used to make the operation safely retryable without creating duplicates?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "idempotency",
+      "headers",
+      "retries"
+    ]
+  },
+  {
+    "id": 499,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "An endpoint returns different representations based on and . Which response header should be included so caches know which request headers affect the representation?",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "caching",
+      "content-negotiation",
+      "headers"
+    ]
+  },
+  {
+    "id": 500,
+    "tier": "T2",
+    "category": "web_fetch",
+    "task": "A server returns . Briefly state what , , and each mean.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "http",
+      "api",
+      "status-codes",
+      "semantics"
+    ]
+  }
+]

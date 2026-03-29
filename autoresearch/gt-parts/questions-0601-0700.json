@@ -1,0 +1,2052 @@
+[
+  {
+    "id": 601,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — duplicate conditional logic. Refactor to remove duplicated discount logic for user types and book discounts. Keep behavior identical.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "duplicate-code",
+      "conditionals"
+    ]
+  },
+  {
+    "id": 602,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — deeply nested conditionals. Refactor to reduce nesting and make control flow clearer without changing outputs.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "conditionals",
+      "readability"
+    ]
+  },
+  {
+    "id": 603,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — repeated object property access. Refactor to reduce repeated property access and improve readability. Do not change console output.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "readability",
+      "objects"
+    ]
+  },
+  {
+    "id": 604,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — long function doing multiple things. Refactor into smaller functions with single responsibilities: normalization, validation, persistence, and reporting. Preserve behavior.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "single-responsibility",
+      "functions"
+    ]
+  },
+  {
+    "id": 605,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — magic strings. Refactor to replace magic strings with clearly named constants while keeping logic unchanged.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "constants",
+      "readability"
+    ]
+  },
+  {
+    "id": 606,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — repeated list filtering. Refactor to avoid unnecessary intermediate collections while keeping the same result.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "lists",
+      "performance"
+    ]
+  },
+  {
+    "id": 607,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — callback hell. Refactor to improve readability and structure. You may use named helper functions, but do not change the callback-based API.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "callbacks",
+      "readability"
+    ]
+  },
+  {
+    "id": 608,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — duplicated formatting logic. Refactor to reuse shared invoice formatting logic without changing printed or returned text.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "duplicate-code",
+      "formatting"
+    ]
+  },
+  {
+    "id": 609,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — redundant boolean comparisons. Refactor to remove redundant boolean comparisons and simplify the function.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "booleans",
+      "simplification"
+    ]
+  },
+  {
+    "id": 610,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — poor variable names. Refactor to use descriptive names and make intent obvious. Do not change behavior.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "naming",
+      "readability"
+    ]
+  },
+  {
+    "id": 611,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — repeated loop logic. Refactor to eliminate duplicated looping logic while keeping both public functions.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "loops",
+      "duplicate-code"
+    ]
+  },
+  {
+    "id": 612,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — manual index-based iteration. Refactor to use a clearer iteration style without changing behavior.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "iteration",
+      "readability"
+    ]
+  },
+  {
+    "id": 613,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — large switch with repeated structure. Refactor to a data-driven structure instead of a switch. Preserve all outputs.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "switch",
+      "data-driven"
+    ]
+  },
+  {
+    "id": 614,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — inconsistent return style. Refactor for consistency and readability. Do not alter grading logic.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "returns",
+      "readability"
+    ]
+  },
+  {
+    "id": 615,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — mutating parameter unnecessarily. Refactor to avoid mutating the input array. Return a new normalized array with identical values.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "immutability",
+      "arrays"
+    ]
+  },
+  {
+    "id": 616,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — repeated dictionary construction. Refactor to remove duplication while keeping both functions available.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "dictionaries",
+      "duplicate-code"
+    ]
+  },
+  {
+    "id": 617,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — nested ternaries hurting readability. Refactor to improve readability without changing behavior.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "ternary",
+      "readability"
+    ]
+  },
+  {
+    "id": 618,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — duplicated validation branches. Refactor to make the validation more concise and maintainable while preserving logic.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "validation",
+      "duplicate-code"
+    ]
+  },
+  {
+    "id": 619,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — repeated sorting comparator. Refactor the comparator to a more concise form. Keep the same ascending order behavior.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "sorting",
+      "comparator"
+    ]
+  },
+  {
+    "id": 620,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — building string with repeated concatenation. Refactor to a clearer and more efficient implementation with identical output.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "strings",
+      "performance"
+    ]
+  },
+  {
+    "id": 621,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — unclear temporary variables. Refactor to improve naming and remove unnecessary variables while keeping the function the same externally.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "naming",
+      "readability"
+    ]
+  },
+  {
+    "id": 622,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — duplicated error message creation. Refactor to share the field lookup and error creation logic. Keep both public functions.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "errors",
+      "duplicate-code"
+    ]
+  },
+  {
+    "id": 623,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — hardcoded repeated numbers. Refactor to remove the repeated hardcoded spacing value while keeping all style assignments.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "constants",
+      "styling"
+    ]
+  },
+  {
+    "id": 624,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — too many returns for equivalent outcomes. Refactor to simplify the logic and remove redundant comparisons.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "returns",
+      "simplification"
+    ]
+  },
+  {
+    "id": 625,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — combining filtering and mapping in multiple passes. Refactor to reduce unnecessary passes while preserving the returned array.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "arrays",
+      "performance"
+    ]
+  },
+  {
+    "id": 626,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — repeated calls. Refactor to avoid repeating the same computation and improve clarity.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "duplicate-code",
+      "clarity"
+    ]
+  },
+  {
+    "id": 627,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — duplicated API response shaping. Refactor to remove duplication while preserving both exported functions and output shape.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "api",
+      "duplicate-code"
+    ]
+  },
+  {
+    "id": 628,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — nested loops with avoidable complexity. Refactor for clarity and efficiency. Preserve behavior, including duplicates from matches in the current implementation if possible.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "loops",
+      "performance"
+    ]
+  },
+  {
+    "id": 629,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — procedural repetition for status checks. Refactor to a clearer membership-based approach without changing results.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "conditionals",
+      "readability"
+    ]
+  },
+  {
+    "id": 630,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — function mixes parsing and math. Refactor to separate parsing from addition, while preserving functionality.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "separation-of-concerns",
+      "functions"
+    ]
+  },
+  {
+    "id": 631,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — duplicated logging wrappers. Refactor to reuse the common logging structure but keep both public functions.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "logging",
+      "duplicate-code"
+    ]
+  },
+  {
+    "id": 632,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — unnecessary after return. Refactor to a cleaner style without changing behavior.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "cleanup",
+      "readability"
+    ]
+  },
+  {
+    "id": 633,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — repeated date formatting pieces. Refactor to make the formatting logic cleaner and easier to read.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "dates",
+      "readability"
+    ]
+  },
+  {
+    "id": 634,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — converting values with repeated code. Refactor to avoid repeating the conversion pattern while keeping the same output keys and types.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "conversion",
+      "duplicate-code"
+    ]
+  },
+  {
+    "id": 635,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — function does lookup with multiple repeated returns. Refactor to a table-based lookup. Preserve outputs for all current inputs.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "lookup",
+      "data-driven"
+    ]
+  },
+  {
+    "id": 636,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — duplicated counting logic. Refactor to share the counting pattern while keeping both public functions.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "counting",
+      "duplicate-code"
+    ]
+  },
+  {
+    "id": 637,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — awkward temporary state. Refactor to remove unnecessary temporary state and simplify the function.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "state",
+      "simplification"
+    ]
+  },
+  {
+    "id": 638,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — repeated key existence checks. Refactor to reduce repeated dictionary key checks while keeping output identical.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "dictionaries",
+      "readability"
+    ]
+  },
+  {
+    "id": 639,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — duplicated accumulation pattern. Refactor to remove duplicated accumulation logic while keeping both functions.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "accumulation",
+      "duplicate-code"
+    ]
+  },
+  {
+    "id": 640,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — low-level manual max search. Refactor to a more idiomatic and readable implementation. Assume is non-empty.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "idiomatic",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 641,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — repeated normalization in comparisons. Refactor to share the normalization logic while keeping both functions unchanged externally.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "normalization",
+      "duplicate-code"
+    ]
+  },
+  {
+    "id": 642,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — duplicated tuple construction. Refactor to remove duplication while preserving both public functions and return values.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "tuples",
+      "duplicate-code"
+    ]
+  },
+  {
+    "id": 643,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — array transformed with push in loop. Refactor to a more declarative style with the same returned array contents.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "arrays",
+      "declarative"
+    ]
+  },
+  {
+    "id": 644,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — verbose boolean return. Refactor to simplify the boolean return without altering semantics.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "booleans",
+      "simplification"
+    ]
+  },
+  {
+    "id": 645,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — repeated branch bodies. Refactor to eliminate redundant branches while preserving behavior exactly.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "branches",
+      "duplicate-code"
+    ]
+  },
+  {
+    "id": 646,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — repeated arithmetic update pattern. Refactor to a cleaner, more idiomatic implementation with the same output.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "arithmetic",
+      "idiomatic"
+    ]
+  },
+  {
+    "id": 647,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — function mixes selection and formatting. Refactor to separate formatting from selection logic. Preserve returned string format.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "separation-of-concerns",
+      "formatting"
+    ]
+  },
+  {
+    "id": 648,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — repeated predicates in list comprehensions. Refactor to remove duplication while keeping both functions.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "list-comprehensions",
+      "duplicate-code"
+    ]
+  },
+  {
+    "id": 649,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "JavaScript — manual property copying. Refactor to a cleaner cloning approach for the same fields only. Do not copy extra properties.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "refactoring",
+      "objects",
+      "cloning"
+    ]
+  },
+  {
+    "id": 650,
+    "tier": "T3",
+    "category": "refactor",
+    "task": "Python — repetitive field printing. Refactor to reduce repetition while keeping the exact same printed lines and order.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "python",
+      "refactoring",
+      "printing",
+      "duplicate-code"
+    ]
+  },
+  {
+    "id": 651,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a URL Shortener",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 652,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design an API Rate Limiter",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 653,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Distributed Cache",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 654,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Message Queue",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 655,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Notification System",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 656,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Job Scheduler",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 657,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Search Autocomplete Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 658,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Real-Time Chat Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 659,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Distributed Lock Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 660,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a File Storage Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 661,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a News Feed System",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 662,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Metrics Collection System",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 663,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Log Aggregation Platform",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 664,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Web Crawler",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 665,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Video Streaming Platform",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 666,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Global CDN Cache Invalidation System",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 667,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Leaderboard Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 668,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Recommendation System Backend",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 669,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Distributed Cron Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 670,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Payment Webhook Delivery System",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 671,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Session Store",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 672,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Feature Flag Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 673,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design an Email Delivery Platform",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 674,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Document Collaboration Backend",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 675,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Ride Matching System",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 676,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Multi-Tenant Search Indexing Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 677,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Secret Management Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 678,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Distributed Unique ID Generator",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 679,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design an Image Processing Pipeline",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 680,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Data Deduplication Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 681,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Mobile Push Notification Gateway",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 682,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Fraud Detection Event Pipeline",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 683,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Webhook Signature Verification Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 684,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Location Tracking Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 685,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Multi-Region Key-Value Store",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 686,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Database Connection Pooling Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 687,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Package Download Mirror",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 688,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Content Moderation Pipeline",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 689,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Backup and Restore Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 690,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design an Audit Logging System",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 691,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Service Discovery System",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 692,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Real-Time Collaborative Whiteboard Backend",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 693,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Tenant-Aware Rate-Limited API Gateway",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 694,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Live Polling System",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 695,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a URL Safety Scanner",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 696,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Distributed Counter Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 697,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Shopping Cart Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 698,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Schema Registry",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 699,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Read Receipt System",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  },
+  {
+    "id": 700,
+    "tier": "T3",
+    "category": "system_design",
+    "task": "Design a Quota Management Service",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "system-design"
+    ]
+  }
+]

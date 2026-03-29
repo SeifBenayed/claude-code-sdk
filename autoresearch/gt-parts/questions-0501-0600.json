@@ -1,0 +1,1952 @@
+[
+  {
+    "id": 501,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `parseQueryString(input)` that converts a URL query string like `\"?a=1&b=two\"` into an object. Then write unit tests for at least 8 cases, including repeated keys, empty values, percent-encoded characters, missing `?`, blank input, keys without `=`, and malformed escape sequences. Handle edge cases explicitly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 502,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `chunkArray(items, size)` that splits an array into subarrays of length `size`. Then write tests covering at least 7 cases, including `size = 1`, `size` larger than array length, empty array, invalid `size` values (`0`, negative, non-integer), and arrays containing `null` and `undefined`. Define and test the expected behavior for invalid input.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 503,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `deepMerge(a, b)` that recursively merges two plain JSON-like objects. Then write tests for at least 10 cases, including nested objects, array overwrite vs. merge behavior, `null`, missing keys, conflicting primitive types, empty objects, and deep nesting. Handle edge cases without mutating either input.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 504,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `debounce(fn, delay)` that returns a debounced version of `fn`. Then write tests using fake timers to verify delayed execution, argument forwarding, `this` preservation, multiple rapid calls, and behavior when `delay` is `0`. Handle edge cases such as non-function inputs.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 505,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `normalizePhoneNumber(input, defaultCountry)` that converts user-entered phone numbers into a normalized format you define. Then write tests for at least 8 inputs, including whitespace, punctuation, country code prefixes, extensions, empty input, invalid characters, and already-normalized values. Handle edge cases and document assumptions.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 506,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `isValidIPv4(input)` that returns `true` only for valid IPv4 addresses. Then write tests for at least 12 cases, including leading zeros, too few octets, too many octets, non-numeric octets, negative values, `255.255.255.255`, `0.0.0.0`, surrounding whitespace, and empty strings. Handle edge cases clearly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 507,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `topKFrequent(words, k)` that returns the `k` most frequent strings from an array, breaking ties alphabetically. Then write tests for at least 8 cases, including ties, `k = 0`, `k` greater than unique count, empty input, case sensitivity, punctuation in tokens, and repeated empty strings. Handle edge cases deterministically.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 508,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `groupAnagrams(words)` that groups words that are anagrams of each other. Then write tests for at least 7 cases, including duplicate words, empty strings, mixed case, punctuation, Unicode characters, a one-element array, and empty input. Define whether grouping is case-sensitive and test that rule.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 509,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `flattenObject(obj)` that converts nested objects into a flat object with dot-separated keys. Then write tests for at least 9 cases, including nested objects, arrays, empty objects, `null`, keys containing dots, booleans, numbers, and multiple nesting levels. Handle edge cases and define how arrays should be represented.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 510,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `unflattenObject(obj)` that reverses dot-separated keys like `{ \"a.b\": 1 }` into nested objects. Then write tests for at least 8 cases, including conflicting paths (`\"a\": 1` and `\"a.b\": 2`), empty input, numeric path segments, deep nesting, and invalid keys such as empty segments. Handle edge cases consistently.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 511,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `parseCsvLine(line)` that parses a single CSV row into fields, supporting quoted fields and escaped quotes. Then write tests for at least 10 cases, including commas inside quotes, empty fields, trailing commas, unmatched quotes, embedded quotes, blank lines, and whitespace preservation. Handle malformed input explicitly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 512,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `toTitleCase(input)` that converts text into title case using clear word-boundary rules. Then write tests for at least 8 cases, including apostrophes, hyphenated words, extra spaces, empty strings, already-capitalized text, numbers, punctuation-only strings, and mixed casing. Handle edge cases without using external libraries.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 513,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `rotateMatrix(matrix)` that rotates an `N x N` matrix 90 degrees clockwise. Then write tests for at least 7 cases, including `1x1`, `2x2`, `3x3`, empty matrix, non-square matrix, matrix containing negative numbers, and matrix containing strings. Handle invalid input safely.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 514,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `binarySearchRange(nums, target)` that returns the first and last index of `target` in a sorted array. Then write tests for at least 9 cases, including target missing, all values equal to target, empty array, single-element array, duplicates at ends, negative numbers, and large sorted input. Handle edge cases with O(log n) search logic.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 515,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `retryAsync(task, maxAttempts, delayMs)` that retries an async function until success or attempts are exhausted. Then write tests for success-on-first-try, success-after-retries, final failure, invalid attempt counts, zero delay, and error propagation. Handle edge cases and avoid retrying after success.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 516,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `memoize(fn)` that caches results based on arguments. Then write tests for at least 8 cases, including primitive arguments, object arguments, repeated calls, different argument order, `undefined` results, thrown errors, and preservation of `this` if applicable. Handle edge cases and define your cache key strategy.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 517,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `diffArrays(a, b)` that returns items added, removed, and unchanged between two arrays. Then write tests for at least 8 cases, including duplicates, empty arrays, mixed primitive types, order differences, `null`, `undefined`, and identical arrays. Handle edge cases and define whether multiplicity matters.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 518,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `safeJsonParse(input, fallback)` that parses JSON and returns `fallback` on invalid input. Then write tests for at least 8 cases, including valid objects, arrays, numbers, `null`, malformed JSON, empty string, whitespace-only input, and non-string values. Handle edge cases without throwing unexpectedly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 519,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `formatDuration(seconds)` that converts a number of seconds into a human-readable string such as `\"1h 2m 3s\"`. Then write tests for at least 9 cases, including `0`, negative input, fractional seconds, exactly 60, exactly 3600, very large values, and invalid types. Handle edge cases explicitly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 520,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `slugify(input)` that converts arbitrary text into a URL slug. Then write tests for at least 10 cases, including repeated spaces, punctuation, accented characters, non-Latin text, leading/trailing separators, empty input, emoji, uppercase text, and strings containing existing hyphens. Handle edge cases and define transliteration rules.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 521,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `paginate(items, page, pageSize)` that returns a slice of items plus metadata like total pages. Then write tests for at least 8 cases, including empty input, last partial page, page out of range, invalid page sizes, page `1`, very large page numbers, and arrays with one item. Handle edge cases clearly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 522,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `compareVersions(a, b)` that compares semantic version strings like `\"1.10.0\"` and `\"1.2.9\"`. Then write tests for at least 10 cases, including missing patch segments, leading zeros, prerelease tags if you choose to support them, invalid formats, equal versions, and different segment lengths. Handle edge cases deterministically.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 523,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `humanFileSize(bytes)` that formats byte counts into strings like `\"1.5 MB\"`. Then write tests for at least 8 cases, including `0`, `1`, `1024`, large numbers, negative input, fractional bytes, invalid input, and unit boundary values. Handle edge cases and define whether you use base-1000 or base-1024.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 524,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `intersectIntervals(intervals)` that computes the common overlap of a list of numeric intervals. Then write tests for at least 8 cases, including no intervals, one interval, full overlap, partial overlap, no common overlap, reversed interval endpoints, negative numbers, and touching endpoints. Handle edge cases explicitly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 525,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `mergeIntervals(intervals)` that merges overlapping intervals. Then write tests for at least 9 cases, including already sorted input, unsorted input, touching intervals, nested intervals, empty input, one interval, negative values, duplicate intervals, and invalid interval shapes. Handle edge cases safely.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 526,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `wordWrap(text, maxWidth)` that wraps text into lines no longer than `maxWidth`. Then write tests for at least 8 cases, including empty input, words longer than `maxWidth`, multiple spaces, newline preservation rules, punctuation, width `1`, invalid width, and trailing spaces. Handle edge cases and define splitting behavior.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 527,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `escapeHtml(input)` that escapes HTML-sensitive characters. Then write tests for at least 8 cases, including `&`, `<`, `>`, `\"`, `'`, already-escaped text, empty strings, long strings, and strings without special characters. Handle edge cases without double-escaping unexpectedly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 528,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `unescapeHtml(input)` that decodes common HTML entities back into characters. Then write tests for at least 8 cases, including mixed entities, unknown entities, numeric entities, empty strings, malformed entities, repeated entities, and plain text without entities. Handle edge cases consistently.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 529,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `buildTree(items)` that converts a flat list of `{ id, parentId }` nodes into a tree. Then write tests for at least 10 cases, including multiple roots, missing parents, cycles, duplicate IDs, empty input, deep nesting, out-of-order items, and children before parents. Handle edge cases explicitly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 530,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `lruCache(capacity)` that returns an object with `get` and `put` methods implementing an LRU cache. Then write tests for at least 9 cases, including eviction order, updating an existing key, capacity `1`, invalid capacity, missing keys, repeated gets, storing falsy values, and string vs. numeric keys. Handle edge cases carefully.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 531,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `parseDateISO(input)` that parses dates in strict `YYYY-MM-DD` format into a `Date` or structured object. Then write tests for at least 10 cases, including leap years, invalid months, invalid days, missing zero padding, empty strings, whitespace, non-string input, and February 29 on non-leap years. Handle edge cases without accepting ambiguous formats.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 532,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `relativePath(from, to)` that computes the relative filesystem path from one absolute path to another. Then write tests for at least 8 cases, including same path, sibling directories, nested directories, root paths, trailing slashes, mixed separators if supported, and invalid non-absolute input. Handle edge cases clearly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 533,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `sortByMultiple(items, rules)` that sorts objects by multiple keys and directions. Then write tests for at least 8 cases, including ascending and descending rules, missing fields, equal values requiring tie-breakers, empty input, one item, mixed value types, and stability expectations. Handle edge cases and document assumptions.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 534,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `parseBoolean(input)` that converts strings and primitives into boolean values using strict rules. Then write tests for at least 10 cases, including `\"true\"`, `\"false\"`, `\"1\"`, `\"0\"`, `\"yes\"`, `\"no\"`, mixed case, whitespace, actual booleans, numbers, empty string, and invalid values. Handle edge cases explicitly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 535,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `transposeCsv(rows)` that accepts an array of CSV rows represented as arrays of strings and returns the transposed table. Then write tests for at least 8 cases, including rectangular input, jagged rows, empty input, one row, one column, empty cells, and non-string values. Handle edge cases and define padding behavior.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 536,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `minWindowSubstring(text, pattern)` that returns the smallest substring of `text` containing all characters from `pattern` with multiplicity. Then write tests for at least 8 cases, including no match, exact match, repeated characters in `pattern`, empty `text`, empty `pattern`, case sensitivity, and multiple valid windows. Handle edge cases efficiently.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 537,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `detectCycle(head)` for a singly linked list that returns whether the list contains a cycle. Then write tests that build linked lists for at least 6 cases, including no cycle, cycle to head, cycle in middle, one node without cycle, one node with self-cycle, and empty list. Handle edge cases without modifying the list.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 538,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `serializeForm(fields)` that converts an array of `{ name, value }` pairs into a query string. Then write tests for at least 8 cases, including repeated field names, empty names, empty values, spaces, special characters, Unicode, null-like values, and empty input. Handle edge cases and define encoding behavior.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 539,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `descriptiveStats(numbers)` that returns count, min, max, mean, median, mode, and range. Then write tests for at least 10 cases, including odd and even lengths, duplicates, multiple modes, negative numbers, decimals, one-element array, empty array, and unsorted input. Handle edge cases and define behavior when no unique mode exists.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 540,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `validatePassword(password)` that checks a password against explicit rules: minimum length 10, at least one uppercase letter, one lowercase letter, one digit, and one symbol. Then write tests for at least 10 cases, including too short, missing each required category, whitespace, Unicode letters, empty string, and valid complex passwords. Handle edge cases clearly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 541,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `nearestPalindrome(n)` that returns the numerically closest palindrome to a positive integer string. Then write tests for at least 8 cases, including single digits, powers of ten, numbers already palindromic, ties, very large inputs, and invalid input. Handle edge cases without converting to unsafe integer types.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 542,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `removeComments(code)` that removes `//` and `/* ... */` comments from a source string while preserving content inside quoted strings. Then write tests for at least 10 cases, including line comments, block comments, comment markers inside strings, escaped quotes, unterminated block comments, empty input, and multiline code. Handle edge cases explicitly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 543,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `evaluateRpn(tokens)` that evaluates an arithmetic expression in Reverse Polish Notation. Then write tests for at least 9 cases, including addition, subtraction, multiplication, division, negative numbers, invalid tokens, insufficient operands, extra operands, and empty input. Handle edge cases and define integer division behavior.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 544,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `findPeakElement(nums)` that returns the index of any peak element in an array. Then write tests for at least 8 cases, including one element, strictly increasing array, strictly decreasing array, multiple peaks, equal adjacent values, negative numbers, and empty input. Handle edge cases and define how ties are treated.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 545,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `searchRotatedArray(nums, target)` that finds `target` in a rotated sorted array and returns its index or `-1`. Then write tests for at least 9 cases, including no rotation, full rotation equivalent, target absent, one-element array, two-element array, duplicates if you choose to support them, and negative values. Handle edge cases explicitly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 546,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `romanToInt(input)` that converts a Roman numeral to an integer. Then write tests for at least 10 cases, including additive forms, subtractive forms, lowercase input handling, invalid subtractive patterns, repeated symbols beyond allowed counts, empty input, and malformed numerals. Handle edge cases with strict validation.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 547,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `intToRoman(input)` that converts an integer to a Roman numeral. Then write tests for at least 8 cases, including `1`, `4`, `9`, `58`, `1994`, minimum and maximum supported values, zero, negative numbers, non-integers, and overly large input. Handle edge cases with clear constraints.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 548,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `knapsack01(items, capacity)` that returns the maximum achievable value for the 0/1 knapsack problem. Then write tests for at least 8 cases, including zero capacity, empty items, one item fits, one item does not fit, multiple optimal choices, zero-weight items, invalid weights, and larger capacities. Handle edge cases and define input validation.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 549,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `longestCommonPrefix(words)` that returns the longest shared prefix among strings. Then write tests for at least 8 cases, including empty array, one string, no common prefix, identical strings, empty strings within input, mixed case, Unicode characters, and very long strings. Handle edge cases deterministically.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 550,
+    "tier": "T3",
+    "category": "build_and_test",
+    "task": "Write a function `balancedBrackets(input)` that returns whether all brackets in a string are balanced for `()`, `[]`, and `{}` while ignoring non-bracket characters. Then write tests for at least 10 cases, including nested brackets, interleaved invalid order, empty input, strings with text, only opening brackets, only closing brackets, and long balanced input. Handle edge cases clearly.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "build_and_test"
+    ]
+  },
+  {
+    "id": 551,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain how binary search works and why it requires sorted input, then write a function that returns the index of a target value in a sorted integer array or if not found.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "algorithms",
+      "binary-search",
+      "arrays"
+    ]
+  },
+  {
+    "id": 552,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain the difference between a stack and a queue, then write two classes implementing each data structure with push/pop and enqueue/dequeue operations.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "data-structures",
+      "stack",
+      "queue"
+    ]
+  },
+  {
+    "id": 553,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain how hash maps achieve average-case constant-time lookup, then write a function that counts the frequency of each word in a string and returns a map of word to count.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "data-structures",
+      "hash-map",
+      "strings"
+    ]
+  },
+  {
+    "id": 554,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain how recursion works and what a base case is, then write a recursive function that computes the factorial of a non-negative integer.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "recursion",
+      "math",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 555,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain memoization and how it improves recursive algorithms, then write a memoized function that returns the nth Fibonacci number.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "dynamic-programming",
+      "memoization",
+      "recursion"
+    ]
+  },
+  {
+    "id": 556,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain the two-pointer technique, then write a function that determines whether a sorted array contains two numbers whose sum equals a given target.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "algorithms",
+      "two-pointers",
+      "arrays"
+    ]
+  },
+  {
+    "id": 557,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain sliding window algorithms, then write a function that returns the length of the longest substring of a string that contains no repeated characters.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "algorithms",
+      "sliding-window",
+      "strings"
+    ]
+  },
+  {
+    "id": 558,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain how depth-first search traverses a graph, then write a function that determines whether a path exists between two nodes in a directed graph.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "graphs",
+      "dfs",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 559,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain how breadth-first search differs from depth-first search, then write a function that returns the shortest path length between two nodes in an unweighted graph.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "graphs",
+      "bfs",
+      "shortest-path"
+    ]
+  },
+  {
+    "id": 560,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain topological sorting and when it is possible, then write a function that returns a valid topological ordering of a directed acyclic graph.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "graphs",
+      "topological-sort",
+      "dag"
+    ]
+  },
+  {
+    "id": 561,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain how cycle detection works in graphs, then write a function that returns whether a directed graph contains a cycle.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "graphs",
+      "cycle-detection",
+      "dfs"
+    ]
+  },
+  {
+    "id": 562,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain what a binary tree traversal is, then write a function that returns the inorder traversal of a binary tree as an array.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "trees",
+      "binary-tree",
+      "traversal"
+    ]
+  },
+  {
+    "id": 563,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain the binary search tree property, then write a function that inserts a value into a binary search tree and returns the root.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "trees",
+      "binary-search-tree",
+      "insertion"
+    ]
+  },
+  {
+    "id": 564,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain how heaps support priority queues, then write a min-heap class with insert and extractMin methods.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "data-structures",
+      "heap",
+      "priority-queue"
+    ]
+  },
+  {
+    "id": 565,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain merge sort and why its time complexity is O(n log n), then write a function that sorts an array of integers using merge sort.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "sorting",
+      "merge-sort",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 566,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain quicksort partitioning, then write a function that sorts an array of integers using quicksort.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "sorting",
+      "quicksort",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 567,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain dynamic programming using subproblems and overlapping work, then write a function that computes the minimum number of coins needed to make a target amount from given coin denominations.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "dynamic-programming",
+      "coin-change",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 568,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain the longest common subsequence problem, then write a function that returns the length of the longest common subsequence of two strings.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "dynamic-programming",
+      "strings",
+      "longest-common-subsequence"
+    ]
+  },
+  {
+    "id": 569,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain edit distance and the allowed operations, then write a function that computes the Levenshtein distance between two strings.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "dynamic-programming",
+      "strings",
+      "edit-distance"
+    ]
+  },
+  {
+    "id": 570,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain greedy algorithms and when they are valid, then write a function that schedules the maximum number of non-overlapping intervals from a list of start/end times.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "greedy",
+      "interval-scheduling",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 571,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain prefix sums, then write a function that answers multiple range-sum queries on an integer array in constant time per query after preprocessing.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "arrays",
+      "prefix-sum",
+      "range-query"
+    ]
+  },
+  {
+    "id": 572,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain difference arrays, then write a function that applies a list of inclusive range increment operations to an array and returns the final array.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "arrays",
+      "difference-array",
+      "range-updates"
+    ]
+  },
+  {
+    "id": 573,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain union-find (disjoint set union), then write a class supporting find and union, and use it to count the number of connected components in an undirected graph.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "graphs",
+      "union-find",
+      "disjoint-set"
+    ]
+  },
+  {
+    "id": 574,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain Dijkstra’s algorithm and its assumptions, then write a function that returns the shortest path distances from a source node in a graph with non-negative edge weights.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "graphs",
+      "shortest-path",
+      "dijkstra"
+    ]
+  },
+  {
+    "id": 575,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain why Bellman-Ford can handle negative edges, then write a function that computes shortest path distances from a source and detects whether a negative cycle is reachable.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "graphs",
+      "shortest-path",
+      "bellman-ford"
+    ]
+  },
+  {
+    "id": 576,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain what a trie is and what problems it solves, then write a trie class supporting insert, search, and startsWith.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "data-structures",
+      "trie",
+      "strings"
+    ]
+  },
+  {
+    "id": 577,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain backtracking, then write a function that returns all valid combinations of n pairs of balanced parentheses.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "backtracking",
+      "recursion",
+      "combinatorics"
+    ]
+  },
+  {
+    "id": 578,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain permutation generation with backtracking, then write a function that returns all permutations of a list of distinct integers.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "backtracking",
+      "permutations",
+      "recursion"
+    ]
+  },
+  {
+    "id": 579,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain how subset generation works, then write a function that returns the power set of a list of unique integers.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "backtracking",
+      "subsets",
+      "power-set"
+    ]
+  },
+  {
+    "id": 580,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain the concept of stable sorting, then write a stable sort function for an array of objects by a specified numeric key.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "sorting",
+      "stable-sort",
+      "objects"
+    ]
+  },
+  {
+    "id": 581,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain how regular expressions match patterns, then write a function that validates whether a string is a valid IPv4 address.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "strings",
+      "regex",
+      "validation"
+    ]
+  },
+  {
+    "id": 582,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain string tokenization, then write a function that parses a CSV line into fields, correctly handling quoted commas and escaped quotes.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "strings",
+      "parsing",
+      "csv"
+    ]
+  },
+  {
+    "id": 583,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain URL query strings and percent-encoding, then write a function that parses a query string into a dictionary of key-value pairs.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "web",
+      "url",
+      "parsing"
+    ]
+  },
+  {
+    "id": 584,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain JSON serialization and parsing, then write a function that safely pretty-prints a JSON string with indentation or returns an error for invalid input.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "json",
+      "parsing",
+      "serialization"
+    ]
+  },
+  {
+    "id": 585,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain how timestamps and time zones differ, then write a function that converts a Unix timestamp in seconds into an ISO 8601 UTC string.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "datetime",
+      "timestamps",
+      "timezones"
+    ]
+  },
+  {
+    "id": 586,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain the producer-consumer problem, then write thread-safe code using a blocking queue to allow one producer and one consumer to exchange integer messages.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "concurrency",
+      "producer-consumer",
+      "thread-safety"
+    ]
+  },
+  {
+    "id": 587,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain race conditions, then write code that safely increments a shared counter from multiple threads and returns the correct final value.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "concurrency",
+      "race-conditions",
+      "thread-safety"
+    ]
+  },
+  {
+    "id": 588,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain asynchronous programming with promises or futures, then write a function that runs three asynchronous tasks in parallel and returns all results in original order.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "async",
+      "promises",
+      "concurrency"
+    ]
+  },
+  {
+    "id": 589,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain debounce behavior in event-driven systems, then write a debounced wrapper function that delays invoking a callback until no calls have occurred for 300 ms.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "debounce",
+      "events"
+    ]
+  },
+  {
+    "id": 590,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain throttle behavior and how it differs from debounce, then write a throttled wrapper function that ensures a callback runs at most once per 200 ms.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "javascript",
+      "throttle",
+      "events"
+    ]
+  },
+  {
+    "id": 591,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain least-recently-used caching, then write an LRUCache class with get and put operations in O(1) average time.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "data-structures",
+      "cache",
+      "lru"
+    ]
+  },
+  {
+    "id": 592,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain how pagination works in APIs, then write a function that fetches all pages from a paginated endpoint that returns items and nextPageToken.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "apis",
+      "pagination",
+      "http"
+    ]
+  },
+  {
+    "id": 593,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain REST idempotency, then write an HTTP handler for PUT /users/:id that replaces a user record with the request body.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "rest",
+      "http",
+      "idempotency"
+    ]
+  },
+  {
+    "id": 594,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain how JWT structure is organized into header, payload, and signature, then write a function that base64url-decodes the header and payload of a JWT without verifying the signature.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "security",
+      "jwt",
+      "encoding"
+    ]
+  },
+  {
+    "id": 595,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain password hashing and why salts are necessary, then write code that hashes a password with a random salt and verifies a login attempt against the stored hash.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "security",
+      "authentication",
+      "password-hashing"
+    ]
+  },
+  {
+    "id": 596,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain SQL parameterization and how it prevents injection, then write a function that queries a seifbenayed table by email using a parameterized statement.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "databases",
+      "sql",
+      "security"
+    ]
+  },
+  {
+    "id": 597,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain the difference between encryption and hashing, then write code that encrypts a plaintext string with AES and decrypts it back to the original value.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "security",
+      "cryptography",
+      "encryption"
+    ]
+  },
+  {
+    "id": 598,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain rate limiting with a token bucket, then write a TokenBucket class that decides whether each incoming request should be allowed.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "systems",
+      "rate-limiting",
+      "token-bucket"
+    ]
+  },
+  {
+    "id": 599,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain how finite state machines model parsing, then write a function that validates whether a string is a valid decimal number with optional sign and fractional part.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "parsing",
+      "finite-state-machine",
+      "validation"
+    ]
+  },
+  {
+    "id": 600,
+    "tier": "T3",
+    "category": "research_and_code",
+    "task": "Explain how markdown headings are structured, then write a function that parses a markdown document string and returns a nested table of contents based on heading levels.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "markdown",
+      "parsing",
+      "document-processing"
+    ]
+  }
+]

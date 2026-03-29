@@ -1,0 +1,704 @@
+{
+  "answers": {
+    "601": {
+      "id": 601,
+      "answer": "Refactoring duplicate conditional discount logic in JavaScript means extracting repeated if/else chains into a single lookup table or helper function.\n\nBefore (duplicated logic):\n```javascript\nfunction getPrintPrice(user, book) {\n  let price = book.printPrice;\n  if (user.type === 'member') price *= 0.9;\n  else if (user.type === 'student') price *= 0.8;\n  else if (user.type === 'senior') price *= 0.85;\n  if (book.category === 'textbook') price *= 0.95;\n  else if (book.category === 'fiction') price *= 1.0;\n  else if (book.category === 'rare') price *= 1.2;\n  return price;\n}\n\nfunction getEbookPrice(user, book) {\n  let price = book.ebookPrice;\n  if (user.type === 'member') price *= 0.9;\n  else if (user.type === 'student') price *= 0.8;\n  else if (user.type === 'senior') price *= 0.85;\n  if (book.category === 'textbook') price *= 0.95;\n  else if (book.category === 'fiction') price *= 1.0;\n  else if (book.category === 'rare') price *= 1.2;\n  return price;\n}\n```\n\nAfter (shared helper):\n```javascript\nconst USER_DISCOUNTS = { member: 0.9, student: 0.8, senior: 0.85 };\nconst BOOK_MULTIPLIERS = { textbook: 0.95, fiction: 1.0, rare: 1.2 };\n\nfunction applyDiscounts(basePrice, user, book) {\n  const userMultiplier = USER_DISCOUNTS[user.type] ?? 1.0;\n  const bookMultiplier = BOOK_MULTIPLIERS[book.category] ?? 1.0;\n  return basePrice * userMultiplier * bookMultiplier;\n}\n\nfunction getPrintPrice(user, book) {\n  return applyDiscounts(book.printPrice, user, book);\n}\n\nfunction getEbookPrice(user, book) {\n  return applyDiscounts(book.ebookPrice, user, book);\n}\n```\n\nKey changes: extracted the repeated conditional chains into lookup objects (`USER_DISCOUNTS`, `BOOK_MULTIPLIERS`) and a shared `applyDiscounts` helper. Both public functions now delegate to it, eliminating duplication while preserving identical behavior.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — duplicate conditional logic. Refactor to remove duplicated discount logic for user types and book discounts. Keep behavior identical."
+    },
+    "602": {
+      "id": 602,
+      "answer": "Reducing deeply nested conditionals in Python uses early-return (guard clauses) to flatten the structure and make each condition self-contained.\n\nBefore (deeply nested):\n```python\ndef process_order(order):\n    if order is not None:\n        if order.get('status') == 'active':\n            if order.get('items'):\n                total = 0\n                for item in order['items']:\n                    if item.get('available'):\n                        if item.get('price') is not None:\n                            total += item['price'] * item.get('qty', 1)\n                return total\n            else:\n                return 0\n        else:\n            return None\n    else:\n        return None\n```\n\nAfter (guard clauses, flat nesting):\n```python\ndef process_order(order):\n    if order is None:\n        return None\n    if order.get('status') != 'active':\n        return None\n    if not order.get('items'):\n        return 0\n\n    total = 0\n    for item in order['items']:\n        if not item.get('available'):\n            continue\n        if item.get('price') is None:\n            continue\n        total += item['price'] * item.get('qty', 1)\n    return total\n```\n\nKey changes: inverted each condition to a guard/early return at the top of the function, eliminating nesting. The inner loop uses `continue` to skip invalid items instead of nesting further. Output is identical.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — deeply nested conditionals. Refactor to reduce nesting and make control flow clearer without changing outputs."
+    },
+    "603": {
+      "id": 603,
+      "answer": "Reducing repeated object property access in JavaScript means destructuring at the top of the function so each property is read once.\n\nBefore (repeated access):\n```javascript\nfunction printUserInfo(user) {\n  console.log('Name:', user.profile.name);\n  console.log('Age:', user.profile.age);\n  console.log('Email:', user.contact.email);\n  console.log('Phone:', user.contact.phone);\n  console.log('City:', user.address.city);\n  console.log('Country:', user.address.country);\n  console.log('ZIP:', user.address.zip);\n}\n```\n\nAfter (destructured once):\n```javascript\nfunction printUserInfo(user) {\n  const { name, age } = user.profile;\n  const { email, phone } = user.contact;\n  const { city, country, zip } = user.address;\n\n  console.log('Name:', name);\n  console.log('Age:', age);\n  console.log('Email:', email);\n  console.log('Phone:', phone);\n  console.log('City:', city);\n  console.log('Country:', country);\n  console.log('ZIP:', zip);\n}\n```\n\nKey changes: used destructuring assignment to extract each nested sub-object's properties at the start, then referenced local variables in the `console.log` calls. Console output is unchanged.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — repeated object property access. Refactor to reduce repeated property access and improve readability. Do not change console output."
+    },
+    "604": {
+      "id": 604,
+      "answer": "Splitting a long multi-responsibility function into focused single-purpose functions is the Single Responsibility Principle in practice. Each sub-function does one thing: normalize, validate, persist, or report.\n\nBefore (monolithic):\n```python\ndef process_user(data, db, logger):\n    # normalize\n    data['name'] = data.get('name', '').strip().title()\n    data['email'] = data.get('email', '').strip().lower()\n    # validate\n    if not data['name']:\n        raise ValueError('Name is required')\n    if '@' not in data['email']:\n        raise ValueError('Invalid email')\n    # persist\n    user_id = db.insert('users', data)\n    db.commit()\n    # report\n    logger.info(f\"User {user_id} created: {data['name']} <{data['email']}>\")\n    return user_id\n```\n\nAfter (single-responsibility functions):\n```python\ndef normalize_user(data):\n    return {\n        **data,\n        'name': data.get('name', '').strip().title(),\n        'email': data.get('email', '').strip().lower(),\n    }\n\ndef validate_user(data):\n    if not data.get('name'):\n        raise ValueError('Name is required')\n    if '@' not in data.get('email', ''):\n        raise ValueError('Invalid email')\n\ndef persist_user(data, db):\n    user_id = db.insert('users', data)\n    db.commit()\n    return user_id\n\ndef report_user_created(user_id, data, logger):\n    logger.info(f\"User {user_id} created: {data['name']} <{data['email']}>\")\n\ndef process_user(data, db, logger):\n    normalized = normalize_user(data)\n    validate_user(normalized)\n    user_id = persist_user(normalized, db)\n    report_user_created(user_id, normalized, logger)\n    return user_id\n```\n\nKey changes: extracted four helpers for normalization, validation, persistence, and reporting. The orchestrating `process_user` function now reads as a clear sequence of steps. Behavior is preserved.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — long function doing multiple things. Refactor into smaller functions with single responsibilities: normalization, validation, persistence, and reporting. Preserve behavior."
+    },
+    "605": {
+      "id": 605,
+      "answer": "Magic strings are raw string literals scattered through logic. Replacing them with named constants makes intent explicit and centralises future changes.\n\nBefore (magic strings):\n```javascript\nfunction getStatusLabel(status) {\n  if (status === 'pending') return 'Awaiting approval';\n  if (status === 'approved') return 'Approved';\n  if (status === 'rejected') return 'Rejected';\n  if (status === 'archived') return 'Archived';\n  return 'Unknown';\n}\n\nfunction canEdit(status) {\n  return status === 'pending' || status === 'rejected';\n}\n```\n\nAfter (named constants):\n```javascript\nconst STATUS = {\n  PENDING: 'pending',\n  APPROVED: 'approved',\n  REJECTED: 'rejected',\n  ARCHIVED: 'archived',\n};\n\nconst STATUS_LABELS = {\n  [STATUS.PENDING]: 'Awaiting approval',\n  [STATUS.APPROVED]: 'Approved',\n  [STATUS.REJECTED]: 'Rejected',\n  [STATUS.ARCHIVED]: 'Archived',\n};\n\nfunction getStatusLabel(status) {\n  return STATUS_LABELS[status] ?? 'Unknown';\n}\n\nfunction canEdit(status) {\n  return status === STATUS.PENDING || status === STATUS.REJECTED;\n}\n```\n\nKey changes: all raw status strings moved into a `STATUS` constant object; label mappings moved into `STATUS_LABELS`. Logic is unchanged, but typos in string literals now cause an obvious reference error rather than a silent wrong branch.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — magic strings. Refactor to replace magic strings with clearly named constants while keeping logic unchanged."
+    },
+    "606": {
+      "id": 606,
+      "answer": "Repeated list filtering that creates intermediate collections wastes memory. The fix is to combine predicates into a single pass or use generator expressions.\n\nBefore (multiple intermediate lists):\n```python\ndef get_eligible_users(users):\n    active = [u for u in users if u['active']]\n    verified = [u for u in active if u['verified']]\n    adults = [u for u in verified if u['age'] >= 18]\n    return adults\n```\n\nAfter (single-pass):\n```python\ndef get_eligible_users(users):\n    return [\n        u for u in users\n        if u['active'] and u['verified'] and u['age'] >= 18\n    ]\n```\n\nOr with a helper predicate for readability:\n```python\ndef _is_eligible(user):\n    return user['active'] and user['verified'] and user['age'] >= 18\n\ndef get_eligible_users(users):\n    return [u for u in users if _is_eligible(u)]\n```\n\nKey changes: combined three sequential filters into one list comprehension with all conditions joined by `and`. No intermediate lists are created. Result is identical.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — repeated list filtering. Refactor to avoid unnecessary intermediate collections while keeping the same result."
+    },
+    "607": {
+      "id": 607,
+      "answer": "Callback hell is deep nesting of anonymous callbacks that makes flow hard to follow. Refactoring extracts each callback into a named function while keeping the callback-based API.\n\nBefore (nested callbacks):\n```javascript\nfunction loadUserDashboard(userId, callback) {\n  getUser(userId, function(err, user) {\n    if (err) return callback(err);\n    getPosts(user.id, function(err, posts) {\n      if (err) return callback(err);\n      getComments(posts[0].id, function(err, comments) {\n        if (err) return callback(err);\n        callback(null, { user, posts, comments });\n      });\n    });\n  });\n}\n```\n\nAfter (named helper callbacks):\n```javascript\nfunction loadUserDashboard(userId, callback) {\n  getUser(userId, onUserLoaded);\n\n  function onUserLoaded(err, user) {\n    if (err) return callback(err);\n    getPosts(user.id, onPostsLoaded.bind(null, user));\n  }\n\n  function onPostsLoaded(user, err, posts) {\n    if (err) return callback(err);\n    getComments(posts[0].id, onCommentsLoaded.bind(null, user, posts));\n  }\n\n  function onCommentsLoaded(user, posts, err, comments) {\n    if (err) return callback(err);\n    callback(null, { user, posts, comments });\n  }\n}\n```\n\nKey changes: each anonymous callback is replaced with a named inner function. The nesting is eliminated — all helpers are at the same indentation level. The external API (callback-based) is unchanged.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — callback hell. Refactor to improve readability and structure. You may use named helper functions, but do not change the callback-based API."
+    },
+    "608": {
+      "id": 608,
+      "answer": "Duplicated formatting logic means two functions build the same text using copy-pasted code. Refactoring extracts a shared formatter.\n\nBefore (duplicated):\n```python\ndef print_invoice(invoice):\n    lines = []\n    lines.append(f\"Invoice #{invoice['id']}\")\n    lines.append(f\"Customer: {invoice['customer']}\")\n    for item in invoice['items']:\n        lines.append(f\"  {item['name']}: ${item['price']:.2f}\")\n    lines.append(f\"Total: ${invoice['total']:.2f}\")\n    print('\\n'.join(lines))\n\ndef get_invoice_text(invoice):\n    lines = []\n    lines.append(f\"Invoice #{invoice['id']}\")\n    lines.append(f\"Customer: {invoice['customer']}\")\n    for item in invoice['items']:\n        lines.append(f\"  {item['name']}: ${item['price']:.2f}\")\n    lines.append(f\"Total: ${invoice['total']:.2f}\")\n    return '\\n'.join(lines)\n```\n\nAfter (shared formatter):\n```python\ndef format_invoice(invoice):\n    lines = [f\"Invoice #{invoice['id']}\"]\n    lines.append(f\"Customer: {invoice['customer']}\")\n    for item in invoice['items']:\n        lines.append(f\"  {item['name']}: ${item['price']:.2f}\")\n    lines.append(f\"Total: ${invoice['total']:.2f}\")\n    return '\\n'.join(lines)\n\ndef print_invoice(invoice):\n    print(format_invoice(invoice))\n\ndef get_invoice_text(invoice):\n    return format_invoice(invoice)\n```\n\nKey changes: all formatting logic lives in `format_invoice`. Both public functions delegate to it. Printed and returned text is unchanged.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — duplicated formatting logic. Refactor to reuse shared invoice formatting logic without changing printed or returned text."
+    },
+    "609": {
+      "id": 609,
+      "answer": "Redundant boolean comparisons like `x === true` or `x === false` add noise. Boolean expressions already are `true` or `false`, so comparing them is unnecessary.\n\nBefore (redundant comparisons):\n```javascript\nfunction canAccessFeature(user) {\n  if (user.isActive === true && user.hasSubscription === true) {\n    if (user.isAdmin === false) {\n      return user.trialExpired === false;\n    }\n    return true;\n  }\n  return false;\n}\n```\n\nAfter (simplified):\n```javascript\nfunction canAccessFeature(user) {\n  if (user.isActive && user.hasSubscription) {\n    if (!user.isAdmin) {\n      return !user.trialExpired;\n    }\n    return true;\n  }\n  return false;\n}\n```\n\nOr more concisely as a single expression:\n```javascript\nfunction canAccessFeature(user) {\n  if (!user.isActive || !user.hasSubscription) return false;\n  return user.isAdmin || !user.trialExpired;\n}\n```\n\nKey changes: `=== true` comparisons replaced with the expression directly; `=== false` comparisons replaced with `!`. Logic is identical.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — redundant boolean comparisons. Refactor to remove redundant boolean comparisons and simplify the function."
+    },
+    "610": {
+      "id": 610,
+      "answer": "Poor variable names hide intent and make code hard to maintain. Renaming to descriptive identifiers makes the purpose self-evident.\n\nBefore (cryptic names):\n```python\ndef calc(lst, n):\n    r = []\n    for x in lst:\n        if x > n:\n            t = x * 0.9\n            r.append(t)\n        else:\n            r.append(x)\n    return r\n```\n\nAfter (descriptive names):\n```python\ndef apply_bulk_discount(prices, threshold):\n    discounted_prices = []\n    for price in prices:\n        if price > threshold:\n            discounted_price = price * 0.9\n            discounted_prices.append(discounted_price)\n        else:\n            discounted_prices.append(price)\n    return discounted_prices\n```\n\nOr more concisely:\n```python\ndef apply_bulk_discount(prices, threshold):\n    return [\n        price * 0.9 if price > threshold else price\n        for price in prices\n    ]\n```\n\nKey changes: `calc` -> `apply_bulk_discount`, `lst` -> `prices`, `n` -> `threshold`, `r` -> `discounted_prices`, `x` -> `price`, `t` -> `discounted_price`. Behavior is unchanged.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — poor variable names. Refactor to use descriptive names and make intent obvious. Do not change behavior."
+    },
+    "611": {
+      "id": 611,
+      "answer": "Repeated loop logic occurs when two public functions contain near-identical iteration code. Extract a private helper that both call.\n\nBefore (duplicated loops):\n```javascript\nfunction sumPositive(numbers) {\n  let total = 0;\n  for (let i = 0; i < numbers.length; i++) {\n    if (numbers[i] > 0) {\n      total += numbers[i];\n    }\n  }\n  return total;\n}\n\nfunction countPositive(numbers) {\n  let count = 0;\n  for (let i = 0; i < numbers.length; i++) {\n    if (numbers[i] > 0) {\n      count++;\n    }\n  }\n  return count;\n}\n```\n\nAfter (shared helper):\n```javascript\nfunction getPositives(numbers) {\n  return numbers.filter(n => n > 0);\n}\n\nfunction sumPositive(numbers) {\n  return getPositives(numbers).reduce((acc, n) => acc + n, 0);\n}\n\nfunction countPositive(numbers) {\n  return getPositives(numbers).length;\n}\n```\n\nKey changes: extracted `getPositives` to filter once; both public functions use it. The manual index loop is replaced with idiomatic `filter`/`reduce`. Both public APIs are preserved.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — repeated loop logic. Refactor to eliminate duplicated looping logic while keeping both public functions."
+    },
+    "612": {
+      "id": 612,
+      "answer": "Manual index-based iteration using `range(len(...))` is unidiomatic Python. Use `enumerate` when you need the index, or iterate directly when you don't.\n\nBefore (index-based):\n```python\ndef print_items(items):\n    for i in range(len(items)):\n        print(f\"{i + 1}. {items[i]}\")\n\ndef find_first(items, target):\n    for i in range(len(items)):\n        if items[i] == target:\n            return i\n    return -1\n```\n\nAfter (idiomatic):\n```python\ndef print_items(items):\n    for i, item in enumerate(items, start=1):\n        print(f\"{i}. {item}\")\n\ndef find_first(items, target):\n    for i, item in enumerate(items):\n        if item == target:\n            return i\n    return -1\n```\n\nKey changes: `range(len(items))` replaced with `enumerate(items)`. `enumerate(items, start=1)` avoids the `i + 1` offset. Item values accessed directly from the loop variable instead of indexing. Behavior is identical.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — manual index-based iteration. Refactor to use a clearer iteration style without changing behavior."
+    },
+    "613": {
+      "id": 613,
+      "answer": "A large switch statement with repeated structure is better expressed as a data-driven lookup table. Adding a new case then means adding one entry to the table, not another `case` block.\n\nBefore (large switch):\n```javascript\nfunction getShippingInfo(carrier) {\n  switch (carrier) {\n    case 'fedex':\n      return { name: 'FedEx', days: 2, cost: 15.99 };\n    case 'ups':\n      return { name: 'UPS', days: 3, cost: 12.49 };\n    case 'usps':\n      return { name: 'USPS', days: 5, cost: 7.99 };\n    case 'dhl':\n      return { name: 'DHL', days: 4, cost: 18.00 };\n    case 'ontrac':\n      return { name: 'OnTrac', days: 2, cost: 14.50 };\n    default:\n      return null;\n  }\n}\n```\n\nAfter (data-driven):\n```javascript\nconst SHIPPING_INFO = {\n  fedex:  { name: 'FedEx',  days: 2, cost: 15.99 },\n  ups:    { name: 'UPS',    days: 3, cost: 12.49 },\n  usps:   { name: 'USPS',   days: 5, cost:  7.99 },\n  dhl:    { name: 'DHL',    days: 4, cost: 18.00 },\n  ontrac: { name: 'OnTrac', days: 2, cost: 14.50 },\n};\n\nfunction getShippingInfo(carrier) {\n  return SHIPPING_INFO[carrier] ?? null;\n}\n```\n\nKey changes: each `case` body moved into a plain object. The function becomes a single-line lookup. All outputs are identical.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — large switch with repeated structure. Refactor to a data-driven structure instead of a switch. Preserve all outputs."
+    },
+    "614": {
+      "id": 614,
+      "answer": "Inconsistent return style mixes early returns, guard clauses, and trailing returns in ways that make control flow unpredictable. Standardize on one style throughout.\n\nBefore (inconsistent):\n```python\ndef get_grade(score):\n    if score >= 90:\n        return 'A'\n    else:\n        if score >= 80:\n            return 'B'\n        else:\n            if score >= 70:\n                grade = 'C'\n                return grade\n            else:\n                if score >= 60:\n                    return 'D'\n                else:\n                    grade = 'F'\n    return grade\n```\n\nAfter (consistent early-return style):\n```python\ndef get_grade(score):\n    if score >= 90:\n        return 'A'\n    if score >= 80:\n        return 'B'\n    if score >= 70:\n        return 'C'\n    if score >= 60:\n        return 'D'\n    return 'F'\n```\n\nKey changes: removed all `else` branches (unnecessary after a `return`), eliminated intermediate `grade` variable, flattened to a sequence of guard returns. Grading logic is unchanged.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — inconsistent return style. Refactor for consistency and readability. Do not alter grading logic."
+    },
+    "615": {
+      "id": 615,
+      "answer": "Mutating an input array surprises callers and creates hidden side effects. Return a new array instead, leaving the original untouched.\n\nBefore (mutates input):\n```javascript\nfunction normalizeScores(scores) {\n  for (let i = 0; i < scores.length; i++) {\n    scores[i] = Math.round(scores[i] * 100) / 100;\n    if (scores[i] > 100) scores[i] = 100;\n    if (scores[i] < 0) scores[i] = 0;\n  }\n  return scores;\n}\n```\n\nAfter (returns new array):\n```javascript\nfunction normalizeScores(scores) {\n  return scores.map(score => {\n    const rounded = Math.round(score * 100) / 100;\n    return Math.min(100, Math.max(0, rounded));\n  });\n}\n```\n\nKey changes: replaced the mutating `for` loop with `map`, which always produces a new array. Used `Math.min`/`Math.max` to clamp instead of two separate conditionals. The original `scores` array is never modified. Returned values are identical.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — mutating parameter unnecessarily. Refactor to avoid mutating the input array. Return a new normalized array with identical values."
+    },
+    "616": {
+      "id": 616,
+      "answer": "Repeated dictionary construction means two functions build nearly-identical dicts with copy-pasted fields. Extract a shared builder.\n\nBefore (duplicated):\n```python\ndef get_user_summary(user):\n    return {\n        'id': user.id,\n        'name': user.name,\n        'email': user.email,\n        'role': user.role,\n        'created_at': str(user.created_at),\n    }\n\ndef get_user_card(user):\n    return {\n        'id': user.id,\n        'name': user.name,\n        'email': user.email,\n        'role': user.role,\n        'created_at': str(user.created_at),\n        'avatar_url': user.avatar_url,\n    }\n```\n\nAfter (shared base builder):\n```python\ndef _build_user_base(user):\n    return {\n        'id': user.id,\n        'name': user.name,\n        'email': user.email,\n        'role': user.role,\n        'created_at': str(user.created_at),\n    }\n\ndef get_user_summary(user):\n    return _build_user_base(user)\n\ndef get_user_card(user):\n    return {**_build_user_base(user), 'avatar_url': user.avatar_url}\n```\n\nKey changes: common fields extracted into `_build_user_base`. `get_user_card` spreads the base dict and adds its extra field. Both public functions preserved.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — repeated dictionary construction. Refactor to remove duplication while keeping both functions available."
+    },
+    "617": {
+      "id": 617,
+      "answer": "Nested ternaries chain conditional expressions in a way that is hard to read and reason about. Replace them with a clear `if/else if` chain or a lookup.\n\nBefore (nested ternaries):\n```javascript\nfunction getDiscount(tier) {\n  return tier === 'gold' ? 0.3\n    : tier === 'silver' ? 0.2\n    : tier === 'bronze' ? 0.1\n    : 0;\n}\n```\n\nAfter (lookup table — most readable):\n```javascript\nconst TIER_DISCOUNTS = { gold: 0.3, silver: 0.2, bronze: 0.1 };\n\nfunction getDiscount(tier) {\n  return TIER_DISCOUNTS[tier] ?? 0;\n}\n```\n\nOr with explicit if/else if:\n```javascript\nfunction getDiscount(tier) {\n  if (tier === 'gold')   return 0.3;\n  if (tier === 'silver') return 0.2;\n  if (tier === 'bronze') return 0.1;\n  return 0;\n}\n```\n\nKey changes: nested ternary chain replaced with a flat lookup object (preferred) or sequential early returns. Behavior is unchanged.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — nested ternaries hurting readability. Refactor to improve readability without changing behavior."
+    },
+    "618": {
+      "id": 618,
+      "answer": "Duplicated validation branches repeat the same check-and-error pattern for each field. Consolidate with a loop or a validator map.\n\nBefore (duplicated branches):\n```python\ndef validate_form(data):\n    errors = []\n    if not data.get('name'):\n        errors.append('name is required')\n    if not data.get('email'):\n        errors.append('email is required')\n    if not data.get('phone'):\n        errors.append('phone is required')\n    if not data.get('address'):\n        errors.append('address is required')\n    return errors\n```\n\nAfter (data-driven loop):\n```python\nREQUIRED_FIELDS = ['name', 'email', 'phone', 'address']\n\ndef validate_form(data):\n    return [\n        f'{field} is required'\n        for field in REQUIRED_FIELDS\n        if not data.get(field)\n    ]\n```\n\nKey changes: list of required fields moved to a constant; validation reduced to a list comprehension. Adding or removing a required field now means changing one line in `REQUIRED_FIELDS`. Logic and output are identical.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — duplicated validation branches. Refactor to make the validation more concise and maintainable while preserving logic."
+    },
+    "619": {
+      "id": 619,
+      "answer": "A verbose sorting comparator that manually subtracts or uses if/else can be replaced with a concise one-liner using arrow functions or `key=`.\n\nBefore (verbose comparator):\n```javascript\nfunction sortByAge(people) {\n  return people.sort(function(a, b) {\n    if (a.age < b.age) return -1;\n    if (a.age > b.age) return 1;\n    return 0;\n  });\n}\n```\n\nAfter (concise subtraction comparator):\n```javascript\nfunction sortByAge(people) {\n  return [...people].sort((a, b) => a.age - b.age);\n}\n```\n\nNote: also uses spread to avoid mutating the input array (best practice). If mutation is acceptable and only the comparator needs updating:\n```javascript\nfunction sortByAge(people) {\n  return people.sort((a, b) => a.age - b.age);\n}\n```\n\nKey changes: three-branch if/else comparator replaced with `a.age - b.age`. Ascending order behavior is identical.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — repeated sorting comparator. Refactor the comparator to a more concise form. Keep the same ascending order behavior."
+    },
+    "620": {
+      "id": 620,
+      "answer": "Building a string with repeated `+=` concatenation creates many intermediate string objects in Python. Use `str.join()` on a list instead.\n\nBefore (repeated concatenation):\n```python\ndef build_report(entries):\n    result = ''\n    result += 'Report:\\n'\n    for entry in entries:\n        result += f\"  - {entry['name']}: {entry['value']}\\n\"\n    result += 'End of report'\n    return result\n```\n\nAfter (join on list):\n```python\ndef build_report(entries):\n    lines = ['Report:']\n    for entry in entries:\n        lines.append(f\"  - {entry['name']}: {entry['value']}\")\n    lines.append('End of report')\n    return '\\n'.join(lines)\n```\n\nOr using a list comprehension for the body:\n```python\ndef build_report(entries):\n    body = [f\"  - {e['name']}: {e['value']}\" for e in entries]\n    return '\\n'.join(['Report:', *body, 'End of report'])\n```\n\nKey changes: accumulated lines into a list, joined once at the end. Output is identical, and no intermediate strings are created.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — building string with repeated concatenation. Refactor to a clearer and more efficient implementation with identical output."
+    },
+    "621": {
+      "id": 621,
+      "answer": "Unclear temporary variables with single-letter or vague names hide what each computation step is doing. Rename them to reflect purpose.\n\nBefore (unclear temporaries):\n```javascript\nfunction computeOrderTotal(items, taxRate) {\n  let s = 0;\n  for (const item of items) {\n    let t = item.price * item.qty;\n    let d = item.discount ? t * item.discount : 0;\n    s += t - d;\n  }\n  let tx = s * taxRate;\n  return s + tx;\n}\n```\n\nAfter (descriptive names):\n```javascript\nfunction computeOrderTotal(items, taxRate) {\n  let subtotal = 0;\n  for (const item of items) {\n    const lineTotal = item.price * item.qty;\n    const discountAmount = item.discount ? lineTotal * item.discount : 0;\n    subtotal += lineTotal - discountAmount;\n  }\n  const taxAmount = subtotal * taxRate;\n  return subtotal + taxAmount;\n}\n```\n\nKey changes: `s` -> `subtotal`, `t` -> `lineTotal`, `d` -> `discountAmount`, `tx` -> `taxAmount`. No logic changed; the function produces the same result.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — unclear temporary variables. Refactor to improve naming and remove unnecessary variables while keeping the function the same externally."
+    },
+    "622": {
+      "id": 622,
+      "answer": "When two functions share the same pattern of looking up a field label and constructing an error message, extract a private helper.\n\nBefore (duplicated):\n```python\nFIELD_LABELS = {'name': 'Full Name', 'email': 'Email Address', 'dob': 'Date of Birth'}\n\ndef get_missing_error(field):\n    label = FIELD_LABELS.get(field, field)\n    return f\"{label} is missing\"\n\ndef get_invalid_error(field):\n    label = FIELD_LABELS.get(field, field)\n    return f\"{label} is invalid\"\n```\n\nAfter (shared helper):\n```python\nFIELD_LABELS = {'name': 'Full Name', 'email': 'Email Address', 'dob': 'Date of Birth'}\n\ndef _get_field_label(field):\n    return FIELD_LABELS.get(field, field)\n\ndef get_missing_error(field):\n    return f\"{_get_field_label(field)} is missing\"\n\ndef get_invalid_error(field):\n    return f\"{_get_field_label(field)} is invalid\"\n```\n\nKey changes: extracted `_get_field_label` to avoid repeating the `FIELD_LABELS.get(field, field)` lookup. Both public functions are kept and return identical strings.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — duplicated error message creation. Refactor to share the field lookup and error creation logic. Keep both public functions."
+    },
+    "623": {
+      "id": 623,
+      "answer": "Hardcoded repeated numbers in style assignments should be extracted into a named constant so the value only appears once.\n\nBefore (repeated magic number):\n```javascript\nfunction applyGridSpacing(elements) {\n  elements.header.style.margin = '16px';\n  elements.sidebar.style.padding = '16px';\n  elements.content.style.gap = '16px';\n  elements.footer.style.padding = '16px';\n}\n```\n\nAfter (named constant):\n```javascript\nconst GRID_SPACING = '16px';\n\nfunction applyGridSpacing(elements) {\n  elements.header.style.margin = GRID_SPACING;\n  elements.sidebar.style.padding = GRID_SPACING;\n  elements.content.style.gap = GRID_SPACING;\n  elements.footer.style.padding = GRID_SPACING;\n}\n```\n\nKey changes: `'16px'` extracted to `GRID_SPACING` constant. All four style assignments now reference the constant. Changing the spacing value requires editing one line. All assigned values remain identical.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — hardcoded repeated numbers. Refactor to remove the repeated hardcoded spacing value while keeping all style assignments."
+    },
+    "624": {
+      "id": 624,
+      "answer": "When multiple branches return the same type of value, the conditional logic can often be reduced to a direct boolean or expression return.\n\nBefore (too many returns for equivalent outcomes):\n```python\ndef is_valid_age(age):\n    if age is None:\n        return False\n    if not isinstance(age, int):\n        return False\n    if age < 0:\n        return False\n    if age > 150:\n        return False\n    return True\n```\n\nAfter (single expression return):\n```python\ndef is_valid_age(age):\n    return (\n        age is not None\n        and isinstance(age, int)\n        and 0 <= age <= 150\n    )\n```\n\nOr keeping early returns but tightening:\n```python\ndef is_valid_age(age):\n    if age is None or not isinstance(age, int):\n        return False\n    return 0 <= age <= 150\n```\n\nKey changes: all `False` guard returns consolidated. The `True` path replaced with a direct boolean expression. Logic and all return values are identical.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — too many returns for equivalent outcomes. Refactor to simplify the logic and remove redundant return paths."
+    },
+    "625": {
+      "id": 625,
+      "answer": "Making multiple passes over a collection — first to filter, then to map — can be combined into a single pass using `flatMap` or chained array methods that are evaluated lazily, or simply `reduce`.\n\nBefore (multiple passes):\n```javascript\nfunction getActiveUserNames(users) {\n  const activeUsers = users.filter(u => u.active);\n  const names = activeUsers.map(u => u.name.toUpperCase());\n  return names;\n}\n```\n\nAfter (single chained expression — still two passes but cleaner):\n```javascript\nfunction getActiveUserNames(users) {\n  return users\n    .filter(u => u.active)\n    .map(u => u.name.toUpperCase());\n}\n```\n\nOr true single-pass with `reduce`:\n```javascript\nfunction getActiveUserNames(users) {\n  return users.reduce((acc, u) => {\n    if (u.active) acc.push(u.name.toUpperCase());\n    return acc;\n  }, []);\n}\n```\n\nKey changes: eliminated intermediate `activeUsers` variable; the chained version is idiomatic and most readable. The `reduce` version is a true single pass. Both produce identical results.",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — combining filtering and mapping in multiple passes. Refactor to reduce unnecessary passes over the data."
+    },
+    "626": {
+      "id": 626,
+      "answer": "Refactor by caching the repeated computation result:\n\n```python\ndef summarize(data):\n    total = sum(data)\n    count = len(data)\n    average = total / count if count else 0\n    return {'total': total, 'average': average, 'count': count}\n```",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — repeated calls. Refactor to avoid repeating the same computation and improve clarity."
+    },
+    "627": {
+      "id": 627,
+      "answer": "// Refactored: extract shared shapeResponse helper; keep both exports\nfunction shapeResponse(raw) {\n  return { id: raw.id, name: raw.name, email: raw.email, createdAt: raw.created_at };\n}\n\nexport function formatUserResponse(raw)  { return shapeResponse(raw); }\nexport function formatAdminResponse(raw) { return { ...shapeResponse(raw), role: 'admin' }; }",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — duplicated API response shaping. Refactor to remove duplication while preserving both exported functions and output shape."
+    },
+    "628": {
+      "id": 628,
+      "answer": "# Refactored: use set intersection instead of nested loops; preserve duplicate behavior via counter\nfrom collections import Counter\n\ndef common_items(list_a, list_b):\n    counter_a = Counter(list_a)\n    counter_b = Counter(list_b)\n    result = []\n    for item in counter_a:\n        count = min(counter_a[item], counter_b[item])\n        result.extend([item] * count)\n    return result",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — nested loops with avoidable complexity. Refactor for clarity and efficiency. Preserve behavior, including duplicates."
+    },
+    "629": {
+      "id": 629,
+      "answer": "// Refactored: use a Set for membership testing instead of a chain of conditions\nconst ACTIVE_STATUSES = new Set(['active', 'trial', 'grace']);\n\nfunction isActive(user) {\n  return ACTIVE_STATUSES.has(user.status);\n}",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — procedural repetition for status checks. Refactor to a clearer membership-based approach without changing results."
+    },
+    "630": {
+      "id": 630,
+      "answer": "# Refactored: separate parsing from arithmetic\ndef parse_numbers(text):\n    return [int(t) for t in text.split() if t.lstrip('-').isdigit()]\n\ndef sum_text_numbers(text):\n    return sum(parse_numbers(text))",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — function mixes parsing and math. Refactor to separate parsing from addition, while preserving functionality."
+    },
+    "631": {
+      "id": 631,
+      "answer": "// Refactored: extract logWith helper; keep both public functions\nfunction logWith(level, label, fn, ...args) {\n  console.log(`[${level}] ${label} called`);\n  const result = fn(...args);\n  console.log(`[${level}] ${label} done`);\n  return result;\n}\n\nexport function loggedFetch(fn, ...args) { return logWith('INFO', 'fetch', fn, ...args); }\nexport function loggedSave(fn, ...args)  { return logWith('INFO', 'save',  fn, ...args); }",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — duplicated logging wrappers. Refactor to reuse the common logging structure but keep both public functions."
+    },
+    "632": {
+      "id": 632,
+      "answer": "Refactor to remove dead code after return statements:\n\n```python\ndef get_status(is_active, is_admin):\n    if is_admin:\n        return 'admin'\n    if is_active:\n        return 'active'\n    return 'inactive'\n```",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — unnecessary after return. Refactor to a cleaner style without changing behavior."
+    },
+    "633": {
+      "id": 633,
+      "answer": "// Refactored: format date with a helper that reads parts from a Date object\nfunction formatDate(date) {\n  const pad = n => String(n).padStart(2, '0');\n  const y = date.getFullYear();\n  const m = pad(date.getMonth() + 1);\n  const d = pad(date.getDate());\n  return `${y}-${m}-${d}`;\n}",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — repeated date formatting pieces. Refactor to make the formatting logic cleaner and easier to read."
+    },
+    "634": {
+      "id": 634,
+      "answer": "# Refactored: extract convert helper; apply uniformly across converters\ndef convert(value, factor):\n    return round(value * factor, 4)\n\ndef km_to_miles(km): return convert(km, 0.621371)\ndef kg_to_lbs(kg):  return convert(kg, 2.20462)\ndef c_to_f(c):      return round(c * 9 / 5 + 32, 4)",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — converting values with repeated code. Refactor to avoid repeating the conversion pattern while keeping the same results."
+    },
+    "635": {
+      "id": 635,
+      "answer": "// Refactored: table-based lookup replaces multi-branch function\nconst COUNTRY_CODES = {\n  'United States': 'US',\n  'United Kingdom': 'GB',\n  'Canada': 'CA',\n  'Australia': 'AU',\n  'Germany': 'DE',\n};\n\nfunction getCountryCode(country) {\n  return COUNTRY_CODES[country] ?? 'UNKNOWN';\n}",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — function does lookup with multiple repeated returns. Refactor to a table-based lookup. Preserve outputs for all inputs."
+    },
+    "636": {
+      "id": 636,
+      "answer": "# Refactored: extract count_by helper; keep both public functions\ndef count_by(items, key):\n    counts = {}\n    for item in items:\n        k = item[key]\n        counts[k] = counts.get(k, 0) + 1\n    return counts\n\ndef count_by_status(items):\n    return count_by(items, 'status')\n\ndef count_by_category(items):\n    return count_by(items, 'category')",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — duplicated counting logic. Refactor to share the counting pattern while keeping both public functions."
+    },
+    "637": {
+      "id": 637,
+      "answer": "// Refactored: eliminate temporary flag by returning directly\nfunction hasPermission(user, action) {\n  return (user.roles || []).some(role => (role.permissions || []).includes(action));\n}",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — awkward temporary state. Refactor to remove unnecessary temporary state and simplify the function."
+    },
+    "638": {
+      "id": 638,
+      "answer": "# Refactored: use dict.get() with defaults to remove redundant key checks\ndef summarize(config):\n    host  = config.get('host', 'localhost')\n    port  = config.get('port', 8080)\n    debug = config.get('debug', False)\n    return f\"{host}:{port} debug={debug}\"",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — repeated key existence checks. Refactor to reduce repeated dictionary key checks while keeping output identical."
+    },
+    "639": {
+      "id": 639,
+      "answer": "// Refactored: extract accumulate helper; keep both exported functions\nfunction accumulate(items, valueKey, labelKey) {\n  return items.reduce((acc, item) => {\n    const label = item[labelKey];\n    acc[label] = (acc[label] || 0) + item[valueKey];\n    return acc;\n  }, {});\n}\n\nexport function totalByCategory(items) { return accumulate(items, 'amount', 'category'); }\nexport function totalByRegion(items)   { return accumulate(items, 'amount', 'region'); }",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — duplicated accumulation pattern. Refactor to remove duplicated accumulation logic while keeping both functions."
+    },
+    "640": {
+      "id": 640,
+      "answer": "Refactor using Python's built-in `max` with a key function:\n\n```python\ndef get_top_scorer(players):\n    return max(players, key=lambda p: p['score'])\n```",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — low-level manual max search. Refactor to a more idiomatic and readable implementation. Assume is non-empty."
+    },
+    "641": {
+      "id": 641,
+      "answer": "Refactor by extracting a shared normalize function:\n\n```javascript\nfunction normalize(str) {\n  return str.trim().toLowerCase();\n}\n\nfunction isSameName(a, b) {\n  return normalize(a) === normalize(b);\n}\n\nfunction includesName(list, name) {\n  return list.some(item => normalize(item) === normalize(name));\n}\n```",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — repeated normalization in comparisons. Refactor to share the normalization logic while keeping both functions unchanged externally."
+    },
+    "642": {
+      "id": 642,
+      "answer": "Refactor by extracting a shared tuple builder:\n\n```python\ndef _make_record(name, value, unit):\n    return (name, value, unit)\n\ndef get_temperature(value):\n    return _make_record('temperature', value, 'C')\n\ndef get_pressure(value):\n    return _make_record('pressure', value, 'Pa')\n```",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — duplicated tuple construction. Refactor to remove duplication while preserving both public functions and return values."
+    },
+    "643": {
+      "id": 643,
+      "answer": "// Refactored: use map() for a declarative single-pass transform\nfunction toDisplayItems(products) {\n  return products.map(({ id, name, price }) => ({\n    id,\n    label: name.toUpperCase(),\n    formattedPrice: `$${price.toFixed(2)}`,\n  }));\n}",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — array transformed with push in loop. Refactor to a more declarative style with the same returned array contents."
+    },
+    "644": {
+      "id": 644,
+      "answer": "# Refactored: return the boolean expression directly\ndef is_valid_user(user):\n    return bool(user.get('name')) and bool(user.get('email')) and user.get('age', 0) >= 18",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — verbose boolean return. Refactor to simplify the boolean return without altering semantics."
+    },
+    "645": {
+      "id": 645,
+      "answer": "// Refactored: merge identical branch bodies by broadening the condition\nfunction applyFee(account) {\n  if (account.type === 'savings' || account.type === 'checking') {\n    account.balance -= 5;\n  } else if (account.type === 'premium') {\n    account.balance -= 0;\n  }\n  return account;\n}",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — repeated branch bodies. Refactor to eliminate redundant branches while preserving behavior exactly."
+    },
+    "646": {
+      "id": 646,
+      "answer": "# Refactored: use augmented assignment and built-in min/max\ndef update_stats(stats, value):\n    stats['count'] += 1\n    stats['total'] += value\n    stats['min']    = min(stats['min'], value)\n    stats['max']    = max(stats['max'], value)\n    return stats",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — repeated arithmetic update pattern. Refactor to a cleaner, more idiomatic implementation with the same output."
+    },
+    "647": {
+      "id": 647,
+      "answer": "// Refactored: separate format from select; compose in listAffordable\nfunction formatProduct(p) {\n  return `${p.name} - $${p.price.toFixed(2)}`;\n}\n\nfunction selectAffordable(products, budget) {\n  return products.filter(p => p.price <= budget);\n}\n\nfunction listAffordable(products, budget) {\n  return selectAffordable(products, budget).map(formatProduct);\n}",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — function mixes selection and formatting. Refactor to separate formatting from selection logic. Preserve returned strings."
+    },
+    "648": {
+      "id": 648,
+      "answer": "Refactor by extracting the shared predicate:\n\n```python\ndef _is_eligible(item):\n    return item.get('active') and item.get('score', 0) > 50\n\ndef get_eligible_names(items):\n    return [item['name'] for item in items if _is_eligible(item)]\n\ndef get_eligible_ids(items):\n    return [item['id'] for item in items if _is_eligible(item)]\n```",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — repeated predicates in list comprehensions. Refactor to remove duplication while keeping both functions."
+    },
+    "649": {
+      "id": 649,
+      "answer": "// Refactored: use object destructuring + property shorthand to clone specific fields\nconst CLONED_FIELDS = ['id', 'name', 'email', 'role'];\n\nfunction cloneUser(user) {\n  return Object.fromEntries(CLONED_FIELDS.map(k => [k, user[k]]));\n}",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "JavaScript — manual property copying. Refactor to a cleaner cloning approach for the same fields only. Do not copy extra properties."
+    },
+    "650": {
+      "id": 650,
+      "answer": "Refactor by iterating over a field definition list:\n\n```python\ndef print_user(user):\n    fields = [\n        ('Name', 'name'),\n        ('Email', 'email'),\n        ('Age', 'age'),\n        ('Role', 'role'),\n    ]\n    for label, key in fields:\n        print(f'{label}: {user[key]}')\n```",
+      "tier": "T3",
+      "category": "refactor",
+      "task": "Python — repetitive field printing. Refactor to reduce repetition while keeping the exact same printed lines and order."
+    },
+    "651": {
+      "id": 651,
+      "answer": "**URL Shortener System Design**\n\n**Core Requirements:** Generate short aliases for long URLs, redirect clients, track click analytics.\n\n**Key Components:**\n- **API Service** — REST endpoints: `POST /shorten` (returns short code), `GET /{code}` (301/302 redirect)\n- **ID Generation** — Use base62 encoding of an auto-increment ID (from a distributed ID generator like Snowflake) to produce 6–8 character codes. Alternatively use a pre-generated code pool.\n- **Storage** — Key-value store (Redis) for hot lookups; persistent store (Cassandra or DynamoDB) for durability. Schema: `code → {long_url, created_at, user_id, expiry}`\n- **Redirect Service** — Stateless servers read code from cache first (Redis), fall back to DB. Return 301 (cacheable) or 302 (trackable).\n- **Analytics** — Stream click events (Kafka) to an analytics pipeline; store aggregated counts in a time-series DB.\n- **Custom Aliases** — Store in the same KV store; check uniqueness before insert.\n\n**Scalability:** Hash ring sharding on code; read replicas; CDN for popular redirects. Rate-limit `POST /shorten` per user. Bloom filter to avoid DB lookup for definitely-missing codes.\n\n**Capacity (rough):** 100M URLs, 6-char base62 = 56B possible codes — ample headroom.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a URL Shortener"
+    },
+    "652": {
+      "id": 652,
+      "answer": "**API Rate Limiter System Design**\n\n**Goals:** Limit request rates per client (IP, API key, user) to prevent abuse and ensure fair use.\n\n**Algorithms:**\n- **Token Bucket** — Allows bursting up to bucket capacity; tokens refill at fixed rate. Good for bursty traffic.\n- **Sliding Window Counter** — Accurate; store per-second sub-buckets in Redis sorted sets or hash maps.\n- **Fixed Window** — Simple; boundary spikes possible.\n\n**Architecture:**\n- **Middleware layer** — Rate limiter sits in API Gateway or as a sidecar.\n- **Centralized state** — Redis with atomic Lua scripts or INCR+EXPIRE for counters. Use Redis Cluster for HA.\n- **Config store** — Rules DB (limit, window, key type) loaded into memory with TTL refresh.\n- **Response headers** — `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`, `Retry-After`.\n\n**Multi-tier limits:** Global limit + per-endpoint limit + per-user limit evaluated in order.\n\n**Distributed coordination:** If multiple gateway nodes, all share Redis. Local cache of limits for speed; accept slight over-allowance at boundary.\n\n**Failure mode:** Fail open (allow traffic) if Redis is unreachable to avoid full outage, log for alerting.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design an API Rate Limiter"
+    },
+    "653": {
+      "id": 653,
+      "answer": "**Distributed Cache System Design**\n\n**Goals:** Low-latency key-value store with horizontal scalability, high availability, and cache invalidation.\n\n**Core Design:**\n- **Sharding** — Consistent hashing ring assigns keys to nodes; virtual nodes smooth distribution. Adding/removing a node migrates only a fraction of keys.\n- **Replication** — Each key replicated to N (e.g., 3) consecutive nodes. Reads can use quorum (R=2) or primary-only for speed.\n- **Eviction Policies** — LRU (most common), LFU, TTL-based expiry. Memory-bound; evict on capacity.\n- **Write Policies** — Write-through (write to DB and cache together) vs. write-back (write to cache, flush to DB asynchronously).\n\n**Components:**\n- **Client library** — Handles hashing, node selection, serialization.\n- **Cache nodes** — In-memory store (hash table + linked list for LRU). Each node exposes GET/SET/DEL/EXPIRE.\n- **Coordinator / gossip** — Nodes gossip health; client library or proxy routes to correct node.\n- **Cache-aside pattern** — App checks cache, on miss reads DB and populates cache.\n\n**Cache Stampede Prevention:** Probabilistic early expiration or mutex-based locking on cache miss.\n\n**Invalidation:** TTL expiry, explicit delete on write, or event-driven invalidation via a CDC stream (Debezium).",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Distributed Cache"
+    },
+    "654": {
+      "id": 654,
+      "answer": "**Message Queue System Design**\n\n**Goals:** Durable, ordered (per-partition) delivery of messages from producers to consumers; at-least-once delivery; horizontal scalability.\n\n**Core Components:**\n- **Brokers** — Cluster of nodes; each stores an append-only log of messages.\n- **Topics & Partitions** — Topics split into N partitions. Each partition is an ordered log. Producers hash message key to partition. Consumers within a consumer group each own some partitions.\n- **Producers** — Publish to partition, receive ACK after write to leader (and optionally replicas).\n- **Consumers** — Pull-based; track offset per partition. Commit offset after processing (at-least-once) or before (at-most-once).\n- **Replication** — Each partition has a leader and follower replicas (ISR list). Leader handles reads/writes; followers replicate.\n- **ZooKeeper / Raft** — Manage leader election and cluster metadata.\n\n**Durability:** Messages written to disk with fsync. Retention configurable (time or size).\n\n**Delivery Guarantees:**\n- At-least-once: default with offset commit after processing.\n- Exactly-once: producer idempotency + transactional API.\n\n**Scaling:** Add partitions to scale throughput. Add consumer instances (up to partition count) to scale consumption.\n\n**Dead Letter Queue:** Messages that fail after N retries routed to DLQ topic for inspection.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Message Queue"
+    },
+    "655": {
+      "id": 655,
+      "answer": "**Notification System Design**\n\n**Goals:** Deliver notifications (push, email, SMS, in-app) reliably to millions of users with low latency.\n\n**Architecture:**\n- **API Service** — Accepts notification requests (`POST /notify`); validates, enqueues.\n- **Message Queue** — Kafka topics per channel (push_notifications, emails, sms). Fan-out from event topic to channel-specific topics.\n- **Channel Workers** — Separate consumer groups per channel:\n  - Push: calls APNs/FCM\n  - Email: calls SendGrid/SES\n  - SMS: calls Twilio\n- **User Preference Service** — Stores per-user opt-in/out, quiet hours, channel preferences. Checked before dispatching.\n- **Template Service** — Renders notification content from templates + user data.\n- **Retry & DLQ** — Exponential backoff on delivery failure; dead-letter queue after N retries.\n- **Deduplication** — Idempotency key prevents duplicate sends on retry.\n- **In-App Store** — Notifications persisted to DB (Cassandra); client polls or uses WebSocket.\n\n**Fan-out for social events:** Event triggers one message; worker fans out to all followers' queues. For celebrities use pull model (followers fetch on load).\n\n**Observability:** Track delivery rate, open rate, bounce rate per channel.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Notification System"
+    },
+    "656": {
+      "id": 656,
+      "answer": "**Job Scheduler System Design**\n\n**Goals:** Schedule jobs at specific times or recurring intervals; ensure each job runs exactly once; handle failures.\n\n**Core Components:**\n- **Job Store** — Database (Postgres) with schema: `(job_id, cron_expr, payload, status, next_run_at, last_run_at, owner_node)`\n- **Scheduler Daemon** — Polls DB for jobs where `next_run_at <= now AND status = 'pending'`. Uses `SELECT FOR UPDATE SKIP LOCKED` for distributed leader-free execution.\n- **Worker Pool** — Scheduler picks up job, marks `status = running`, dispatches to worker queue (Kafka/Redis Queue).\n- **Worker Nodes** — Execute job logic; on success mark `status = success`, compute next_run_at from cron. On failure mark `status = failed`, increment retry count.\n- **Cron Parser** — Library parses cron expression to compute next execution time.\n- **Retry Policy** — Configurable per-job: max retries, backoff strategy.\n- **Heartbeat** — Running jobs send periodic heartbeats; scheduler marks as failed if heartbeat missed (worker crash detection).\n\n**High Availability:** Multiple scheduler nodes; `SKIP LOCKED` prevents double-scheduling. Optional: use distributed lock (Redis SETNX) per job_id.\n\n**Observability:** Job history table; alerting on missed or failed jobs; dashboard showing schedule status.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Job Scheduler"
+    },
+    "657": {
+      "id": 657,
+      "answer": "**Search Autocomplete Service Design**\n\n**Goals:** Return ranked completions for a prefix query within ~100ms at high QPS.\n\n**Data Structures:**\n- **Trie** — Prefix tree where each node stores top-K completions for that prefix (pre-aggregated). Fast but memory-heavy.\n- **Alternative** — Inverted index on n-grams; or store sorted suggestions in Redis sorted sets keyed by prefix.\n\n**Architecture:**\n- **Ingestion Pipeline** — Aggregate search logs (Kafka) → compute top-K phrases per prefix → update suggestion store. Run periodically (every few hours) or incrementally.\n- **Suggestion Store** — Redis sorted sets: key = prefix string, members = suggestions, score = popularity. `ZREVRANGE prefix 0 K-1` returns top-K fast.\n- **API Service** — Stateless; on query `?q=pref`, fetch from Redis. Sub-millisecond response.\n- **CDN / Browser Cache** — Cache common prefix results at edge (short TTL).\n- **Personalization (optional)** — Blend global suggestions with user history using a scoring function.\n\n**Handling Typos:** Fuzzy matching (edit distance) on a slower path; or train a spell-correct model.\n\n**Scaling:** Shard Redis by prefix hash. Read replicas for hot prefixes. Trie sharding by first 1-2 characters.\n\n**Filtering:** Remove offensive/blacklisted suggestions before storing.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Search Autocomplete Service"
+    },
+    "658": {
+      "id": 658,
+      "answer": "**Real-Time Chat Service Design**\n\n**Goals:** Low-latency message delivery, persistence, online presence, read receipts, group chats.\n\n**Architecture:**\n- **WebSocket Gateway** — Long-lived connections per client; handles send/receive. Stateless horizontally; connection metadata stored in Redis (user_id → gateway node).\n- **Message Service** — Validates and stores messages; publishes to Kafka.\n- **Fan-out Service** — Consumes Kafka; for 1:1 chat pushes to recipient's gateway node via internal pub/sub (Redis pub/sub or dedicated message bus). For group chat fans out to all members.\n- **Message Store** — Cassandra partitioned by `(conversation_id, time_bucket)`. Schema: `message_id, sender_id, content, timestamp, type`.\n- **Presence Service** — Track online/offline via heartbeat. Store in Redis with TTL. Broadcast presence changes via pub/sub.\n- **Read Receipts** — Client sends ACK; stored in DB; delivered to sender via the same push path.\n- **Push Notifications** — If recipient is offline, fall back to APNs/FCM via Notification Service.\n- **Media** — Upload to S3; store URL in message. CDN serves media.\n\n**Message Ordering:** Client assigns client-side timestamp; server assigns server-side ID. Clients sort by server ID.\n\n**End-to-End Encryption:** Keys exchanged via Signal protocol; server stores ciphertext only.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Real-Time Chat Service"
+    },
+    "659": {
+      "id": 659,
+      "answer": "**Distributed Lock Service Design**\n\n**Goals:** Provide mutual exclusion across distributed processes; handle node failures; avoid deadlocks.\n\n**Approaches:**\n\n1. **Redis-based (Redlock)** — `SET key token NX PX ttl` acquires lock. Release with Lua script checking token before DEL. Redlock acquires lock on majority of N Redis nodes. Handles single node failure.\n\n2. **Zookeeper-based** — Create ephemeral sequential znode under lock path. Lowest sequence number holds lock. Watch the next-lower node for deletion. Lock released on disconnect (ephemeral node deleted automatically).\n\n3. **Database-based** — `INSERT INTO locks (name, owner, expiry) ... ON CONFLICT DO NOTHING`. Periodic renewal. Cleanup expired locks on acquisition attempt.\n\n**Key Properties:**\n- **Safety** — Only one holder at a time.\n- **Liveness** — Lock is eventually released (TTL / ephemeral node).\n- **Fault tolerance** — Lock released if holder crashes (TTL expires or ephemeral node deleted).\n\n**Fencing Token** — Monotonically increasing token issued on lock acquisition. Downstream services reject requests with stale tokens, protecting against false lock holder after TTL expiry (split-brain).\n\n**API:** `acquire(key, ttl) → token | None`, `release(key, token)`, `renew(key, token, ttl)`.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Distributed Lock Service"
+    },
+    "660": {
+      "id": 660,
+      "answer": "**File Storage Service Design**\n\n**Goals:** Store and retrieve arbitrary files; durable, scalable, accessible via URL; support large files.\n\n**Architecture:**\n- **Upload API** — Client requests presigned upload URL from API service. API generates S3/GCS presigned URL. Client uploads directly to object store, bypassing API servers.\n- **Metadata Store** — Postgres/DynamoDB: `(file_id, owner_id, name, size, mime_type, storage_key, created_at, status)`. Indexed by owner and name.\n- **Object Store** — S3-compatible store (S3, GCS, MinIO). Files stored by content-addressable hash (deduplication) or UUID key.\n- **CDN** — Serve read traffic via CloudFront/Fastly. Signed URLs for private files.\n- **Chunked Upload** — Large files split into chunks (5–100MB). Each chunk uploaded independently; server assembles via multipart upload API. Resumable uploads.\n- **Download** — API validates access, returns presigned download URL or CDN URL.\n- **Virus Scan** — Async scan after upload; quarantine if flagged.\n- **Lifecycle Policies** — Auto-delete or archive to Glacier after retention period.\n\n**Access Control:** Per-file ACL (private, shared, public). Short-lived presigned URLs for private access.\n\n**Durability:** Object store provides 11 nines durability via cross-region replication.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a File Storage Service"
+    },
+    "661": {
+      "id": 661,
+      "answer": "**News Feed System Design**\n\n**Goals:** Generate a personalized, ranked feed of posts from followed users; low read latency; support celebrities with millions of followers.\n\n**Fan-out Strategies:**\n- **Fan-out on Write (Push)** — On post creation, write post ID to each follower's feed list (Redis sorted set, score = timestamp). Fast reads; expensive for celebrities.\n- **Fan-out on Read (Pull)** — On feed request, fetch recent posts from all followed users and merge. Scalable for celebrities; slower reads.\n- **Hybrid** — Push to regular users' feed caches; pull and merge celebrity posts at read time.\n\n**Architecture:**\n- **Post Service** — Stores posts in DB (Cassandra), publishes event to Kafka.\n- **Fan-out Service** — Consumes Kafka; determines follower list; writes to feed cache (Redis sorted sets, capped at e.g. 1000 entries).\n- **Feed Service** — Reads from user's feed cache (Redis). Fetches post details from Post Service. Applies ranking model.\n- **Ranking** — ML model scores posts by relevance (recency, engagement, relationship strength).\n- **Social Graph** — Graph DB or adjacency list store (Redis sets) for follower/following lookups.\n\n**Pagination:** Cursor-based (last seen timestamp) for infinite scroll.\n\n**Cold start:** New users see trending posts until they follow enough accounts.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a News Feed System"
+    },
+    "662": {
+      "id": 662,
+      "answer": "**Metrics Collection System Design**\n\n**Goals:** Collect, store, and query time-series metrics (counters, gauges, histograms) from services at high throughput.\n\n**Architecture:**\n- **Instrumentation** — Services emit metrics via client libraries (StatsD, Prometheus client, OpenTelemetry SDK).\n- **Collection Agents** — Local agents (Telegraf, Prometheus node_exporter) scrape or receive metrics, buffer, and forward to aggregation layer.\n- **Aggregation / Ingestion** — Kafka receives metric streams. Aggregation workers compute pre-aggregates (per-minute rollups) to reduce storage.\n- **Time-Series DB** — InfluxDB, Prometheus TSDB, or VictoriaMetrics. Data model: `metric_name + label_set → [(timestamp, value)]`. Optimized for range queries and downsampling.\n- **Query Layer** — PromQL / InfluxQL for querying. Query federation for multi-region.\n- **Alerting** — Rule engine evaluates queries on schedule (Prometheus Alertmanager); routes alerts to PagerDuty/Slack.\n- **Dashboards** — Grafana queries TSDB and renders charts.\n\n**Retention:** High-resolution data (1s) retained 15 days; downsampled (1m) 6 months; (1h) indefinitely.\n\n**Cardinality Control:** Limit label value count; alert on cardinality explosions. High cardinality is the main scaling challenge.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Metrics Collection System"
+    },
+    "663": {
+      "id": 663,
+      "answer": "**Log Aggregation Platform Design**\n\n**Goals:** Collect logs from all services, store them durably, enable fast full-text search and alerting.\n\n**Architecture (ELK / similar):**\n- **Log Shippers** — Filebeat/Fluentd run on each host; tail log files, parse, and forward to message queue.\n- **Message Queue** — Kafka buffers log events; decouples producers from indexers; handles spikes.\n- **Log Processor** — Logstash/Flink consumes from Kafka; parses, enriches (adds geo-IP, service metadata), filters, and routes to storage.\n- **Storage:**\n  - **Hot (search):** Elasticsearch / OpenSearch for recent logs (7–30 days). Indexed on timestamp, service, level, trace_id.\n  - **Cold (archive):** S3/GCS in Parquet for long-term retention. Query via Athena or BigQuery.\n- **Search & UI** — Kibana or Grafana Loki UI. Search by time range, service, level, keyword, trace_id.\n- **Alerting** — Watcher (ES) or custom rules; alert on error rate spikes, patterns.\n\n**Structured Logging:** Services emit JSON logs with standard fields: `timestamp`, `level`, `service`, `trace_id`, `message`.\n\n**Multi-tenancy:** Index-per-tenant or field-based partitioning. RBAC on Kibana.\n\n**Schema:** Semi-structured; dynamic mapping in ES but with explicit mappings for key fields to control cardinality.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Log Aggregation Platform"
+    },
+    "664": {
+      "id": 664,
+      "answer": "**Web Crawler Design**\n\n**Goals:** Systematically discover and fetch web pages; extract links; store content; be polite and scalable.\n\n**Architecture:**\n- **Seed URLs** — Initial frontier loaded from seed list or sitemap.\n- **URL Frontier** — Priority queue of URLs to crawl. Partitioned by domain to enforce politeness (one request per domain per crawl-delay). Backed by Kafka or Redis sorted sets.\n- **Fetcher Workers** — Distributed workers pull URLs from frontier, fetch HTML (respect robots.txt, crawl-delay, noindex). Use rotating proxies if needed.\n- **DNS Cache** — Shared DNS cache to avoid redundant lookups.\n- **URL Seen Filter** — Bloom filter (fast, space-efficient) + DB to detect already-crawled URLs.\n- **Content Seen Filter** — SimHash or MD5 of content to detect near-duplicate pages.\n- **Parser** — Extracts links (normalize, de-dupe), stores raw HTML to object store (S3). Publishes new URLs to frontier.\n- **Storage** — Raw content in S3; metadata (url, fetch_time, status, content_hash) in Cassandra.\n- **Politeness** — Per-domain rate limiting; respect robots.txt; set User-Agent.\n\n**Distributed coordination:** URL partitioning by domain hash across fetcher nodes.\n\n**Prioritization:** Prioritize high-PageRank, frequently-updated pages for recrawl.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Web Crawler"
+    },
+    "665": {
+      "id": 665,
+      "answer": "**Video Streaming Platform Design**\n\n**Goals:** Upload, transcode, store, and stream video to millions of concurrent viewers with adaptive quality.\n\n**Upload & Processing:**\n- Client uploads raw video to S3 via presigned URL.\n- Upload completion triggers transcoding pipeline (via S3 event → SQS → transcoding workers).\n- Transcoding workers (FFmpeg clusters) produce multiple quality renditions (240p, 480p, 720p, 1080p, 4K) in HLS/DASH segments.\n- Segments stored in S3; manifest files (`.m3u8`) generated.\n\n**Streaming:**\n- Client requests manifest from CDN.\n- CDN (CloudFront/Fastly) serves segments from edge cache close to viewer.\n- Adaptive Bitrate (ABR) — client player selects quality based on bandwidth measurement.\n\n**Metadata Service:** Postgres stores video metadata (title, description, owner, status, duration). Elasticsearch for search.\n\n**Recommendation:** Collaborative filtering or deep learning model; served from feature store.\n\n**Live Streaming:** Ingest via RTMP → transcode in near-real-time (low-latency HLS or WebRTC) → CDN distribution.\n\n**DRM:** Encrypt segments; client authenticates to license server for decryption key.\n\n**Scalability:** CDN absorbs read load. Transcoding auto-scales with job queue depth. DB read replicas for metadata.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Video Streaming Platform"
+    },
+    "666": {
+      "id": 666,
+      "answer": "**Global CDN Cache Invalidation System Design**\n\n**Goals:** Propagate cache invalidations to hundreds of PoPs worldwide within seconds of a content change.\n\n**Challenges:** Eventual consistency across distributed edge nodes; partial failures; large invalidation fan-out.\n\n**Architecture:**\n- **Invalidation API** — `POST /invalidate` accepts URL patterns or cache tags. Assigns a global sequence number. Persists invalidation event to durable log (Kafka / DynamoDB).\n- **Fan-out Service** — Reads events; sends invalidation messages to all PoP controllers via regional Kafka clusters or direct gRPC calls. Batches invalidations to reduce overhead.\n- **PoP Controller** — Receives invalidation; instructs local cache servers to purge matching keys. Acknowledges back to fan-out.\n- **Acknowledgment Tracking** — Track which PoPs have ACKed each invalidation. Retry unacknowledged PoPs with exponential backoff.\n- **Surrogate Keys / Cache Tags** — Content tagged at origin (`Cache-Tag: product-123`). Invalidate by tag to bulk-purge all related objects without enumerating URLs.\n- **Soft Invalidation (stale-while-revalidate)** — Mark objects stale rather than deleting; PoP serves stale while revalidating in background.\n\n**Observability:** Track invalidation propagation time per PoP; alert if > threshold. Dashboard shows global propagation status.\n\n**Partial Failure:** Invalidation log retained; PoPs that recover pull missed events from log.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Global CDN Cache Invalidation System"
+    },
+    "667": {
+      "id": 667,
+      "answer": "**Leaderboard Service Design**\n\n**Goals:** Maintain real-time rankings of users/entities by score; support top-K queries and rank lookup.\n\n**Core Data Structure:**\n- **Redis Sorted Set** — `ZADD leaderboard score user_id`. O(log N) add/update. `ZREVRANGE 0 99` returns top 100. `ZREVRANK user_id` returns rank. Ideal for real-time leaderboards.\n\n**Architecture:**\n- **Score Service** — Accepts score update events (from game server, activity tracker, etc.). Validates and writes to Redis sorted set atomically. Persists to DB (Postgres) for durability.\n- **Leaderboard API** — `GET /leaderboard?top=100` → `ZREVRANGE`. `GET /leaderboard/rank/{user_id}` → `ZREVRANK`. `GET /leaderboard/around/{user_id}?window=5` → `ZREVRANGE` around rank.\n- **Persistence** — Async write-through to Postgres for auditability and recovery. On Redis failure, rebuild from DB.\n- **Segmented Leaderboards** — Separate sorted sets per game, region, time period (daily/weekly/all-time). TTL-based expiry for time-windowed leaderboards.\n- **Time-Windowed** — Use a sliding window: score events stored with timestamp; a periodic job recomputes weekly sorted sets, or use a stream processor to maintain rolling counts.\n\n**Scaling:** Redis Cluster shards sorted sets by leaderboard ID. Read replicas for heavy query load.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Leaderboard Service"
+    },
+    "668": {
+      "id": 668,
+      "answer": "**Recommendation System Backend Design**\n\n**Goals:** Serve personalized item recommendations with low latency; continuously improve with new interaction data.\n\n**Offline Training Pipeline:**\n- **Data Collection** — User interaction events (clicks, purchases, ratings) streamed via Kafka → Data Warehouse (BigQuery/Snowflake).\n- **Feature Engineering** — User features (demographics, history embeddings), item features (category, price, embeddings). Stored in Feature Store (Feast).\n- **Model Training** — Collaborative filtering (matrix factorization, ALS) or deep learning (two-tower model, DLRM). Trained periodically (daily/hourly) on GPU cluster.\n- **Candidate Generation** — ANN index (FAISS, ScaNN) on item embeddings for fast approximate nearest neighbor search.\n\n**Online Serving Pipeline:**\n- **Retrieval** — ANN search returns top-K candidates for user embedding vector.\n- **Ranking** — Lightweight scoring model re-ranks candidates using richer features (real-time context, session data).\n- **Filtering** — Remove already-purchased/seen items, apply business rules.\n- **Serving Layer** — Low-latency API (<100ms). User embeddings cached in Redis. Results cached per user with short TTL.\n\n**A/B Testing:** Experiment framework assigns users to model variants; tracks metrics (CTR, conversion).\n\n**Cold Start:** Use popularity-based recommendations for new users; content-based for new items.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Recommendation System Backend"
+    },
+    "669": {
+      "id": 669,
+      "answer": "**Distributed Cron Service Design**\n\n**Goals:** Execute cron-scheduled jobs exactly once across a distributed cluster; handle node failures; provide observability.\n\n**Architecture:**\n- **Job Registry** — Database (Postgres) stores job definitions: `(job_id, name, cron_expr, payload, endpoint, enabled, max_retries)`.\n- **Scheduler Nodes** — Multiple nodes run scheduler loop. Use distributed leader election (via Zookeeper, etcd, or DB advisory lock) so only one active scheduler at a time (active/standby).\n- **Trigger Mechanism** — Active scheduler computes next trigger time for each job. Sleeps until next trigger. On trigger, creates an execution record in DB and publishes to job queue.\n- **Worker Nodes** — Pull execution records from queue (Kafka/SQS). Execute job (HTTP callback or run task). Update execution record with result/status.\n- **Locking (no leader)** — Alternative leader-free design: all schedulers race to insert execution record with `(job_id, scheduled_at)` unique constraint. Winner runs the job.\n- **Missed Execution** — On startup, check for jobs that should have run while scheduler was down; trigger catch-up or log as missed depending on policy.\n- **Heartbeat & Monitoring** — Track last execution time per job. Alert on jobs not executed within expected window.\n\n**Timezone support:** Store cron in UTC or with explicit timezone offset. Recalculate next_run_at on DST change.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Distributed Cron Service"
+    },
+    "670": {
+      "id": 670,
+      "answer": "**Payment Webhook Delivery System Design**\n\n**Goals:** Reliably deliver payment event webhooks to merchant endpoints; guarantee at-least-once delivery; handle failures with retries.\n\n**Architecture:**\n- **Event Source** — Payment processor emits events (payment.completed, refund.initiated) to Kafka.\n- **Webhook Registry** — DB stores merchant webhook subscriptions: `(merchant_id, url, event_types, secret_key, active)`.\n- **Dispatcher Service** — Consumes Kafka events. For each event, looks up subscribed merchants. Creates delivery record per merchant in Deliveries DB.\n- **Delivery Workers** — Pull pending delivery records. Make HTTP POST to merchant URL with signed payload (`X-Signature: HMAC-SHA256`). On 2xx, mark delivered. On failure, schedule retry.\n- **Retry Policy** — Exponential backoff: 10s, 30s, 5m, 30m, 2h, 24h. After max retries, mark failed; alert merchant.\n- **Delivery DB** — Postgres: `(delivery_id, merchant_id, event_id, url, status, attempts, next_attempt_at, response_code)`.\n- **Idempotency** — Include `X-Webhook-Id` header; merchants deduplicate on their end.\n- **Signature Verification** — HMAC-SHA256 of payload with per-merchant secret. Merchants verify on receipt.\n- **Observability** — Dashboard: delivery success rate, p99 latency, retry queue depth. Alert on elevated failure rates.\n- **Manual Replay** — Admin API to replay a specific event to a merchant.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Payment Webhook Delivery System"
+    },
+    "671": {
+      "id": 671,
+      "answer": "**Session Store Design**\n\n**Goals:** Store authenticated user sessions; fast lookup by session token; handle expiry; scale horizontally.\n\n**Architecture:**\n- **Session Creation** — On login, generate cryptographically random session token (128-bit). Store session data in Redis: `SET session:{token} {json_payload} EX ttl`. Return token to client as HttpOnly, Secure cookie.\n- **Session Lookup** — On each request, middleware extracts token from cookie, calls `GET session:{token}`. On hit, deserialize and attach to request context. On miss/expired, return 401.\n- **Session Data** — Store minimal data: `{user_id, role, created_at, last_active}`. Avoid large payloads; fetch full user from cache/DB when needed.\n- **Expiry** — Sliding expiration: on each request, `EXPIRE session:{token} ttl` to reset TTL. Absolute expiry: record `created_at` in payload, reject if too old.\n- **Session Revocation** — Delete key from Redis (`DEL session:{token}`). For bulk revocation (logout-all-devices), store a per-user `sessions_version` counter; include version in session data; invalidate if version mismatch.\n- **Clustering** — Redis Cluster with consistent hashing; sessions distributed across shards. Replication for HA.\n- **Persistence** — Redis AOF/RDB for durability; tolerate losing sessions on complete Redis failure (users re-login).\n- **Security** — Rotate session tokens on privilege escalation. CSRF protection via SameSite cookie + CSRF token.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Session Store"
+    },
+    "672": {
+      "id": 672,
+      "answer": "**Feature Flag Service Design**\n\n**Goals:** Enable/disable features per user/group/environment without deploys; support gradual rollouts and A/B testing.\n\n**Data Model:**\n```\nFlag: { flag_key, description, enabled, rules: [Rule], default_variant }\nRule: { conditions: [{attribute, operator, value}], variant, rollout_percentage }\n```\n\n**Architecture:**\n- **Management API** — CRUD for flags and rules. Changes stored in Postgres. Versioned for audit.\n- **Config Distribution** — On flag change, publish event to Kafka. SDK clients or edge services subscribe and maintain local in-memory cache of flag configs.\n- **Evaluation Service / SDK** — Client SDK evaluates flags locally using cached config (no network hop per evaluation). Evaluation: iterate rules in order; check user attributes against conditions; apply rollout percentage via consistent hashing (`hash(user_id + flag_key) % 100 < rollout_pct`).\n- **Targeting** — Rules match on user attributes: `user.plan == 'premium'`, `user.country in ['US', 'CA']`, etc.\n- **Gradual Rollout** — `rollout_percentage` in rule controls what fraction of matching users see the variant.\n- **Cache Refresh** — SDK polls config endpoint every 30s as fallback; primary delivery via SSE or WebSocket push for near-instant propagation.\n- **Analytics** — SDK reports flag exposure events for A/B test metric computation.\n- **Audit Log** — Every flag change recorded with actor, timestamp, diff.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Feature Flag Service"
+    },
+    "673": {
+      "id": 673,
+      "answer": "**Email Delivery Platform Design**\n\n**Goals:** Send transactional and marketing emails reliably; track delivery, opens, clicks; manage reputation.\n\n**Architecture:**\n- **Submission API** — `POST /send` accepts `{to, from, subject, body_html, body_text, template_id, metadata}`. Validates, resolves template, enqueues.\n- **Template Service** — Stores email templates; renders with Handlebars/Jinja2 using provided variables.\n- **Send Queue** — Kafka topics: `transactional` (high priority), `marketing` (lower priority). Workers consume separately.\n- **SMTP Workers** — Connect to sending infrastructure (own MTAs or ESPs like SendGrid). Handle SMTP negotiation, TLS. Implement connection pooling per sending domain.\n- **IP/Domain Warm-up** — New IPs ramp volume gradually. Monitor reputation via ISP feedback loops.\n- **Bounce & Complaint Handling** — Process bounce webhooks from ISPs (hard bounce → suppress address, soft bounce → retry). Process spam complaints → suppress.\n- **Suppression List** — Maintain global suppression list; check before every send.\n- **Event Tracking** — Open tracking via 1px image beacon; click tracking via redirect service. Events stored in ClickHouse for analytics.\n- **DKIM/SPF/DMARC** — Sign all outbound with DKIM. Publish SPF records. DMARC policy to protect domain.\n- **Retry** — Transient failures (4xx) retried with backoff; permanent (5xx) bounced.\n- **Dashboard** — Delivery rate, open rate, click rate, bounce rate, spam complaint rate per campaign/sender.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design an Email Delivery Platform"
+    },
+    "674": {
+      "id": 674,
+      "answer": "**Document Collaboration Backend Design**\n\n**Goals:** Multiple users edit a document simultaneously; changes propagate in real-time; maintain consistency.\n\n**Conflict Resolution:**\n- **Operational Transformation (OT)** — Transform concurrent operations relative to each other to maintain consistency. Used by Google Docs.\n- **CRDTs (Conflict-free Replicated Data Types)** — Yjs / Automerge. Data structure ensures convergence without server coordination.\n\n**Architecture:**\n- **WebSocket Gateway** — Each client connects via WebSocket. Gateway is stateful per document session.\n- **Collaboration Service** — Per-document in-memory state (CRDT/OT state). Receives operations from clients; applies transformation; broadcasts to other connected clients.\n- **Document State Store** — Persistent snapshot stored in Postgres (JSONB) or object store. Periodic snapshots + operation log for recovery.\n- **Operation Log** — Append-only log of all operations per document (for replay, undo/redo, history).\n- **Presence** — Track cursor positions and user identity per document. Broadcast on change with low TTL.\n- **Awareness / Sessions** — On client reconnect, send missing operations since last received sequence number.\n- **Horizontal Scaling** — Route all connections for a document to the same collaboration service instance (sticky sessions or consistent hashing). Use Redis pub/sub to forward ops if sessions split across nodes.\n- **Permissions** — ACL checked on connect. Viewer vs. editor roles enforced server-side.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Document Collaboration Backend"
+    },
+    "675": {
+      "id": 675,
+      "answer": "**Ride Matching System Design**\n\n**Goals:** Match riders to nearby available drivers in real-time; minimize wait time; handle high concurrent requests.\n\n**Architecture:**\n- **Driver Location Service** — Drivers send GPS updates every 3–5 seconds. Stored in Redis Geo (geohash-based sorted set): `GEOADD drivers lng lat driver_id`. Enables `GEORADIUSBYMEMBER` for proximity search.\n- **Rider Request Service** — Rider submits pickup and destination. Service queries nearby available drivers.\n- **Matching Engine:**\n  1. Proximity query: find drivers within radius (e.g., 3km).\n  2. Filter: exclude busy drivers, low-rated drivers.\n  3. Score: by ETA (from routing service), rating, acceptance rate.\n  4. Offer to top-ranked driver. If no accept within 10s, offer to next.\n- **Routing Service** — Computes ETAs using road graph (OSRM, Valhalla, Google Maps API).\n- **Supply/Demand Balancing** — Surge pricing model when demand > supply in a geohash cell. Incentivize drivers to move to high-demand zones.\n- **Trip Service** — Once matched, creates trip record. Tracks state: requested → matched → en_route → arrived → in_trip → completed.\n- **Geohash Partitioning** — Partition driver location data by geohash prefix for scalability.\n- **Notifications** — Push notification to driver (accept/decline); to rider (matched, ETA).",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Ride Matching System"
+    },
+    "676": {
+      "id": 676,
+      "answer": "**Multi-Tenant Search Indexing Service Design**\n\n**Goals:** Index documents for multiple tenants with isolation, scalable throughput, and fast per-tenant search.\n\n**Isolation Strategies:**\n- **Index-per-tenant** — Strongest isolation; simplest; impractical at thousands of tenants (too many shards).\n- **Shared index with tenant filter** — All tenants share an index; every document has `tenant_id` field; all queries filtered by `tenant_id`. Simpler ops; risk of cross-tenant data leak if filter omitted.\n- **Hybrid** — Large tenants get dedicated index; small tenants share an index pool.\n\n**Architecture:**\n- **Ingestion API** — `POST /tenants/{tid}/documents`. Validates schema, injects `tenant_id`, publishes to Kafka topic partitioned by tenant.\n- **Indexing Workers** — Consume Kafka; bulk-index to Elasticsearch/OpenSearch. Per-tenant index or shared index per tier.\n- **Search API** — `GET /tenants/{tid}/search?q=...`. Always appends `tenant_id` filter. Returns results scoped to tenant.\n- **Schema Registry** — Per-tenant field mappings. Allow custom analyzers per tenant.\n- **Resource Quotas** — Rate-limit indexing and search per tenant. Circuit-break heavy tenants from affecting others.\n- **Index Lifecycle** — Auto-rollover large indices; archive old data to cold storage.\n- **Security** — API key or JWT bound to tenant_id; enforced at API gateway and at query layer as mandatory filter.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Multi-Tenant Search Indexing Service"
+    },
+    "677": {
+      "id": 677,
+      "answer": "**Secret Management Service Design**\n\n**Goals:** Securely store, distribute, and rotate secrets (API keys, DB passwords, TLS certs) to services.\n\n**Architecture (inspired by HashiCorp Vault):**\n- **Secret Store** — Encrypted at rest (AES-256-GCM) in a backend storage (Consul, DynamoDB, etcd). Encryption key itself is wrapped by a master key (HSM or KMS).\n- **Seal/Unseal** — On start, service is sealed (cannot decrypt). Unseal requires M of N key shares (Shamir's Secret Sharing) or auto-unseal via cloud KMS.\n- **Auth Methods** — Services authenticate via IAM role, Kubernetes service account, LDAP, or AppRole. Auth mounts issue short-lived tokens.\n- **Token System** — Every authenticated client gets a token with TTL and policies. Token authorizes read/write to specific secret paths.\n- **Secret Engines:**\n  - Static: KV store for manually managed secrets.\n  - Dynamic: Generate short-lived DB credentials, AWS IAM keys on demand. Credentials automatically revoked when TTL expires.\n- **Lease & Renewal** — Dynamic secrets have a lease. Clients can renew before expiry. On app shutdown, revoke lease early.\n- **Audit Log** — Every request (read, write, auth) logged immutably with actor, path, timestamp.\n- **HA** — Active/standby nodes; standby nodes forward requests to active. Leader election via storage backend locking.\n- **Secret Rotation** — Automated rotation for supported backends; notifies consuming services via webhook or triggers re-auth.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Secret Management Service"
+    },
+    "678": {
+      "id": 678,
+      "answer": "**Distributed Unique ID Generator Design**\n\n**Goals:** Generate globally unique, roughly time-ordered, 64-bit IDs at high throughput without coordination bottleneck.\n\n**Approaches:**\n\n1. **Twitter Snowflake** — 64-bit: `[1 sign][41 timestamp ms][10 machine_id][12 sequence]`. Each node generates IDs independently. Up to 4096 IDs/ms per node. Monotonic within a node. Requires NTP sync; handle clock skew by waiting until clock catches up.\n\n2. **UUID v4** — 128-bit random. No coordination. Not sortable. Storage overhead.\n\n3. **DB auto-increment with multiple instances** — Each DB has a different starting offset and increment stride (e.g., node 1: 1,3,5...; node 2: 2,4,6...). Limited throughput.\n\n4. **Segment-based (like Flickr)** — Pre-allocate blocks of IDs from DB. Each service instance holds a block in memory, issues IDs locally until exhausted, then fetches next block. DB contention minimal.\n\n**Recommended: Snowflake variant:**\n- Bit layout: 41-bit ms timestamp (69 years), 10-bit datacenter+machine (1024 nodes), 12-bit sequence (4096/ms/node).\n- Each node is stateless — no cross-node communication for ID generation.\n- Sequence resets each millisecond; if exhausted, wait for next millisecond.\n- Clock skew protection: reject requests if clock moves backward; wait if delta small.\n\n**Throughput:** 4096 × 1000 = ~4M IDs/sec per node.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Distributed Unique ID Generator"
+    },
+    "679": {
+      "id": 679,
+      "answer": "**Image Processing Pipeline Design**\n\n**Goals:** Accept image uploads; perform async transformations (resize, compress, watermark, format conversion); serve processed images via CDN.\n\n**Architecture:**\n- **Upload** — Client uploads original image to S3 via presigned URL. S3 event triggers SQS message.\n- **Processing Queue** — SQS (or Kafka) holds processing jobs. Dead-letter queue for failures.\n- **Worker Pool** — Auto-scaling EC2/container workers (GPU-optional). Workers:\n  1. Download original from S3.\n  2. Apply transformations using ImageMagick, Pillow, Sharp, or libvips.\n  3. Upload processed variants to S3 (`/images/{id}/thumb_200x200.webp`, `/images/{id}/full.avif`).\n  4. Update metadata DB with variant URLs and status.\n- **On-the-Fly Processing (alternative):** No pre-generation. Serve requests via image proxy (Imgproxy, Thumbor) that processes on first request and caches result in CDN. Simpler but higher first-request latency.\n- **CDN** — CloudFront/Fastly serves processed images. Long TTL. Cache-Control immutable for versioned URLs.\n- **Metadata DB** — Postgres/DynamoDB: `(image_id, original_url, variants, status, owner_id, created_at)`.\n- **Format Negotiation** — Serve WebP/AVIF if `Accept` header indicates browser support; else JPEG.\n- **Security** — Validate MIME type and magic bytes on upload. Limit file size. Scan for malware.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design an Image Processing Pipeline"
+    },
+    "680": {
+      "id": 680,
+      "answer": "**Data Deduplication Service Design**\n\n**Goals:** Identify and eliminate duplicate records or files across large datasets.\n\n**File-Level Deduplication:**\n- **Content Hashing** — Compute SHA-256 of each file. Store `{hash → storage_location}`. On upload, if hash exists, return existing location (no re-store). Saves storage for identical files.\n- **Chunked (Variable-Length) Deduplication** — Split file into variable-size chunks (CDC: content-defined chunking via Rabin fingerprinting). Hash each chunk. Store only unique chunks. Greater savings for similar-but-not-identical files (e.g., incremental backups). Reconstruct from chunk manifest.\n\n**Record-Level Deduplication:**\n- **Exact Match** — Hash record fields; check hash in seen-set (Redis Bloom filter for speed, DB for accuracy).\n- **Fuzzy Match (Entity Resolution)** — Compare records by blocking (group by soundex of name + birth year) then pairwise similarity (Jaro-Winkler, TF-IDF). Graph clustering to identify duplicate groups.\n\n**Architecture:**\n- **Ingestion API** — Accepts records/files. Computes fingerprint. Checks dedup store.\n- **Fingerprint Store** — Redis Bloom filter (fast reject) + Postgres/DynamoDB (authoritative). Key: hash, value: canonical record ID.\n- **Dedup Worker** — Batch processing for bulk deduplication jobs. Publishes dedup events.\n- **Merge Service** — When duplicates found, merge into canonical record; update references.\n\n**Streaming Deduplication:** Kafka Streams with RocksDB state store; deduplicate within time windows using message key hash.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Data Deduplication Service"
+    },
+    "681": {
+      "id": 681,
+      "answer": "**Mobile Push Notification Gateway Design**\n\n**Goals:** Route push notifications to iOS (APNs) and Android (FCM) devices; manage tokens; track delivery; scale to billions of sends.\n\n**Architecture:**\n- **Device Registration Service** — Apps register device tokens on install/update. API: `POST /devices` stores `{user_id, device_token, platform, app_version}` in DB. Index by user_id.\n- **Notification API** — `POST /push` accepts `{user_id or segment, title, body, data, priority}`. Validates, enqueues.\n- **Fan-out** — For broadcast/segment sends, fan-out service expands user_ids to device tokens. Publishes individual send tasks to Kafka.\n- **Platform Workers:**\n  - **APNs Worker** — Connects to Apple APNs via HTTP/2. Persistent connection pool. Sends JWT-authenticated requests.\n  - **FCM Worker** — Connects to Firebase Cloud Messaging v1 API. OAuth2 bearer token.\n- **Token Management** — Handle invalid token responses from APNs (`BadDeviceToken`) and FCM (`NotRegistered`) by deregistering stale tokens.\n- **Delivery Tracking** — Track send status per notification per device. APNs/FCM delivery receipts where available. Store in Cassandra: `(notification_id, device_id, status, timestamp)`.\n- **Priority & Throttling** — Critical alerts on high-priority queues. Marketing pushes rate-limited to comply with APNs/FCM quotas.\n- **Retry** — Transient failures retried with exponential backoff. Do not retry `BadDeviceToken`.\n- **Analytics** — Open rate tracked via deep-link callback.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Mobile Push Notification Gateway"
+    },
+    "682": {
+      "id": 682,
+      "answer": "**Fraud Detection Event Pipeline Design**\n\n**Goals:** Analyze transaction events in real-time to detect fraud; minimize false positives; act within milliseconds.\n\n**Architecture:**\n- **Event Ingestion** — Transaction events published to Kafka by payment service. Schema: `{tx_id, user_id, amount, merchant, location, device_fp, timestamp}`.\n- **Stream Processor** — Flink or Kafka Streams consumes events. Enriches each event by joining with:\n  - User profile (from Redis cache)\n  - Recent transaction history (sliding window aggregates)\n  - Device fingerprint history\n  - Merchant risk score\n- **Feature Computation** — Real-time features: transaction velocity (count in last 5m, 1h), avg amount deviation, geo-distance from last transaction, new device flag.\n- **Scoring Service** — Enriched features sent to ML model serving (TensorFlow Serving / custom API). Model outputs fraud probability score.\n- **Rule Engine** — Deterministic rules layer (amount > $5000 AND new country) for fast hard-block decisions.\n- **Decision Layer** — Combines rule output and ML score. Three outcomes: `allow`, `review`, `block`.\n- **Action Service** — Block: call Payment Service to decline. Review: queue for human review. Allow: pass through. All decisions logged.\n- **Feedback Loop** — Confirmed fraud/non-fraud labels fed back to training pipeline for model updates (daily/weekly retraining).\n- **Latency Target** — Full pipeline p99 < 200ms per transaction.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Fraud Detection Event Pipeline"
+    },
+    "683": {
+      "id": 683,
+      "answer": "**Webhook Signature Verification Service Design**\n\n**Goals:** Provide a shared library/service that verifies incoming webhook payloads are authentic and unmodified.\n\n**Signature Scheme:**\n- Provider signs payload with HMAC-SHA256 using a per-integration shared secret.\n- Signature delivered in HTTP header: `X-Signature: sha256=<hex_digest>` or `X-Hub-Signature-256`.\n- Timestamp often included: `X-Timestamp: <unix_epoch>` to prevent replay attacks.\n\n**Verification Steps:**\n1. Extract `X-Signature` and `X-Timestamp` from headers.\n2. Reject if timestamp is older than tolerance window (e.g., 5 minutes).\n3. Compute `HMAC-SHA256(secret, timestamp + \".\" + raw_body_bytes)`.\n4. Compare computed digest to provided signature using constant-time comparison (`hmac.compare_digest`) to prevent timing attacks.\n5. Accept if match; reject with 401 otherwise.\n\n**Service Architecture:**\n- **Secret Store** — Per-integration secrets stored in a Secret Management Service (Vault). Retrieved by integration_id at verification time (cached in memory with short TTL).\n- **Verification SDK** — Client library for all services that receive webhooks. Encapsulates above logic.\n- **Centralized Verification Proxy (optional)** — A reverse proxy validates signature before forwarding to backend, removing concern from application code.\n- **Key Rotation** — Support dual-secret period: verify against both current and previous secret during rotation window.\n- **Audit** — Log verification success/failure with integration_id and timestamp.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Webhook Signature Verification Service"
+    },
+    "684": {
+      "id": 684,
+      "answer": "**Location Tracking Service Design**\n\n**Goals:** Ingest high-frequency GPS updates from many devices; store location history; support real-time queries (nearby devices, current location).\n\n**Architecture:**\n- **Ingestion API** — Devices POST location updates `{device_id, lat, lng, accuracy, timestamp}`. High write throughput (e.g., 1M devices × 1 update/5s = 200K writes/sec). Use UDP or HTTP/2 for efficiency.\n- **Message Queue** — Kafka buffers raw location events. Partitioned by device_id.\n- **Stream Processor** — Flink/Kafka Streams: de-duplicate, validate, enrich (reverse geocode on sample), compute derived metrics (speed, distance traveled).\n- **Real-Time Store** — Redis Geo: `GEOADD devices lng lat device_id` updated on each event. Enables `GEORADIUS` for proximity queries. TTL-based cleanup for inactive devices.\n- **History Store** — Time-series DB (InfluxDB, TimescaleDB) or Cassandra: `(device_id, timestamp, lat, lng, meta)`. Partitioned by device_id. Supports `WHERE device_id = X AND timestamp > T` queries efficiently.\n- **Geofencing** — Geofence definitions stored as polygons. Stream processor checks if device enters/exits polygon; publishes geofence events.\n- **Privacy** — Location data access controlled by ACL. Retention policy enforced (delete history older than N days). Anonymize for analytics.\n- **Batch Analytics** — Daily jobs compute route reconstruction, dwell-time analysis, heatmaps from history store.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Location Tracking Service"
+    },
+    "685": {
+      "id": 685,
+      "answer": "**Multi-Region Key-Value Store Design**\n\n**Goals:** Serve low-latency reads/writes in multiple geographic regions; tolerate region failures; handle consistency trade-offs.\n\n**Architecture:**\n- **Regional Clusters** — Each region runs an independent KV cluster (e.g., Cassandra, DynamoDB, or custom Raft-based store). Handles local reads/writes.\n- **Consistency Models:**\n  - **Eventual consistency** — Each region accepts writes independently; asynchronous replication propagates to other regions. Low write latency; risk of conflicts.\n  - **Strong consistency** — All writes routed to a leader region; Paxos/Raft consensus across regions. High write latency (cross-region RTT ~100ms).\n  - **Causal consistency** — Hybrid; track causality with vector clocks; reads respect causal order.\n- **Replication** — WAL shipping or CDC: every write generates a log entry replicated asynchronously to peer regions. Conflict resolution: last-write-wins (by timestamp), or CRDTs for automatic merge.\n- **Global Router** — Routes requests to nearest region. Writes go to origin region; optionally replicate to secondaries.\n- **Conflict Detection** — Track version vectors per key. On conflict, apply resolution policy (LWW / custom merge).\n- **Failure Handling** — On region failure, traffic redirected to other regions. Stale reads acceptable or re-route writes to surviving region.\n- **DNS-based Routing** — GeoDNS or Anycast routes clients to nearest region automatically.\n- **API:** Standard KV: `GET key`, `PUT key value`, `DELETE key`, optional `compare-and-set`.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Multi-Region Key-Value Store"
+    },
+    "686": {
+      "id": 686,
+      "answer": "**Database Connection Pooling Service Design**\n\n**Goals:** Manage a pool of DB connections shared among application instances; reduce connection overhead; enforce limits.\n\n**Architecture (inspired by PgBouncer/ProxySQL):**\n- **Proxy Process** — Sits between application and database. App connects to proxy (lightweight). Proxy maintains a smaller pool of real DB connections.\n- **Pool Modes:**\n  - **Session pooling** — One DB connection per client session. Minimal savings.\n  - **Transaction pooling** — DB connection returned to pool after each transaction. High multiplexing. Most efficient.\n  - **Statement pooling** — Return connection after each statement. Incompatible with multi-statement transactions.\n- **Pool Configuration** — `max_connections` (to DB), `min_pool_size`, `max_pool_size` per (db, user) pair. Queue client requests if pool exhausted; timeout after configurable wait.\n- **Health Checks** — Periodically validate connections with lightweight query. Remove stale/broken connections. Reconnect automatically.\n- **Load Balancing** — Multiple proxy instances behind a load balancer. Each proxy has its own pool. Total DB connections = proxies × per-proxy pool size.\n- **Authentication** — Proxy authenticates clients (user/password). Maintains per-user credential mapping to DB auth.\n- **Observability** — Metrics: active connections, idle connections, wait queue depth, query latency. Alert on pool exhaustion.\n- **SSL** — Terminate TLS from app; re-establish TLS to DB (or use trusted network).\n- **High Availability** — Multiple proxy instances. Application retries on proxy failure (proxies are stateless for transaction-pool mode).",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Database Connection Pooling Service"
+    },
+    "687": {
+      "id": 687,
+      "answer": "**Package Download Mirror Design**\n\n**Goals:** Cache and serve package downloads (npm, PyPI, apt, etc.) from a local mirror to reduce latency and external bandwidth.\n\n**Architecture:**\n- **Proxy / Pull-through Cache** — On package request: check local cache; if miss, fetch from upstream registry, cache locally, serve to client. Subsequent requests served from cache.\n- **Storage Backend** — Object store (S3/MinIO/local NFS) stores package files. Metadata (package name, version, file hash, size, last_fetched) in Postgres.\n- **Index Sync** — Periodically sync package index from upstream (full or incremental). For apt: sync Release/Packages files. For npm: sync registry metadata via CouchDB replication or API polling.\n- **Proxy Layer** — Nginx or custom HTTP service handles requests. Rewrites upstream URLs in index files to point to mirror. Passes through to upstream on miss.\n- **Bandwidth Control** — Rate-limit upstream fetch workers to avoid hammering upstream. Queue concurrent fetch requests for same package.\n- **Integrity Verification** — Verify SHA256 of downloaded packages against upstream manifest before caching.\n- **Staleness Policy** — Package files are immutable (versioned), so cached forever. Index files re-fetched on TTL (e.g., hourly).\n- **Client Configuration** — Clients configured to point to mirror URL (npm: `.npmrc`, pip: `--index-url`, apt: `sources.list`).\n- **Eviction** — LRU eviction when storage quota reached; or keep all (packages are small relative to storage).\n- **HA** — Multiple mirror nodes; GeoDNS routes to nearest. Or CDN in front of mirror origin.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Package Download Mirror"
+    },
+    "688": {
+      "id": 688,
+      "answer": "**Content Moderation Pipeline Design**\n\n**Goals:** Detect and handle policy-violating content (text, images, video) at scale with minimal latency.\n\n**Architecture:**\n- **Ingestion** — Content submission (post, comment, image upload) triggers moderation event on Kafka.\n- **Automated Moderation:**\n  - **Text** — ML classifier (fine-tuned BERT) for hate speech, spam, adult content. Rule-based filter for known slurs/phrases. Hash-matching for known-bad content (PhotoDNA equivalent for text).\n  - **Image** — Vision API (AWS Rekognition, Google Vision, or internal model) for nudity, violence, graphic content. Perceptual hash (pHash) database for known-bad images.\n  - **Video** — Sample frames; apply image moderation per frame. Audio transcription → text moderation.\n- **Decision Service** — Aggregates classifier scores. Applies policy thresholds: `auto-approve`, `auto-reject`, `send-to-human-review`.\n- **Human Review Queue** — Borderline cases queued for human reviewers. Prioritized by severity and virality. Review tool with approve/reject + policy violation labeling.\n- **Appeals** — Users can appeal decisions. Appeals routed to senior reviewers.\n- **Feedback Loop** — Human decisions used to retrain classifiers regularly.\n- **Action Service** — On reject: remove content, notify user, potentially suspend account.\n- **Compliance** — Retain moderation decisions and evidence for legal holds. Jurisdictional filtering (content legal in some regions, not others).\n- **Latency** — Automated moderation < 1s for text; < 5s for images. Publish content optimistically, hide if moderation fails within grace period.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Content Moderation Pipeline"
+    },
+    "689": {
+      "id": 689,
+      "answer": "**Backup and Restore Service Design**\n\n**Goals:** Periodically back up data; ensure durability; support point-in-time restore; minimize RTO and RPO.\n\n**Architecture:**\n- **Backup Agent** — Runs on each data source node (DB server, file server). Coordinates with Backup Orchestrator.\n- **Backup Orchestrator** — Schedules backup jobs (cron). Assigns agents to jobs. Tracks backup catalog.\n- **Backup Types:**\n  - **Full Backup** — Complete snapshot of data. Large; infrequent (weekly).\n  - **Incremental** — Only changes since last backup. Small; frequent (hourly).\n  - **Differential** — Changes since last full. Medium; daily.\n- **Backup Process (DB)** — Use DB-native tools: `pg_dump` (logical) or WAL archiving + base backup (physical, for PITR). MySQL: mysqldump or XtraBackup.\n- **WAL Archiving (PITR)** — Continuously ship WAL/binlog segments to object store. Allows restore to any point in time.\n- **Storage** — Object store (S3 with versioning). Cross-region replication for geo-redundancy. Lifecycle policy: recent backups on Standard, older on Glacier.\n- **Encryption** — AES-256 encrypt backups before upload. Encryption keys managed by KMS.\n- **Catalog DB** — Tracks all backups: `(backup_id, source, type, timestamp, size, location, checksum, status)`.\n- **Restore Process** — Orchestrator retrieves correct backup set from catalog. Streams data from object store to restore target. Verifies checksum. For PITR, applies WAL up to target timestamp.\n- **Testing** — Automated restore tests on a shadow environment to verify backup integrity.\n- **RPO/RTO Targets** — Define per data source. Alert if backup job misses schedule.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Backup and Restore Service"
+    },
+    "690": {
+      "id": 690,
+      "answer": "**Audit Logging System Design**\n\n**Goals:** Record every significant action (who did what, when, to what) immutably for compliance, security, and debugging.\n\n**Requirements:** Tamper-evident, searchable, highly available writes, long-term retention, access-controlled reads.\n\n**Architecture:**\n- **Audit Event Schema** — Structured log: `{event_id, timestamp, actor_id, actor_type, action, resource_type, resource_id, outcome, metadata, source_ip, session_id}`.\n- **Emission** — Services emit audit events via a client library. Library sends to Kafka asynchronously (fire-and-forget with local buffer for resilience).\n- **Kafka** — Durable buffer. Partitioned by resource_type or actor_id.\n- **Audit Writer** — Consumes Kafka; writes to append-only storage. No updates, no deletes.\n- **Storage:**\n  - **Hot (queryable):** Elasticsearch or ClickHouse for recent 90 days. Full-text search on action/resource/actor.\n  - **Cold (archive):** S3 in Parquet/ORC. Query via Athena. Retained for years per compliance requirement.\n- **Tamper Evidence** — Hash-chain: each event includes hash of previous event. Periodic cryptographic checkpoint signed by KMS key. External verifier can check chain integrity.\n- **Access Control** — Audit logs readable only by auditors, security team, compliance officers. No one (including admins) can delete entries.\n- **Alerting** — SIEM integration; alert on suspicious patterns (privilege escalation, bulk data export, off-hours access).\n- **API** — `GET /audit?actor=X&action=Y&from=T1&to=T2` for authorized queries.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design an Audit Logging System"
+    },
+    "691": {
+      "id": 691,
+      "answer": "**Service Discovery System Design**\n\n**Goals:** Allow services to dynamically discover the network location (IP:port) of other services; handle instance registration and deregistration.\n\n**Two Models:**\n1. **Client-Side Discovery** — Client queries registry, gets instance list, performs load balancing. Example: Netflix Eureka + Ribbon.\n2. **Server-Side Discovery** — Client queries a load balancer/router; router queries registry. Example: AWS ELB + Route53, or Consul + HAProxy.\n\n**Architecture:**\n- **Registry** — Strongly consistent KV store (Consul, etcd, Zookeeper) storing `{service_name → [instance_1, instance_2, ...]}` with health and metadata.\n- **Registration:**\n  - **Self-registration** — Service registers itself on startup, deregisters on shutdown. Risk: crash without deregister.\n  - **Third-party registration** — Orchestrator (Kubernetes, Nomad) registers/deregisters services based on lifecycle events. More reliable.\n- **Health Checks** — Registry polls instances (HTTP `/health`, TCP, gRPC health protocol) at interval. Failed checks remove instance from registry after threshold.\n- **TTL / Heartbeat** — Alternative: instance sends heartbeat; if missed, deregistered.\n- **DNS-based Discovery** — Registry updates DNS SRV records. Simple integration; limited metadata. Used by Kubernetes.\n- **Watch / Notify** — Clients watch service keys for changes (Consul watches, etcd `Watch()`) to update local cache without polling.\n- **Security** — mTLS between services; registry enforces which services can query/register which names.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Service Discovery System"
+    },
+    "692": {
+      "id": 692,
+      "answer": "**Real-Time Collaborative Whiteboard Backend Design**\n\n**Goals:** Multiple users draw, annotate, and move objects on a shared canvas simultaneously; changes propagate in near real-time.\n\n**Architecture:**\n- **WebSocket Gateway** — Long-lived connections per user. Gateway routes messages to the board session service.\n- **Session Service** — One service instance owns each board session (sticky routing via consistent hashing on board_id). Maintains in-memory state of current canvas.\n- **Operation Types** — Draw stroke, add shape, move object, delete object, change style. Each operation has `{op_id, user_id, board_id, type, payload, timestamp}`.\n- **CRDT / OT** — Use CRDT for shapes (each shape identified by UUID; add/delete operations commute). Last-write-wins for properties (color, size) using vector clock. Move operations use positional CRDT.\n- **Broadcast** — On receiving op from user A, session service: applies to in-memory state, persists to op log, broadcasts to all other connected users on that board.\n- **Persistence:**\n  - **Op Log** — Append-only log of all operations (Cassandra or Kafka). Enables replay.\n  - **Snapshot** — Periodic snapshot of canvas state to object store (S3) for fast reconnect.\n- **Reconnect** — Client sends last received op sequence; server sends missed ops (or latest snapshot + delta ops).\n- **Horizontal Scaling** — Route all users of a board to same session service. If node fails, reassign board to another node from snapshot.\n- **Presence & Cursors** — Broadcast cursor position updates (~10Hz) via WebSocket. Ephemeral; not persisted.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Real-Time Collaborative Whiteboard Backend"
+    },
+    "693": {
+      "id": 693,
+      "answer": "**Tenant-Aware Rate-Limited API Gateway Design**\n\n**Goals:** Route API traffic; enforce per-tenant rate limits; handle auth; provide observability.\n\n**Architecture:**\n- **Gateway Layer** — Nginx/Envoy/custom service as entry point. Handles TLS termination, request parsing.\n- **Auth Middleware** — Validates API key or JWT. Extracts `tenant_id` and `tier` from token/API key. Attaches to request context.\n- **Rate Limiter Middleware:**\n  - Checks Redis for current usage: `INCR ratelimit:{tenant_id}:{window}` with `EXPIRE`.\n  - Compares against tenant tier limit (fetched from Tenant Config Service, cached locally).\n  - If over limit: return 429 with `Retry-After` and `X-RateLimit-*` headers.\n  - Multi-dimensional: per-tenant global limit + per-endpoint limit + per-IP limit.\n- **Tenant Config Service** — Stores tier definitions and per-tenant overrides. `{tenant_id, plan, rate_limits: {requests_per_min, burst}}`. Changes propagate to gateway via config push or polling.\n- **Router** — Routes authenticated/rate-limited requests to upstream services. Path-based routing. Health-check-based load balancing.\n- **Request Logging** — Every request logged with tenant_id, endpoint, latency, status. Kafka → analytics pipeline.\n- **Quota Enforcement** — Monthly quota tracked separately (Redis INCR with monthly TTL). On quota exhaustion: 402 or 429 depending on policy.\n- **Admin API** — Override rate limits per tenant. View current usage. Block specific tenants.\n- **HA** — Multiple gateway instances; shared Redis for rate limit state. Failover via load balancer health checks.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Tenant-Aware Rate-Limited API Gateway"
+    },
+    "694": {
+      "id": 694,
+      "answer": "**Live Polling System Design**\n\n**Goals:** Create polls, collect votes in real-time, display live results to participants with low latency.\n\n**Architecture:**\n- **Poll Service** — CRUD for polls: `{poll_id, question, options: [{option_id, text}], creator_id, status, created_at, expires_at}`. Stored in Postgres.\n- **Vote API** — `POST /polls/{id}/vote {option_id}`. Validates: poll active, user hasn't voted. Records vote (Postgres for durability). Publishes vote event to Kafka.\n- **Deduplication** — `(poll_id, user_id)` unique constraint prevents double voting. Or use token-based anonymous voting.\n- **Real-Time Results:**\n  - **Redis Counter** — `HINCRBY poll:{poll_id} option:{option_id} 1` on each vote. Sub-millisecond increment. `HGETALL` for current counts.\n  - **Results Broadcaster** — Consumes Kafka vote events; updates Redis counters; pushes updated results to connected clients.\n- **Client Delivery:**\n  - **WebSocket** — Server pushes result updates to subscribed clients as votes arrive. Best for real-time feel.\n  - **SSE (Server-Sent Events)** — Simpler; server pushes, client reads. Good for dashboards.\n  - **Polling** — Client polls `GET /polls/{id}/results` every 1-2s. Simplest; higher latency.\n- **Pub/Sub** — Gateway nodes subscribe to Redis pub/sub channel `poll:{id}:updates`. On new vote, publish update; all gateways broadcast to their connected clients.\n- **Scaling** — Redis handles counter throughput. Partition vote Kafka topic by poll_id. Fan-out via Redis pub/sub to all gateway nodes.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Live Polling System"
+    },
+    "695": {
+      "id": 695,
+      "answer": "**URL Safety Scanner Design**\n\n**Goals:** Determine whether a URL is malicious (phishing, malware, spam) in near real-time.\n\n**Architecture:**\n- **Submission API** — `POST /scan {url}`. Returns cached verdict if available; otherwise triggers scan.\n- **Fast Path (Cache/Blocklist):**\n  - Check Redis cache for previously scanned URL (TTL-based; malicious URLs cached longer).\n  - Check against Google Safe Browsing API or similar threat feed hash database. URLs hashed with prefix matching to preserve privacy.\n- **Slow Path (Deep Scan):**\n  - Fetch URL content in sandboxed crawler (headless Chrome in isolated container/VM).\n  - Analyze: domain age (WHOIS), TLS cert validity, redirect chain, page content (phishing indicators), resource loads (malware payloads).\n  - Extract features: URL lexical features (entropy, TLD, length), HTML content, JavaScript behavior.\n  - ML classifier scores phishing/malware probability from features.\n- **Threat Intelligence Feeds** — Ingest URLhaus, PhishTank, VirusTotal feeds. Update blocklist DB (Redis sets or Bloom filter).\n- **Verdict DB** — Store `{url_hash, verdict, confidence, scan_time, indicators}` in Postgres. TTL-based re-scan for clean URLs.\n- **Async vs Sync** — For real-time use (browser extension): sync fast path (<50ms), async slow path with webhook callback.\n- **Sandboxing** — Crawler runs in ephemeral container with network egress controlled (no internal network access). Timeout after 30s.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a URL Safety Scanner"
+    },
+    "696": {
+      "id": 696,
+      "answer": "**Distributed Counter Service Design**\n\n**Goals:** Maintain accurate counters (page views, likes, inventory) across distributed services with high write throughput.\n\n**Challenges:** High write throughput, read consistency, distributed aggregation.\n\n**Approaches:**\n\n1. **Redis INCR** — Atomic increment. Single Redis node: `INCR counter:{key}`. Redis Cluster: shard by key. Throughput ~1M ops/sec. Simple; single point of failure without cluster.\n\n2. **Sharded Counters** — Maintain N counter shards: `counter:{key}:{shard_id}`. Writers pick random shard and increment. Readers sum all shards. Reduces contention. Read is O(N) but infrequent.\n\n3. **Approximate Counting (CRDT PN-Counter)** — Each node maintains its own increment/decrement local counter. Merge by summing all increments and decrements across all replicas. Eventual consistency; no coordination on writes.\n\n4. **Buffered Counting** — Services batch increments locally (e.g., every 1 second) and flush to central store. Reduces write amplification; small inaccuracy window.\n\n**Architecture:**\n- **Counter API** — `POST /counters/{key}/increment {delta}`, `GET /counters/{key}`.\n- **Write Path** — Accept increment → publish to Kafka → counter worker aggregates and writes to Redis + DB.\n- **Read Path** — Read from Redis (latest) or DB (durable).\n- **Persistence** — Async flush Redis counts to Postgres for durability and historical queries.\n- **Use Cases:** Different strategies per use case: Redis for real-time likes; sharded counters for inventory.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Distributed Counter Service"
+    },
+    "697": {
+      "id": 697,
+      "answer": "**Shopping Cart Service Design**\n\n**Goals:** Allow users to add/remove/update items in a cart; persist across sessions; handle concurrent modifications; integrate with checkout.\n\n**Architecture:**\n- **Cart Storage — Redis** — Primary store for active carts. Key: `cart:{user_id}` or `cart:{session_id}`. Value: hash of `{item_id → {quantity, price_snapshot, added_at}}`.\n  - `HSET cart:123 item:456 '{\"qty\":2,\"price\":9.99}'`\n  - TTL of 30 days for guest carts; user carts survive login.\n- **API Endpoints:**\n  - `GET /cart` — Fetch cart items with current prices.\n  - `POST /cart/items` — Add item `{item_id, quantity}`.\n  - `PATCH /cart/items/{item_id}` — Update quantity.\n  - `DELETE /cart/items/{item_id}` — Remove item.\n  - `POST /cart/checkout` — Initiate checkout flow.\n- **Price Consistency** — Store price snapshot at add time. Show warning if price changed at checkout. Re-validate prices at checkout against Product Service.\n- **Inventory Check** — Check availability at checkout (not at add time, to allow wishlisting). Reserve inventory on checkout initiation.\n- **Guest to User Merge** — On login, merge guest cart (session-keyed) into user cart. Combine quantities or prefer user cart.\n- **Persistence** — Async write-through to Postgres for order history and recovery from Redis loss.\n- **Concurrency** — Redis single-threaded commands are atomic. Use `WATCH`/multi-exec for compare-and-swap on quantity updates if needed.\n- **Coupons/Discounts** — Stored separately; applied at checkout time, not in cart store.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Shopping Cart Service"
+    },
+    "698": {
+      "id": 698,
+      "answer": "**Schema Registry Design**\n\n**Goals:** Store and version message schemas (Avro, Protobuf, JSON Schema); enforce schema compatibility; serve schemas to producers and consumers.\n\n**Architecture:**\n- **Schema Storage** — Postgres stores schemas: `(subject, version, schema_id, schema_definition, compatibility_level, created_at)`. Subject = topic name or data type name.\n- **REST API:**\n  - `POST /subjects/{subject}/versions` — Register new schema version. Returns `schema_id`.\n  - `GET /subjects/{subject}/versions/latest` — Get latest schema.\n  - `GET /schemas/ids/{id}` — Fetch schema by global ID.\n  - `GET /compatibility/subjects/{subject}/versions/latest` — Check compatibility before registering.\n- **Compatibility Checking** — On schema registration, check against previous version(s):\n  - `BACKWARD` — New schema can read data written with old schema.\n  - `FORWARD` — Old schema can read data written with new schema.\n  - `FULL` — Both backward and forward compatible.\n  - `NONE` — No compatibility check.\n- **Schema ID in Messages** — Producers encode `[magic_byte][4-byte schema_id][avro/protobuf payload]`. Consumers read schema_id, fetch schema from registry, deserialize.\n- **Caching** — Clients cache schemas by ID in-process. Registry responses cached in CDN/Redis for GET by ID (immutable once registered).\n- **High Availability** — Registry nodes are stateless (state in Postgres). Multiple instances behind load balancer. Postgres read replicas for GET requests.\n- **Security** — Auth per subject. Some subjects read-only for consumers. Only authorized producers can register new versions.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Schema Registry"
+    },
+    "699": {
+      "id": 699,
+      "answer": "**Read Receipt System Design**\n\n**Goals:** Track whether a message has been delivered and read by recipient(s); show status to sender.\n\n**States per message per recipient:** `sent → delivered → read`.\n\n**Architecture:**\n- **Receipt Store** — Cassandra or DynamoDB: `(message_id, recipient_id, delivered_at, read_at)`. Efficient lookup by message or by user.\n- **Delivery Receipt:**\n  - When message delivered to recipient device (WebSocket ACK or push notification delivery callback), client sends `POST /receipts/delivered {message_id}`.\n  - Server updates receipt record, notifies sender.\n- **Read Receipt:**\n  - When user opens conversation and views messages, client sends `POST /receipts/read {conversation_id, up_to_message_id}`.\n  - Server marks all messages in conversation up to that ID as read for this user.\n  - Bulk-update: mark all messages with `id <= up_to_message_id` in `(conversation_id, recipient_id)` as read.\n- **Delivery to Sender:**\n  - Real-time: push receipt event to sender via WebSocket if online.\n  - On reconnect: sender fetches receipt status for recent messages.\n- **Group Chats** — Receipt per recipient. Aggregate to show `Read by N of M members`. Show individual status on long-press.\n- **Privacy Controls** — User can disable read receipts. If disabled, do not send read events (but delivered receipts still sent).\n- **Optimizations** — Batch receipt sends from client (debounce 500ms). Use Redis as write buffer; flush to Cassandra periodically.\n- **Message seen tracking** — Store watermark `(user_id, conversation_id, last_read_message_id)` for efficient unread count queries.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Read Receipt System"
+    },
+    "700": {
+      "id": 700,
+      "answer": "**Quota Management Service Design**\n\n**Goals:** Track and enforce usage quotas (API calls, storage, seats) per tenant/user; provide accurate real-time quota status; support billing integration.\n\n**Architecture:**\n- **Quota Definition Store** — Postgres: `(plan_id, resource_type, limit, period)`. E.g., `(pro_plan, api_calls, 10000, monthly)`. Per-tenant overrides: `(tenant_id, resource_type, custom_limit)`.\n- **Usage Tracking:**\n  - **Real-time counters** — Redis `INCR usage:{tenant_id}:{resource}:{period_key}` on each billable event. Period key = `2024-01` for monthly.\n  - **Event stream** — Usage events published to Kafka for durable processing and billing.\n  - **Aggregation workers** — Consume Kafka; update authoritative usage in Postgres (eventual consistency, synced every minute).\n- **Quota Check API** — Before expensive operations, services call `GET /quota/{tenant_id}/{resource}` → `{used, limit, remaining, reset_at}`.\n- **Enforcement:**\n  - **Soft limit** — Warn at 80% usage via notification.\n  - **Hard limit** — At 100%, return 429 or 402 depending on resource type.\n  - **Grace period** — Allow small overage; bill for excess or auto-upgrade plan.\n- **Quota Reset** — Cron job at period boundary resets Redis counters. Reset time stored per tenant (handles timezone-based billing periods).\n- **Billing Integration** — End-of-period usage records exported to billing system (Stripe metered billing API).\n- **Admin API** — Increase quota temporarily, reset usage, view history per tenant.\n- **Caching** — Quota limits cached in gateway (TTL 60s) to avoid per-request DB lookup. Eventual consistency acceptable for limit reads.",
+      "tier": "T3",
+      "category": "system_design",
+      "task": "Design a Quota Management Service"
+    }
+  }
+}

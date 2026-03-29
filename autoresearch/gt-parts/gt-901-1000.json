@@ -1,0 +1,704 @@
+{
+  "answers": {
+    "901": {
+      "id": 901,
+      "answer": "SSRF in webhook tester: An attacker can supply URLs like http://169.254.169.254/latest/meta-data/ (AWS metadata), http://localhost:6379 (Redis), or http://internal-service:8080 to reach internal network destinations the server can access but external clients cannot. Redirects and DNS rebinding can bypass naive host checks. Validation policy: (1) Parse the URL strictly; reject anything that is not https://. (2) Resolve the hostname to an IP and block private/loopback ranges (10.x, 172.16-31.x, 192.168.x, 127.x, 169.254.x). (3) Maintain an explicit allowlist: only accept URLs whose hostname matches exactly the fixed partner domain (e.g., partner.example.com). (4) Set a short connect timeout to reduce timing-attack surface. Example check in Python: from urllib.parse import urlparse; import ipaddress, socket; def validate(url): p=urlparse(url); assert p.scheme=='https'; assert p.hostname=='partner.example.com'; ip=socket.gethostbyname(p.hostname); assert not ipaddress.ip_address(ip).is_private",
+      "tier": "T4",
+      "category": "security",
+      "task": "SSRF in webhook tester\nAnalyze this implementation and explain how an attacker could use it to reach unintended destinations.\nThen design a validation policy that would allow only HTTPS URLs to a fixed partner host."
+    },
+    "902": {
+      "id": 902,
+      "answer": "SQL injection in bulk delete: The vulnerability is string interpolation of user-supplied IDs into the IN clause, e.g. DELETE FROM messages WHERE id IN (1,2,DROP TABLE messages--). An attacker can inject arbitrary SQL, delete all rows, drop tables, or exfiltrate data. Secure version using parameterized placeholders (Python/psycopg2): def bulk_delete(conn, ids): ids = [int(i) for i in ids]; placeholders = ','.join(['%s']*len(ids)); conn.execute(f'DELETE FROM messages WHERE id IN ({placeholders})', ids). Key points: (1) Cast every ID to int to reject non-numeric input at the application layer. (2) Use the driver placeholder syntax (%s, ?, $1) never format IDs into the string. (3) Reject empty lists before constructing the query to avoid a syntax error.",
+      "tier": "T4",
+      "category": "security",
+      "task": "SQL injection in bulk delete\nReview this code and explain the vulnerability, including how list inputs can be abused.\nDELETE FROM messages WHERE id IN ()\nThen write a secure version for numeric IDs using placeholders."
+    },
+    "903": {
+      "id": 903,
+      "answer": "XSS through Markdown rendering: Markdown parsers allow raw HTML passthrough, so an attacker can embed <script>alert(1)</script> or <img src=x onerror=alert(1)> directly in Markdown. Even without explicit HTML, features like [click](javascript:alert(1)) produce dangerous href values, and some renderers convert blocks or link titles unsafely. Secure rendering pipeline: (1) Parse Markdown to HTML using a trusted library (marked, commonmark). (2) Pass the resulting HTML through a strict HTML sanitizer (DOMPurify on the client, bleach on the server) that allowlists safe tags and attributes, strips event handlers, and blocks javascript: URIs. (3) Set a Content-Security-Policy header (default-src 'self'; script-src 'none') so even unsanitized scripts cannot execute. (4) Optionally disable raw HTML passthrough in the Markdown parser configuration.",
+      "tier": "T4",
+      "category": "security",
+      "task": "XSS through Markdown rendering\nA service accepts Markdown, converts it to HTML, and returns the HTML directly to browsers. Explain the XSS risk and when Markdown features become dangerous. Then propose a secure rendering pipeline with at least two defenses."
+    },
+    "904": {
+      "id": 904,
+      "answer": "Server-side request smuggling confusion check: The teammate's classification is incorrect. Accepting a user-supplied path appended to a fixed host (e.g., https://api.internal + userPath) is not SSRF because the destination host is fixed, so the attacker cannot redirect the server to an arbitrary host. The real risk is path traversal or access-control bypass: a path like /../admin could reach unintended endpoints on the fixed host if the backend does not normalize the path. It is also a potential injection point if the path is placed in headers or query strings without encoding. Safer version: (1) Validate userPath against an allowlist of known endpoint patterns (regex). (2) Normalize the path and reject any segment containing .. before appending. (3) URL-encode user-controlled components. (4) Document clearly that the host is fixed so future developers do not accidentally make it configurable.",
+      "tier": "T4",
+      "category": "security",
+      "task": "Server-side request smuggling confusion check\nA teammate claims this code has SSRF because it accepts a user-supplied path:\nDecide whether SSRF is the right classification. Explain the real risk, if any, and write a safer version."
+    },
+    "905": {
+      "id": 905,
+      "answer": "Escaping mismatch: URL encoding converts characters to %XX form, which browsers decode before interpreting HTML. So %3Cscript%3Ealert(1)%3C/script%3E rendered as a div value is decoded to <script>alert(1)</script> by the browser HTML parser. URL encoding is designed to protect URL structure, not HTML structure. Correct mitigation for HTML element context: apply HTML entity encoding — replace < with &lt;, > with &gt;, & with &amp;, \" with &quot;, ' with &#x27;. In Python: import html; safe = html.escape(user_input). In JavaScript: use textContent instead of innerHTML: div.textContent = userInput. This ensures the browser treats the value as text, not markup.",
+      "tier": "T4",
+      "category": "security",
+      "task": "Escaping mismatch\nExplain why URL encoding does not prevent XSS in this example.\n<div></div>\nThen give a correct mitigation for HTML element context."
+    },
+    "906": {
+      "id": 906,
+      "answer": "Password reset token SQL injection: The vulnerability is concatenating the raw token string into a SQL query, e.g. SELECT user_id FROM resets WHERE token='+token+'. An attacker supplies a token like ' OR '1'='1 to match any row, bypassing the token check and resetting any account. Realistic impact: full account takeover for any user whose reset record exists. Secure rewrite (Python): cur.execute('SELECT user_id FROM resets WHERE token = %s AND expires_at > NOW()', (token,)). Additional boundary validation: (1) Validate that the token matches a strict format before querying (e.g., 64 hex characters via regex re.fullmatch(r'[0-9a-f]{64}', token)). This rejects injection payloads before they reach the database. (2) Use a cryptographically random token generator (secrets.token_hex(32)). (3) Expire and single-use the token after use.",
+      "tier": "T4",
+      "category": "security",
+      "task": "Password reset token SQL injection\nIdentify the issue and describe a realistic impact.\nThen rewrite it securely and mention any additional validation that helps at the boundary."
+    },
+    "907": {
+      "id": 907,
+      "answer": "SSRF through PDF generation: The headless browser or rendering library (e.g., Puppeteer, wkhtmltopdf) fetches all resources referenced by the submitted HTML — img src, link href, @import url() in CSS — using the server network credentials. An attacker embeds <img src='http://169.254.169.254/latest/meta-data/iam/security-credentials/role'> and the rendering engine makes the request server-side, returning internal data. Three mitigations: (1) Run the renderer in a network-isolated sandbox (Docker with no external network, or a dedicated VPC with no route to internal services). (2) Strip or allowlist all external resource URLs in the HTML before rendering — remove src/href pointing to non-allowlisted hosts. (3) Use a proxy with an egress allowlist between the renderer and the network so only approved external CDNs are reachable.",
+      "tier": "T4",
+      "category": "security",
+      "task": "SSRF through PDF generation\nA PDF service renders user-submitted HTML and allows external images/stylesheets. Explain how this can create SSRF even without an explicit fetch API in application code. Then list three mitigations."
+    },
+    "908": {
+      "id": 908,
+      "answer": "Client-side storage XSS propagation: The code reads from localStorage and writes the value into the DOM via innerHTML or document.write without sanitization. Because localStorage persists across page loads, a one-time injection causes the payload to execute every subsequent visit — this is Stored DOM XSS (Persistent DOM XSS). Classification: DOM-based stored XSS. The source is localStorage, the sink is an unsafe DOM method. Secure rewrite: (1) Never use innerHTML to render stored values. Use textContent for text or create DOM nodes programmatically. (2) If HTML is required, sanitize with DOMPurify before insertion: element.innerHTML = DOMPurify.sanitize(localStorage.getItem('key')). (3) Validate and sanitize values before writing to localStorage, not only when reading. (4) Set a strict CSP to limit script execution as a defence-in-depth layer.",
+      "tier": "T4",
+      "category": "security",
+      "task": "Client-side storage XSS propagation\nAnalyze this code and explain why the issue can persist across page loads.\nClassify the XSS type and provide a secure rewrite."
+    },
+    "909": {
+      "id": 909,
+      "answer": "Secure code review — mixed vulnerabilities: (1) SSRF: If the code fetches a user-supplied URL to get a webhook payload, an attacker reaches internal services. Fix: validate URL scheme (https only) and hostname against an allowlist; resolve IP and reject private ranges. (2) SQL injection: The snippet shows string interpolation of user input into SQL. Fix: use parameterized queries — cur.execute('INSERT INTO events (payload) VALUES (%s)', (payload,)). (3) Stored XSS: If the inserted payload is later rendered in a browser without escaping, stored XSS follows. Fix: HTML-encode output at render time; use textContent not innerHTML. (4) Missing input length limits: unbounded payload can cause DoS via oversized inserts. Fix: validate and truncate payload before storage. Each fix is independent and should be applied at the appropriate layer (input validation, parameterized queries, output encoding).",
+      "tier": "T4",
+      "category": "security",
+      "task": "Secure code review task — mixed vulnerabilities\nReview the snippet and identify every security issue present. For each one, explain the attack vector and provide a minimal secure fix.\nINSERT INTO (payload) VALUES ('')\nAt minimum, consider SSRF and injection risks."
+    },
+    "910": {
+      "id": 910,
+      "answer": "Threat comparison: (1) Reflected XSS — input: URL parameter ?q=<script>; sink: document.write(location.search); executor: victim browser after clicking crafted link; mitigation: HTML-encode all output at render time. (2) Stored XSS — input: comment form field; sink: innerHTML on comment display page; executor: any user browser viewing the stored comment; mitigation: sanitize stored content and use safe DOM APIs at render time. (3) SQL injection — input: login username field; sink: string-concatenated WHERE clause; executor: the database engine; mitigation: parameterized queries. (4) SSRF — input: user-supplied webhook URL; sink: server-side HTTP client (requests.get, fetch); executor: the application server network stack, reaching internal services; mitigation: strict URL allowlisting with host and scheme validation plus IP-range blocking for private/loopback addresses.",
+      "tier": "T4",
+      "category": "security",
+      "task": "Threat explanation task\nCompare reflected XSS, stored XSS, SQL injection, and SSRF using one concrete example for each. For every category, explain:\n- where untrusted input enters,\n- what the dangerous sink is,\n- who/what executes the payload,\n- and one primary mitigation."
+    },
+    "911": {
+      "id": 911,
+      "answer": "The task text has the actual expression stripped (rendered blank), so answering the general pattern tagged 'JavaScript coercion': the obvious answer that the expression evaluates to a simple number or string is wrong because JavaScript implicitly converts operand types before evaluating operators. For example [] + [] gives '' (empty string), [] + {} gives '[object Object]', {} + [] gives 0 in statement context. JavaScript coerces operands using ToPrimitive, ToNumber, and ToString rules, which often produce counterintuitive results because + is overloaded for both addition and string concatenation, and objects convert to their string representations unexpectedly. Always be explicit about types in JavaScript arithmetic.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "What is the value of  in JavaScript?"
+    },
+    "912": {
+      "id": 912,
+      "answer": "Based on the tag 'JavaScript coercion': in a browser console, expressions involving {} are parsed differently depending on context. {} + [] evaluates as +[] which is 0 when {} is treated as an empty block statement (not an object). But ({}) + [] gives '[object Object]'. Similarly [] + {} gives '[object Object]' because [] is not at statement position. The key insight is that JavaScript's parser context (statement vs expression) changes how {} is interpreted, making the result differ from naive expectations. This is why {} + [] and [] + {} give different results even though + is commutative for numbers — for objects, context-sensitive parsing changes the operand types.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "What is the value of  +  when evaluated as a standalone expression in a browser console?"
+    },
+    "913": {
+      "id": 913,
+      "answer": "Based on the tag 'JavaScript equality trap': the answer addresses == vs === semantics. The obvious answer is wrong because JavaScript has two equality operators with very different semantics. == performs type coercion (abstract equality) while === performs strict equality with no coercion. Classic traps: null == undefined is true but null === undefined is false. 0 == false is true but 0 === false is false. '' == false is true but '' === false is false. NaN == NaN is false (NaN is never equal to itself under either operator). Always use === unless you explicitly need coercion, and use Number.isNaN() to check for NaN.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "Without running code, determine whether  is  or ."
+    },
+    "914": {
+      "id": 914,
+      "answer": "Based on the tag 'JavaScript chained comparison': JavaScript does not support chained comparisons the way Python does. An expression like 1 < 2 < 3 evaluates left to right: (1 < 2) gives true, then true < 3 gives 1 < 3 which gives true — so this accidentally works. But 3 > 2 > 1 evaluates as (3 > 2) = true, then true > 1 = 1 > 1 = false, which is the wrong result. The obvious answer that chained comparisons work like math is wrong; JavaScript evaluates them sequentially with type coercion, not as compound mathematical inequalities. Use explicit conjunctions: x > 2 && x < 5 rather than 2 < x < 5.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "In JavaScript, what is the result of ?"
+    },
+    "915": {
+      "id": 915,
+      "answer": "Based on the tag 'JavaScript numeric precision': the expression likely involves 0.1 + 0.2 === 0.3. The obvious answer is true, but it evaluates to false. JavaScript uses IEEE 754 double-precision floating-point, in which 0.1 and 0.2 cannot be represented exactly in binary. 0.1 + 0.2 actually equals 0.30000000000000004, which is not strictly equal to 0.3. The correct approach for floating-point comparisons is to check within an epsilon: Math.abs(0.1 + 0.2 - 0.3) < Number.EPSILON. Never use === to compare floating-point results in JavaScript or any IEEE 754 language.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "Does  evaluate to  or ?"
+    },
+    "916": {
+      "id": 916,
+      "answer": "Based on the tag 'JavaScript type confusion': typeof null returns 'object' (not 'null') — this is a long-standing JavaScript bug from its initial implementation that was never fixed for backwards compatibility. typeof undefined returns 'undefined'. typeof [] returns 'object' (not 'array'). typeof function(){} returns 'function'. The obvious wrong answer is that typeof null === 'null'; the correct answer is 'object'. To check for null specifically, use value === null. To check for array, use Array.isArray(value). Never rely on typeof to distinguish null from objects or arrays from plain objects.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "What does  return?"
+    },
+    "917": {
+      "id": 917,
+      "answer": "Based on the tag 'JavaScript sparse arrays': when you create a sparse array (e.g., const a = new Array(3) or const a = [,,]), accessing unassigned slots returns undefined, but those slots do not actually exist as own properties. For example new Array(3) creates a sparse array of length 3 with no actual elements. a[0] is undefined, but 0 in a is false. Array methods like map, forEach, filter skip holes entirely, so [,,3].map(x=>x*2) gives [,,6] with holes preserved, not [undefined, undefined, 6]. The obvious wrong answer is that sparse slots behave identically to explicit undefined values; the correct answer is that they are absent and are skipped by iteration methods while explicit undefined is not.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "Given , what is ?"
+    },
+    "918": {
+      "id": 918,
+      "answer": "Based on the tag 'JavaScript array mapping trap': ['1','2','3'].map(parseInt) gives [1, NaN, NaN], not [1, 2, 3]. The obvious wrong answer is [1, 2, 3]. map passes three arguments to its callback: (element, index, array). parseInt receives both the element and the index as its two parameters. So: parseInt('1', 0) = 1 (radix 0 treated as 10), parseInt('2', 1) = NaN (radix 1 is invalid), parseInt('3', 2) = NaN ('3' is not a valid base-2 digit). Fix: ['1','2','3'].map(x => parseInt(x, 10)) or ['1','2','3'].map(Number).",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "What is the result of ?"
+    },
+    "919": {
+      "id": 919,
+      "answer": "Based on the tag 'JavaScript reference equality': {} === {} is false, and [] === [] is false. The obvious answer is true, but objects and arrays are compared by reference in JavaScript, not by value. Two separately created object or array literals occupy different memory addresses, so === returns false. Only if two variables point to the exact same object will === return true: const a = {}; const b = a; a === b is true. To compare object contents, use JSON.stringify(a) === JSON.stringify(b) (with limitations for ordering and special values) or a deep-equality library like Lodash's _.isEqual. Primitive values (strings, numbers, booleans) are compared by value.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "Is  true or false?"
+    },
+    "920": {
+      "id": 920,
+      "answer": "Based on the tag 'JavaScript floating-point edge case': key values — 1/0 = Infinity (not an error), -1/0 = -Infinity, 0/0 = NaN, Infinity - Infinity = NaN, Infinity + Infinity = Infinity, typeof NaN = 'number' (not 'NaN'). The most common trap is that NaN !== NaN is true — NaN is the only value in JavaScript not equal to itself. Use Number.isNaN(value) to detect it (not the global isNaN() which coerces strings). Another edge: Number.MAX_SAFE_INTEGER + 1 === Number.MAX_SAFE_INTEGER + 2 is true because both exceed safe integer precision. Use BigInt for exact large integer arithmetic.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "What is the value of ?"
+    },
+    "921": {
+      "id": 921,
+      "answer": "Python mutable default argument trap: On the second call (with no arguments), the function returns [1, 1] not []. The obvious wrong answer is that it returns [] or [1] each time. Python evaluates default argument values once at function definition time, not at each call. So def f(lst=[]): lst.append(1); return lst shares the same list object across all calls that use the default. First call: lst is [], appends 1, returns [1]. Second call: lst is the same object (now [1]), appends 1 again, returns [1, 1]. Fix: use None as default and create a new list inside: def f(lst=None): if lst is None: lst = []; lst.append(1); return lst.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "What does this function return on the second call: Assume  was already called once before with no arguments."
+    },
+    "922": {
+      "id": 922,
+      "answer": "Python tuple syntax trap: (1) is int — parentheses alone do not create a tuple; they are just grouping. (1,) is tuple — the trailing comma is what creates a single-element tuple. This is a common mistake: developers write (value) expecting a tuple and get the scalar value itself. To confirm: type((1)) is int, type((1,)) is tuple. For an empty tuple, () works. For a single-element tuple, always include the trailing comma: (value,) or just value, without parentheses. The comma is the tuple constructor, not the parentheses.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "What is the type of  and what is the type of ?"
+    },
+    "923": {
+      "id": 923,
+      "answer": "Python list multiplication aliasing: [[]] * 3 gives a list of three references to the same inner list object, not three independent lists. So after a = [[]] * 3; a[0].append(1), all three slots show [1]: a is [[1], [1], [1]]. The obvious wrong answer is that you get three independent inner lists. The * operator copies the reference, not the object. This trap also applies to 2D grids: grid = [[0]*3]*3 shares rows, so modifying grid[0][0] also changes grid[1][0] and grid[2][0]. Fix to get independent lists: a = [[] for _ in range(3)] — the list comprehension creates a new list object on each iteration.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "After running what is ?"
+    },
+    "924": {
+      "id": 924,
+      "answer": "Python NaN comparison: float('nan') == float('nan') is False. The obvious wrong assumption is that a value always equals itself, but IEEE 754 mandates NaN is not equal to any value including itself. In Python: nan = float('nan'); nan == nan is False; nan != nan is True. To check for NaN, use math.isnan(value) or numpy.isnan(value). Note: float('nan') is float('nan') may be True in CPython because the same object may be reused, but is checks identity not IEEE equality — never rely on is for NaN detection. The is True result here (the question asks if nan == nan is true or false) is False.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "In Python, is  true or false?"
+    },
+    "925": {
+      "id": 925,
+      "answer": "Python chained assignment aliasing: After a = b = [], both a and b point to the same list object. So after a.append(1), b is also [1] because they reference the same object. The obvious wrong answer is that a and b are independent lists. Chained assignment assigns the same object to all names on the left side — it is not equivalent to a = []; b = [] which creates two independent lists. Similarly a = b = {} makes both names reference the same dict. For independent mutable objects always use separate assignments or explicit copying: import copy; a = []; b = copy.copy(a) or b = a[:].",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "After what is the value of ?"
+    },
+    "926": {
+      "id": 926,
+      "answer": "Python identity vs equality: is is not guaranteed to return True for equal integers beyond the small integer cache range (-5 to 256 in CPython). For integers in that range, CPython interns (caches) objects so 256 is 256 is True. But 257 is 257 may be True within the same code block (compiler optimization) yet unpredictably False across separate eval() calls or different Python implementations. The == operator tests value equality and is always reliable for equal integers. The wrong answer is that is and == are interchangeable for integers. The correct answer: use == for value comparison of integers, and is only for singletons like None, True, False, or explicitly interned strings.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "Is  guaranteed to be  in Python?"
+    },
+    "927": {
+      "id": 927,
+      "answer": "Python negative zero: -0.0 == 0.0 is True in Python (IEEE 754). The obvious trap is expecting them to be different values. float('-0') and 0.0 are equal under == and most arithmetic treats them identically. However, math.copysign(1, -0.0) gives -1.0 while math.copysign(1, 0.0) gives 1.0, so sign is preserved in some operations. str(-0.0) gives '-0.0'. Division: 1/-0.0 gives -inf while 1/0.0 gives inf. So -0.0 and 0.0 are == but not identical in all contexts. In practice, -0.0 arises from underflow in floating-point computation and is rarely intended explicitly by programmers.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "What is the result of  in Python?"
+    },
+    "928": {
+      "id": 928,
+      "answer": "Python set duplicate trap: {1, 1.0, True} has 1 element, not 3. The obvious answer is 3. In Python, 1 == 1.0 == True and hash(1) == hash(1.0) == hash(True), so a set treats them as the same key. {1, 1.0, True} contains exactly 1 element. Similarly {0, 0.0, False} has 1 element. This occurs because sets use hash + equality to determine uniqueness, and Python's numeric tower makes int 1, float 1.0, and bool True all equal and hash-identical. The order of which value is retained depends on insertion order: in {1, 1.0, True}, 1 is retained because it was inserted first.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "How many elements are in ?"
+    },
+    "929": {
+      "id": 929,
+      "answer": "Python loop variable capture (late binding closure): When creating lambdas or functions inside a loop — funcs = [lambda: i for i in range(3)] — all functions return 2 (the final value of i) when called, not 0, 1, 2 respectively. The obvious wrong answer is that each lambda captures its own value of i at creation time. Python closures capture variables by reference, not by value, so all lambdas share the same i which is 2 after the loop ends. Fix using a default argument to capture the current value: funcs = [lambda i=i: i for i in range(3)]. Now each lambda has its own default parameter that was evaluated at definition time. Alternatively use a factory function.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "What does this print?"
+    },
+    "930": {
+      "id": 930,
+      "answer": "You receive 1 free item. The promotion 'buy 2, get 1 free' means for every 2 items purchased, 1 additional item is given at no cost. Purchasing exactly 2 items satisfies the condition as stated (the requirement confirms: purchasing 2 items before a free item is awarded). So you pay for 2 items and receive 1 free, for a total of 3 items. The potential confusion is whether the free item counts toward the 2 required, or whether you need to buy more than 2. The standard retail interpretation and the stated requirement both confirm: 2 paid items qualifies for 1 free item.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "A store says: \"Buy 2 items, get 1 free.\" You buy exactly 2 items. How many free items do you receive if the promotion requires purchasing 2 items before a free item is awarded?"
+    },
+    "931": {
+      "id": 931,
+      "answer": "No, the two statements are not logically equivalent. 'All that glitters is not gold' is ambiguous English but is conventionally interpreted as 'Not everything that glitters is gold' (existential negation: some glittering things are not gold). 'Nothing that glitters is gold' is a universal negation: no glittering thing is gold at all. These are different logical propositions. The first (NOT FOR ALL x: glitters(x) IMPLIES gold(x)) is compatible with some glittering things being gold; the second (FOR ALL x: glitters(x) IMPLIES NOT gold(x)) rules out any glittering thing being gold. Natural language 'all X is not Y' is logically ambiguous and is a classic source of specification bugs — in code, always write precise boolean conditions rather than natural language descriptions.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "Is the statement \"All that glitters is not gold\" logically equivalent to \"Nothing that glitters is gold\"?"
+    },
+    "932": {
+      "id": 932,
+      "answer": "The CEO account should not be rejected. The system contains two rules: (1) 'Reject users without managers' and (2) 'executive accounts are valid users'. These rules conflict for the CEO case. Rule 2 is more specific and should take precedence as an exception to rule 1. The correct implementation: check if the account is an executive type first; if so, allow it regardless of manager presence. If not executive, apply the manager requirement. The broader lesson: requirements containing implicit exceptions must be made explicit. A developer who implements rule 1 literally without considering rule 2 would incorrectly reject the CEO. Always clarify conflicting requirements before implementation and encode the precedence explicitly in code logic.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "A ticket says: \"Reject users without managers.\" Should a CEO account with no manager be rejected if the system also says executive accounts are valid users?"
+    },
+    "933": {
+      "id": 933,
+      "answer": "Based on the tag 'Off-by-one trap': for i in range(1, 10) executes 9 times (values 1 through 9, not including 10). range(1, 10) is exclusive on the upper bound. range(0, 10) executes 10 times. range(10) executes 10 times. The classic off-by-one: developers expect range(1, 10) to include 10 and expect 10 iterations, but Python's range is exclusive on the upper bound. For a loop 'for i in range(n)', it executes exactly n times (0 through n-1). To iterate n times starting at 1: range(1, n+1). Always remember Python range(start, stop) excludes stop.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "A loop runs  in Python. How many times does it execute?"
+    },
+    "934": {
+      "id": 934,
+      "answer": "Sorting requirement trap: Original casing should be preserved in output — 'case-insensitive sort' means the sort key is the lowercased version but the stored/displayed value remains original. In Python: sorted(names, key=str.lower). Regarding 'Alice' vs 'alice': since they are equal under the case-insensitive key, their relative order is unspecified by the requirement (stable sort preserves original order). A complete implementation should define tie-breaking. The requirement is also ambiguous about locale — different locales have different collation rules. The correct engineering response: implement sorted(names, key=str.lower) for the case-insensitive sort, preserve original casing in the output values, and seek clarification on tie-breaking and locale handling.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "A requirement says: \"Sort names alphabetically, case-insensitive.\" Should  come before  and should original casing be preserved in output?"
+    },
+    "935": {
+      "id": 935,
+      "answer": "Inclusive/exclusive boundary: 'Under 18 only' means strictly less than 18 (age < 18), so age 17 is valid and age 18 is NOT valid — 18 is the exclusive upper bound. The obvious confusion is whether 'under 18' might include 18. In programming context, 'under N' universally means age < N (strict less-than, exclusive). Code: if age < 18: accept(). If the business intent is '18 and under', the specification must be corrected to 'at most 18' or '18 or under'. Age 18 with 'under 18 only' should be rejected. Always confirm boundary conditions explicitly with stakeholders before implementing validation logic, especially for compliance-sensitive age checks.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "A function must accept ages \"under 18 only.\" Is age  valid?"
+    },
+    "936": {
+      "id": 936,
+      "answer": "Date logic trap: A subscription starting January 31 lasting 1 month ends on February 28 (in a non-leap year) or February 29 (in a leap year), because February has no 31st day. The stated rule: 'same day number next month if possible, otherwise last day of next month.' February never has a 31st, so the rule falls back to the last day of February. Implementations must handle month-end normalization explicitly; naive 'add 30 days' gives March 2 which is wrong. In Python using dateutil: from dateutil.relativedelta import relativedelta; datetime(2024, 1, 31) + relativedelta(months=1) gives datetime(2024, 2, 29). This is a common source of subscription billing bugs when months have different lengths.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "If a subscription starts on January 31 and lasts 1 month, on what date does it end if the rule is \"same day number next month if possible, otherwise last day of next month\"?"
+    },
+    "937": {
+      "id": 937,
+      "answer": "Boolean wording trap: If the flag is named disable_cache and its value is true, then caching is DISABLED. The confusion: a developer might read 'disable_cache = true' and think 'the cache is active/true'. But the flag name encodes a negation: true means 'yes, disable it'. So disable_cache=true means caching OFF; disable_cache=false means caching ON. This is a common readability anti-pattern. Negated boolean flag names (disable_, no_, skip_, prevent_) require mental double-negation and cause bugs when developers reason about them quickly. Best practice: name flags positively (cache_enabled=true means caching is on). If you must use a negated flag, add a code comment explaining the semantics explicitly.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "A flag is named . If , is caching enabled or disabled?"
+    },
+    "938": {
+      "id": 938,
+      "answer": "Distinct vs total counting: When the requirement means 'unique users', one user who logs in 5 times counts as 1. The obvious wrong implementation is COUNT(*) which gives 5. The correct implementation is COUNT(DISTINCT user_id) which gives 1. This is a classic metrics bug: 'number of users who logged in' in plain English almost always means distinct users, but naive SQL gives total login events. The query should be: SELECT COUNT(DISTINCT user_id) FROM login_events WHERE date = today. If the requirement genuinely wants total login events, it should say 'number of login events' or 'total logins'. Always clarify 'users' vs 'sessions' vs 'events' in any reporting requirement.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "A report asks for \"number of users who logged in.\" If one user logs in 5 times, should that count as 1 or 5 when the requirement means unique users?"
+    },
+    "939": {
+      "id": 939,
+      "answer": "Specification trap: Per the literal requirement ('non-empty strings'), a string of only spaces like '   ' is technically non-empty (len > 0) and should PASS. The obvious wrong answer is to trim and reject it. Without explicit trimming requirements, a whitespace-only string passes the 'non-empty' check. However, this is almost certainly a gap in the specification — in most user-facing contexts, a field containing only spaces is meaningless. The correct engineering response: flag the ambiguity with the stakeholder. If the intent is 'meaningful non-empty input', the requirement should say 'non-blank' or 'non-empty after stripping whitespace'. Implement what is specified while documenting the assumption and seeking clarification before delivery.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "A validator must allow \"non-empty strings.\" Should a string containing only spaces, like , pass if the requirement does not explicitly say trimming is required?"
+    },
+    "940": {
+      "id": 940,
+      "answer": "JavaScript coercion trap (without running code): The task text has specific lines stripped but based on the tag the canonical examples are: (1) console.log(1 + '2') prints '12' — because + with a string coerces the number to string, giving string concatenation. (2) console.log('3' - 1) prints 2 — because - has no string meaning so '3' is coerced to number. (3) console.log(true + true) prints 2 — boolean true coerces to 1. (4) console.log([] + []) prints '' — both arrays convert to empty strings. (5) console.log([] + {}) prints '[object Object]'. The rule: + is string-biased (if either operand is a string or object, both convert to string); arithmetic operators -, *, / are number-biased and coerce operands to numbers.",
+      "tier": "T4",
+      "category": "trick_questions",
+      "task": "JavaScript coercion trap: Without running the code, determine exactly what is printed and explain why. Assume each line is executed exactly as written in a normal browser console, independently of the others."
+    },
+    "941": {
+      "id": 941,
+      "answer": "Python — Remove quadratic duplicate detection. BEFORE: def unique_ids(items): result = []; for x in items: if x not in result: result.append(x); return result. Bottleneck: x not in result is O(n) per check on a list. Total: O(n^2) time, O(n) space. AFTER: def unique_ids(items): seen = set(); result = []; for x in items: if x not in seen: seen.add(x); result.append(x); return result. Big-O after: O(n) time (set lookup/insert is O(1) average), O(n) space. For 10M items, this reduces from ~10^14 operations to ~10^7. If order does not matter, list(dict.fromkeys(items)) or list(set(items)) are even simpler one-liners. dict.fromkeys preserves insertion order in Python 3.7+.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Python — Remove quadratic duplicate detection: Given a Python function that builds a list of unique user IDs by scanning an input list and using membership checks on a Python list, optimize it for large inputs (10M+ items). Identify the bottleneck and rewrite it. Include Big-O time and space analysis before and after."
+    },
+    "942": {
+      "id": 942,
+      "answer": "JavaScript — Speed up repeated DOM queries. BEFORE: Nested loop calling querySelector on each of 5,000 rows inside an inner loop. Bottleneck: each querySelector triggers a DOM traversal O(m) where m is DOM size. With nested loops: O(n^2 * m) total. DOM queries also force layout recalculation. AFTER: (1) Cache all rows once: const rows = Array.from(table.querySelectorAll('tr')) — O(n). (2) Read all cell values into plain JS arrays in one pass before computation. (3) Do all computation on plain data structures (no DOM access in the loop). (4) Write results back to DOM in a single batch using DocumentFragment or innerHTML once. Big-O after: O(n) DOM reads + O(n) computation + O(1) DOM writes (1 batch insert). Eliminates layout thrashing and repeated style recalculation. For 5,000 rows: thousands of DOM queries reduced to 1 batch read and 1 batch write.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "JavaScript — Speed up repeated DOM queries: Given frontend JavaScript that loops over 5,000 table rows and repeatedly calls querySelector inside nested loops to read cell values, optimize it to reduce rendering and query overhead. Identify the bottleneck and provide Big-O analysis before and after."
+    },
+    "943": {
+      "id": 943,
+      "answer": "Java — Replace nested loop joins. BEFORE: for (Order o : orders) { for (Customer c : customers) { if (o.customerId == c.id) { o.customer = c; break; } } }. Bottleneck: O(n * m) where n=1M orders, m=100k customers = 10^11 comparisons. AFTER: Map<Long, Customer> customerMap = new HashMap<>(customers.size()); for (Customer c : customers) customerMap.put(c.id, c); for (Order o : orders) o.customer = customerMap.get(o.customerId). Big-O after: O(m) to build map + O(n) to join = O(n + m). HashMap.get is O(1) average. For 1M orders and 100k customers: ~1.1M operations vs 10^11. Space: O(m) for the map. This is the hash join pattern used by all relational query optimizers. Pre-size the HashMap with the known customer count to avoid rehashing.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Java — Replace nested loop joins: Given Java code that matches every order against every customer using nested loops to attach customer data by ID, optimize the join logic for datasets with 1M orders and 100k customers. Include the exact bottleneck and Big-O analysis before and after."
+    },
+    "944": {
+      "id": 944,
+      "answer": "C++ — Avoid repeated string concatenation copies. BEFORE: std::string result; for (auto& r : records) result = result + row_to_csv(r). Bottleneck: operator+ allocates a new string each iteration, copying all previous content. Total bytes copied: O(n^2) for n records. AFTER option 1 — std::ostringstream: std::ostringstream oss; for (auto& r : records) oss << row_to_csv(r); std::string result = oss.str(). AFTER option 2 — reserve + append: std::string result; result.reserve(avg_row_size * records.size()); for (auto& r : records) result += row_to_csv(r). The += (append) operator avoids creating temporaries and amortizes growth. Big-O after: O(n * k) total bytes written with amortized O(1) per append due to geometric growth strategy, vs O(n^2 * k) before. For 2M records this is a dramatic reduction in both time and peak memory usage.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "C++ — Avoid repeated string concatenation copies: Given C++ code that constructs a large CSV string using operator+ inside a loop over 2M records, optimize it to avoid excessive allocations and copying. Explain the bottleneck and provide Big-O analysis before and after."
+    },
+    "945": {
+      "id": 945,
+      "answer": "Go — Eliminate redundant JSON unmarshalling. BEFORE: Each helper function calls json.Unmarshal(payload, &target) independently. Bottleneck: json.Unmarshal is O(p) where p = payload size, involves reflection and heap allocation. Calling it k times per request = O(k*p) parse cost plus k separate allocations. AFTER: Parse once in the request handler and pass the struct to all helpers: type Payload struct{...}; func handleRequest(raw []byte) { var p Payload; if err := json.Unmarshal(raw, &p); err != nil { return }; helperA(p); helperB(p); helperC(p) }. Big-O after: O(p) once per request regardless of helper count. Space: O(p) for one parsed struct. For a 10KB payload called by 5 helpers: 5x reduction in parse time and allocations. For high-concurrency servers, also consider json.NewDecoder for streaming or sync.Pool to reuse struct memory across requests.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Go — Eliminate redundant JSON unmarshalling: Given a Go service that unmarshals the same JSON payload multiple times in different helper functions during a single request, refactor it to parse once and reuse structured data. Identify the bottleneck and give Big-O analysis before and after."
+    },
+    "946": {
+      "id": 946,
+      "answer": "Python — Optimize frequency counting. BEFORE: counts = {}; unique = set(words); for w in unique: counts[w] = words.count(w). Bottleneck: list.count(w) scans the entire list for each unique word. If there are u unique words and n total tokens: O(n * u). For a Zipf corpus u can be O(n^0.5) or worse. AFTER option 1 — collections.Counter: from collections import Counter; counts = Counter(words). Single O(n) pass, O(u) space. AFTER option 2 — dict accumulation: counts = {}; for w in words: counts[w] = counts.get(w, 0) + 1. Also O(n). Big-O after: O(n) time, O(u) space. Counter is implemented in C, making it faster by a constant factor than pure Python loops. For very large corpora exceeding memory, process in streaming chunks with a defaultdict and merge partial counts.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Python — Optimize frequency counting: Given Python code that counts word frequencies by calling list.count for every distinct word in the list, optimize it for a corpus of 50M tokens. Identify the bottleneck and include Big-O analysis before and after."
+    },
+    "947": {
+      "id": 947,
+      "answer": "Rust — Reduce hash map reallocation. BEFORE: let mut map = HashMap::new(); for entry in data { map.insert(entry.key, entry.value); }. Bottleneck: HashMap grows by doubling when load factor exceeds ~7/8, triggering reallocation and full rehashing. For n insertions: O(n) amortized but with multiple O(n) rehash spikes and increased allocator pressure. AFTER: let mut map = HashMap::with_capacity(data.len()); for entry in data { map.insert(entry.key, entry.value); }. with_capacity preallocates enough buckets to hold data.len() entries without any rehashing. Big-O after: O(n) time with no reallocation spikes, O(n) space allocated upfront. Amortized complexity is the same, but wall-clock time improves significantly by eliminating rehash operations (each of which copies all existing entries). For high-performance scenarios also consider the ahash crate for a faster hasher than the default SipHash13.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Rust — Reduce hash map reallocation: Given Rust code that inserts millions of entries into a HashMap without preallocating capacity, optimize it to reduce resizing and rehashing overhead. Explain the bottleneck and give Big-O analysis before and after."
+    },
+    "948": {
+      "id": 948,
+      "answer": "SQL + application code — Fix N+1 query pattern. BEFORE: posts = db.query('SELECT * FROM posts LIMIT 1000'); for post in posts: post.comments = db.query('SELECT * FROM comments WHERE post_id = ?', post.id). Bottleneck: 1 query for posts + 1 query per post = 1001 queries. Query count: O(n). Total latency = n * network_RTT. AFTER option 1 — JOIN: SELECT p.*, c.* FROM posts p LEFT JOIN comments c ON c.post_id = p.id LIMIT 1000 — 1 query, group results by post_id in application. AFTER option 2 — batch load: post_ids = [p.id for p in posts]; comments = db.query('SELECT * FROM comments WHERE post_id IN (?)', post_ids); group by post_id in a dict. Big-O after: O(1) queries (2 at most). Runtime dominated by data transfer not round-trips. Eliminates 1000 database round-trips. Most ORMs support eager loading (includes/prefetch_related) that applies this pattern automatically.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "SQL + application code — Fix N+1 query pattern: Given application code that loads 1,000 blog posts and then issues one SQL query per post to load comments, optimize the data access pattern. Identify the bottleneck and include Big-O query-count and runtime analysis before and after."
+    },
+    "949": {
+      "id": 949,
+      "answer": "JavaScript — Debounce expensive input handling. BEFORE: input.addEventListener('input', () => { results = items.filter(x => x.includes(input.value)); render(results); }). Bottleneck: filter runs on every keystroke. Fast typists trigger 10+ events/second. Per keystroke: O(n) filter over 100k items. Synchronous, blocks main thread. AFTER: function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; } input.addEventListener('input', debounce(handleSearch, 250)). Big-O per keystroke after: O(1) for most keystrokes (just a timer reset). Filter still O(n) but runs at most once per 250ms idle period. Perceived latency drops dramatically. Additional optimizations: pre-build a search index for sub-linear queries; virtualize the rendered list to only render visible rows.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "JavaScript — Debounce expensive input handling: Given browser code that filters a 100k-item list on every keystroke with no throttling or debounce, optimize responsiveness while preserving correctness. Identify the bottleneck and provide Big-O per keystroke analysis before and after."
+    },
+    "950": {
+      "id": 950,
+      "answer": "Python — Replace repeated sorting. BEFORE: lst = []; for x in stream: lst.append(x); lst.sort(). Bottleneck: lst.sort() (Timsort) is O(k log k) where k is current list length. Summed over 500k insertions: O(n^2 log n) total comparisons. AFTER option 1 — heapq: import heapq; h = []; for x in stream: heapq.heappush(h, x). Each push is O(log k). Total: O(n log n). To retrieve sorted output: sorted(h) or use heapq.nsmallest. AFTER option 2 — SortedList: from sortedcontainers import SortedList; sl = SortedList(); for x in stream: sl.add(x). Each add is O(log n). Total: O(n log n), and the list stays sorted at all times with O(log n) index access. Big-O after: O(n log n) vs O(n^2 log n) before. For 500k insertions: ~9.5M operations vs ~9.5 billion.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Python — Replace repeated sorting: Given Python code that appends one element at a time to a list and calls sort after each insertion to keep it ordered, optimize it for 500k insertions. Identify the bottleneck and include Big-O analysis before and after."
+    },
+    "951": {
+      "id": 951,
+      "answer": "C# — Cache expensive reflection. BEFORE: foreach (var obj in objects) { var props = obj.GetType().GetProperties(); foreach (var p in props) { /* serialize p.GetValue(obj) */ } }. Bottleneck: GetType().GetProperties() via reflection queries metadata on every object instance — security checks, attribute lookup, NativeInterop. O(n * p) reflection calls where n = objects, p = properties per type. AFTER: Cache property metadata per type: static readonly ConcurrentDictionary<Type, PropertyInfo[]> Cache = new(); ... var props = Cache.GetOrAdd(obj.GetType(), t => t.GetProperties()); foreach (var p in props) { /* p.GetValue(obj) */ }. Big-O after: O(t * p) reflection calls for t distinct types (typically 1), then O(n * p) fast cached reads. For n=1M objects of 1 type: 1 reflection call vs 1M before. Further optimization: compile PropertyInfo into typed Func<T,object> delegates for zero-reflection hot paths.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "C# — Cache expensive reflection: Given C# code that uses reflection to discover property metadata inside a tight serialization loop for every object instance, optimize it to avoid repeated metadata lookup. Explain the bottleneck and provide Big-O analysis before and after."
+    },
+    "952": {
+      "id": 952,
+      "answer": "Java — Improve string building in loops. BEFORE: String html = \"\"; for (Item item : items) { html = html + \"<li>\" + item.getName() + \"</li>\"; }. Bottleneck: Java String is immutable; + creates a new String object each iteration, copying all previous content. Total bytes copied: O(n^2) for n items. AFTER: StringBuilder sb = new StringBuilder(items.size() * 50); for (Item item : items) { sb.append(\"<li>\").append(item.getName()).append(\"</li>\"); } String html = sb.toString(). Big-O after: O(n * k) total bytes written, amortized O(1) per append due to geometric buffer growth. Final toString() is one O(n*k) copy. For 100k items: eliminates billions of unnecessary character copies. Note: in modern Java (9+), the compiler optimizes simple + chains on separate lines but NOT concatenation that spans loop iterations — always use StringBuilder explicitly in loops.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Java — Improve string building in loops: Given Java code that assembles a large HTML response using string concatenation inside a loop over 100k items, optimize it to reduce allocation and copy costs. Include the bottleneck and Big-O analysis before and after."
+    },
+    "953": {
+      "id": 953,
+      "answer": "Python — Convert recursive Fibonacci with repeated subproblems. BEFORE: def fib(n): return n if n <= 1 else fib(n-1) + fib(n-2). Bottleneck: exponential recursion — fib(n) makes O(2^n) calls because every subproblem is recomputed. fib(50) requires ~10^15 calls. AFTER option 1 — memoization: from functools import lru_cache; @lru_cache(maxsize=None); def fib(n): return n if n <= 1 else fib(n-1) + fib(n-2). Each value computed once. AFTER option 2 — iterative DP: def fib(n): a, b = 0, 1; [exec('a,b=b,a+b') for _ in range(n)]; return a. O(n) time, O(1) space. AFTER option 3 — precompute all: fibs = [0,1]; [fibs.append(fibs[-1]+fibs[-2]) for _ in range(max_n-1)]. O(n) once, O(1) per lookup. Big-O after: O(n) time vs O(2^n) before. For reporting jobs computing many values, precompute the entire table once.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Python — Convert recursive Fibonacci with repeated subproblems: Given a naive recursive Python implementation of Fibonacci used in a reporting job for many input values, optimize it without changing outputs. Identify the bottleneck and provide Big-O analysis before and after."
+    },
+    "954": {
+      "id": 954,
+      "answer": "Node.js — Parallelize independent I/O safely. BEFORE: const results = []; for (const f of files) { results.push(await fs.readFile(f)); }. Bottleneck: each readFile awaits completion before starting the next. Total time: sum of all read latencies = O(n * t). For 200 files at 10ms each: 2 seconds sequentially. AFTER — Promise.all: const results = await Promise.all(files.map(f => fs.readFile(f))). All reads initiated concurrently; total time = max(individual read times). For very large n to avoid overwhelming the OS with open file descriptors, use bounded concurrency: import pLimit from 'p-limit'; const limit = pLimit(20); const results = await Promise.all(files.map(f => limit(() => fs.readFile(f)))). Complexity after: O(n/concurrency * t_max) wall time. Result order is preserved by Promise.all. For 200 files this is typically 50-200x faster than sequential awaits.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Node.js — Parallelize independent I/O safely: Given Node.js code that reads 200 independent files using await inside a for loop, optimize total execution time while preserving result order. Identify the bottleneck and provide complexity analysis before and after."
+    },
+    "955": {
+      "id": 955,
+      "answer": "C++ — Speed up membership checks. BEFORE: for (auto q : queries) { bool found = std::find(ids.begin(), ids.end(), q) != ids.end(); }. Bottleneck: std::find on a vector is O(m) linear scan per query where m=1M IDs. For 10M queries: O(n * m) = O(10^13) comparisons. AFTER option 1 — std::unordered_set (hash set): std::unordered_set<int> id_set(ids.begin(), ids.end()); for (auto q : queries) { bool found = id_set.count(q) > 0; }. Build: O(m), each lookup: O(1) average. AFTER option 2 — sorted vector + binary search: std::sort(ids.begin(), ids.end()); for (auto q : queries) { bool found = std::binary_search(ids.begin(), ids.end(), q); }. Build: O(m log m), each lookup: O(log m), better cache locality. Big-O after: O(m) build + O(n) lookups vs O(n * m) before. For 10M queries against 1M IDs: 10M operations vs 10^13.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "C++ — Speed up membership checks: Given C++ code that checks whether each query ID exists in a large vector by linear scan, optimize it for 10M lookups against 1M IDs. Identify the bottleneck and include Big-O analysis before and after."
+    },
+    "956": {
+      "id": 956,
+      "answer": "Python — Avoid repeated DataFrame row iteration. BEFORE: for idx, row in df.iterrows(): df.at[idx, 'result'] = row['a'] * row['b'] + row['c']. Bottleneck: iterrows() constructs a Python Series object for each row (boxing overhead), and the loop runs in pure Python. O(n) iterations with high per-row overhead — typically 10-100x slower than vectorized operations. AFTER — vectorized: df['result'] = df['a'] * df['b'] + df['c']. This dispatches to NumPy's C-level array operations, processing entire columns at once. For more complex logic: df['result'] = np.where(condition, df['a'], df['b']) or use df.apply(func, axis=1) for Python-level row functions (faster than iterrows but still not vectorized). For maximum performance: use numba @jit or Cython for custom kernels. Big-O after: O(n) same asymptotic, but constant factor is 10-100x smaller due to C/Fortran-level NumPy vectorization.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Python — Avoid repeated DataFrame row iteration: Given pandas code that iterates row by row with iterrows to compute a derived column from existing numeric columns, optimize it using vectorized operations. Explain the bottleneck and provide Big-O analysis before and after."
+    },
+    "957": {
+      "id": 957,
+      "answer": "Go — Reduce excessive allocations in hot loop. BEFORE: for _, line := range lines { parts := strings.Split(line, ','); record := Record{Name: parts[0], Val: parts[1]}; process(record) }. Bottleneck: strings.Split allocates a new []string per line; each iteration causes multiple heap allocations, increasing GC pause frequency. AFTER option 1 — manual index scan: find the comma index with strings.IndexByte and use substring slicing which avoids a slice allocation. AFTER option 2 — sync.Pool for reuse: var pool = sync.Pool{New: func() any { return &Record{} }}; r := pool.Get().(*Record); fillRecord(r, line); process(r); pool.Put(r). AFTER option 3 — use encoding/csv with pre-allocated reader and reuse the []string slice across iterations. Big-O after: O(n) same, but allocations per iteration drop from O(k) to O(0) or O(1). GC pause frequency decreases proportionally. Benchmark with go test -bench -memprofile to verify reduction.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Go — Reduce excessive allocations in hot loop: Given Go code in a request handler that creates temporary slices and strings on every loop iteration while parsing records, optimize it to reduce GC pressure. Identify the bottleneck and include Big-O plus allocation behavior before and after."
+    },
+    "958": {
+      "id": 958,
+      "answer": "JavaScript — Batch DOM updates. BEFORE: for (let i=0; i<20000; i++) { const el = document.createElement('div'); el.textContent = data[i]; container.appendChild(el); }. Bottleneck: each appendChild on a live DOM node can trigger layout recalculation (reflow). 20,000 individual appends = up to 20,000 potential reflows. O(n) reflows. AFTER option 1 — DocumentFragment: const frag = document.createDocumentFragment(); for (let i=0; i<20000; i++) { const el = document.createElement('div'); el.textContent = data[i]; frag.appendChild(el); } container.appendChild(frag). Fragment is off-DOM; single reflow on final append. AFTER option 2 — innerHTML string: const html = data.map(d => '<div>' + escapeHtml(d) + '</div>').join(''); container.innerHTML = html. One parse + one reflow. Operation analysis after: O(n) element creation (unavoidable) + O(1) reflows (1 batch) vs O(n) reflows before. For 20,000 elements this can be 100-1000x faster in total rendering time.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "JavaScript — Batch DOM updates: Given browser code that appends 20,000 elements directly to the DOM one at a time inside a loop, optimize it to reduce layout/reflow overhead. Explain the bottleneck and provide Big-O-style operation analysis before and after."
+    },
+    "959": {
+      "id": 959,
+      "answer": "Python — Optimize matrix lookup logic. BEFORE: def contains(matrix, val): for row in matrix: for cell in row: if cell == val: return True; return False. For each query: O(r * c) where r=rows, c=cols. For q queries on mostly static data: O(q * r * c). AFTER — precompute a set once: flat_set = set(x for row in matrix for x in row). Build: O(r * c) once. Each query: O(1) average hash lookup. Total: O(r*c) setup + O(q) queries vs O(q*r*c) before. For sorted matrices (each row sorted, first element of each row greater than last of previous row), binary search works: O(log(r*c)) per query without extra space. For NumPy matrices: val in matrix.ravel() or np.any(matrix == val) uses vectorized C-level scan. Big-O summary: Before O(q*r*c), After O(r*c + q). For 1000 queries on a 100x100 matrix: 10^7 vs ~11,000 operations.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Python — Optimize matrix lookup logic: Given Python code that answers many membership queries on a 2D matrix by scanning every cell each time, optimize it for repeated queries on mostly static data. Identify the bottleneck and include Big-O analysis before and after."
+    },
+    "960": {
+      "id": 960,
+      "answer": "Java — Reuse compiled regular expressions. BEFORE: for (String line : lines) { Pattern p = Pattern.compile(\"\\\\d{4}-\\\\d{2}-\\\\d{2}\"); Matcher m = p.matcher(line); ... }. Bottleneck: Pattern.compile parses the regex, validates it, and builds an NFA/DFA structure on every loop iteration — O(R) work per line where R = regex complexity. For millions of lines this compilation cost dominates. AFTER: Compile once as a static constant — private static final Pattern DATE_PATTERN = Pattern.compile(\"\\\\d{4}-\\\\d{2}-\\\\d{2}\"); ... for (String line : lines) { Matcher m = DATE_PATTERN.matcher(line); ... }. Pattern is immutable and thread-safe; Matcher is not (create per thread or per call). Big-O after: O(R) compile once + O(n * L) matching where L = line length, vs O(n * (R + L)) before. For 1M log lines: eliminates 1M Pattern.compile calls entirely.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Java — Reuse compiled regular expressions: Given Java code that compiles the same regex pattern inside a loop over millions of log lines, optimize it to avoid repeated compilation. Explain the bottleneck and provide Big-O analysis before and after."
+    },
+    "961": {
+      "id": 961,
+      "answer": "C — Improve file reading strategy. BEFORE: int c; while ((c = fgetc(fp)) != EOF) { process(c); }. Bottleneck: even with libc stdio buffering, fgetc has per-call overhead at the application level and function call cost. For multi-GB files the loop overhead is significant. O(n) loop iterations where n = file size in bytes. AFTER option 1 — fread with large buffer: char buf[65536]; size_t n; while ((n = fread(buf, 1, sizeof(buf), fp)) > 0) { for (size_t i=0; i<n; i++) process(buf[i]); }. Reduces syscall overhead and improves cache behavior. AFTER option 2 — mmap: char* data = mmap(NULL, size, PROT_READ, MAP_PRIVATE, fd, 0). OS maps file pages on demand; sequential access is fast with kernel readahead. Process array directly. Big-O after: O(n) bytes processed (same) but per-iteration overhead drops dramatically. For 1GB file: 1 billion fgetc calls vs ~16k fread calls with 64KB buffer — throughput improves 10-100x.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "C — Improve file reading strategy: Given C code that reads a large file one byte at a time with repeated system calls, optimize it for throughput on multi-GB files. Identify the bottleneck and include Big-O analysis before and after."
+    },
+    "962": {
+      "id": 962,
+      "answer": "Python — Replace nested aggregation loops. BEFORE: totals = {}; for customer in customers: total = 0; for txn in transactions: if txn.customer_id == customer.id: total += txn.amount; totals[customer.id] = total. Bottleneck: O(n * m) where n=500k customers, m=5M transactions = 2.5 * 10^12 iterations. AFTER — single pass with defaultdict: from collections import defaultdict; totals = defaultdict(float); for txn in transactions: totals[txn.customer_id] += txn.amount. O(m) = 5M iterations. Access totals[customer_id] in O(1). AFTER with pandas: df.groupby('customer_id')['amount'].sum() — vectorized C-level aggregation. Big-O after: O(m + n) time vs O(n*m) before. Space: O(c) where c = number of distinct customer IDs. For 5M transactions: ~5M operations vs 2.5 trillion. This is the hash-aggregate pattern used by all major relational databases.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Python — Replace nested aggregation loops: Given Python code that computes per-customer purchase totals by scanning the full transaction list once for every customer, optimize it for 5M transactions and 500k customers. Explain the bottleneck and provide Big-O analysis before and after."
+    },
+    "963": {
+      "id": 963,
+      "answer": "TypeScript — Memoize repeated expensive computation. BEFORE: function formatUser(user: User): string { return expensiveFormat(user.name, user.locale); } called in render loop for same users repeatedly. Bottleneck: expensiveFormat runs for every call even when input is identical. O(n * cost_of_format) where n = render calls. AFTER — Map cache: const cache = new Map<string, string>(); function formatUser(user: User): string { const key = user.id + ':' + user.locale; if (cache.has(key)) return cache.get(key)!; const result = expensiveFormat(user.name, user.locale); cache.set(key, result); return result; }. AFTER for React — useMemo per component or a library like fast-memoize. Big-O after: O(u * cost_of_format) where u = unique inputs, then O(1) per cache hit. If render cycle has 1000 calls for 50 distinct users: 50 expensive calls vs 1000 before. Cache invalidation: clear or bound cache size when user data changes to avoid stale results.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "TypeScript — Memoize repeated expensive computation: Given TypeScript code that recomputes the same expensive formatting/transformation result for identical inputs across a render cycle, optimize it using memoization or caching. Identify the bottleneck and include Big-O analysis before and after."
+    },
+    "964": {
+      "id": 964,
+      "answer": "C++ — Replace bubble sort in production path. BEFORE: for (int i=0; i<n; i++) for (int j=0; j<n-1; j++) if (arr[j]>arr[j+1]) std::swap(arr[j],arr[j+1]). Bottleneck: bubble sort is O(n^2) comparisons and O(n^2) swaps in the worst and average case. For n=200k: ~4 * 10^10 operations per request — unacceptable in a latency-sensitive path. AFTER: std::sort(arr.begin(), arr.end()). std::sort uses introsort (quicksort + heapsort + insertion sort hybrid): O(n log n) worst case guaranteed, cache-friendly, highly optimized. Big-O after: O(n log n) = ~200k * 17 = ~3.4M operations vs ~4 * 10^10. Roughly 12,000x fewer comparisons. If data is partially sorted on each request, consider pdqsort or std::stable_sort. If only top-K are needed, use std::partial_sort (O(n log k)) instead of full sort.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "C++ — Replace bubble sort in production path: Given C++ code that sorts a list of 200k integers using bubble sort before serving a request, replace it with a more appropriate approach. Identify the bottleneck and provide Big-O analysis before and after."
+    },
+    "965": {
+      "id": 965,
+      "answer": "Python — Speed up graph traversal setup. BEFORE: edges = [(u,v),...]; BFS scans for neighbors: neighbors = [v for u,v in edges if u==current_node]. Bottleneck: scanning all E edges for every node dequeued = O(V * E) total BFS. For V=1M, E=5M: O(5 * 10^12) operations. AFTER — adjacency list: from collections import defaultdict, deque; graph = defaultdict(list); for u,v in edges: graph[u].append(v). BFS: visited = set(); q = deque([start]); while q: node = q.popleft(); for neighbor in graph[node]: if neighbor not in visited: visited.add(neighbor); q.append(neighbor). Big-O after: O(V + E) for BFS — each node visited once, each edge traversed once. Build adjacency list: O(E). Total: O(V + E). For V=1M, E=5M: ~6M operations vs 5 * 10^12. Standard BFS is always O(V+E) with adjacency list representation.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Python — Speed up graph traversal setup: Given Python code that stores graph edges in a list and, during BFS, repeatedly scans the full edge list to find neighbors of the current node, optimize it for sparse graphs with 1M nodes and 5M edges. Explain the bottleneck and include Big-O analysis before and after."
+    },
+    "966": {
+      "id": 966,
+      "answer": "Ruby — Remove repeated database existence checks. BEFORE: records.each { |r| Record.create!(r) unless Record.exists?(email: r[:email]) }. Bottleneck: one SELECT EXISTS query per record = O(n) queries. For n=10k records: 10k round trips. Also not atomic — race conditions between check and insert. AFTER option 1 — upsert_all (Rails 6+): Record.upsert_all(records, unique_by: :email). Single SQL INSERT ... ON CONFLICT (email) DO NOTHING. O(1) queries. AFTER option 2 — activerecord-import gem: Record.import records, on_duplicate_key_ignore: true. AFTER option 3 — bulk fetch then filter: existing = Record.where(email: records.map{|r|r[:email]}).pluck(:email).to_set; Record.insert_all(records.reject{|r| existing.include?(r[:email])}). Big-O query count after: O(1) or O(2) queries vs O(n) before. Runtime: O(n) data transfer (unavoidable) but network RTT overhead drops from n*RTT to 1*RTT.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Ruby — Remove repeated database existence checks: Given Ruby on Rails code that loops through records and performs an existence query for each item before insertion, optimize it for bulk imports. Identify the bottleneck and provide Big-O query-count and runtime analysis before and after."
+    },
+    "967": {
+      "id": 967,
+      "answer": "JavaScript — Optimize array intersection. BEFORE: const result = a.filter(x => b.includes(x)). Bottleneck: Array.includes is O(m) linear scan. For each of n elements in a: O(m) scan of b. Total: O(n * m). For n=m=1M: O(10^12). AFTER — Set for O(1) lookup: const setB = new Set(b); const result = a.filter(x => setB.has(x)). Build Set: O(m). Filter: O(n) with O(1) has(). Total: O(n + m). Big-O after: O(n + m) time, O(m) space. Set.has() is O(1) average (hash table). For n=m=1M: ~2M operations vs 10^12. Alternative if memory is constrained: sort both arrays O(n log n + m log m), then merge-scan O(n + m) with O(1) extra space — total O(n log n) but avoids the O(m) Set allocation. For the general unsorted case, Set approach is simplest and fastest.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "JavaScript — Optimize array intersection: Given JavaScript code that computes the intersection of two large arrays using nested loops, optimize it for arrays of length 1M each. Explain the bottleneck and provide Big-O analysis before and after."
+    },
+    "968": {
+      "id": 968,
+      "answer": "Go — Replace sequential HTTP calls with bounded concurrency. BEFORE: for _, url := range urls { resp, _ := http.Get(url); results = append(results, resp) }. Bottleneck: each request waits for the previous to complete. Total latency = sum of all RTTs = O(n * t). For n=500 at 100ms each: 50 seconds. AFTER — bounded worker pool: sem := make(chan struct{}, 20); var wg sync.WaitGroup; results := make([]Result, len(urls)); for i, url := range urls { wg.Add(1); go func(i int, u string) { defer wg.Done(); sem <- struct{}{}; results[i] = fetch(u); <-sem }(i, url) }; wg.Wait(). Complexity after: ceil(n/concurrency) * t_max wall time. With 20 workers and 500 requests: 25 batches * 100ms = 2.5 seconds vs 50 seconds. Bounded concurrency prevents overwhelming the remote server. Use errgroup for cleaner error propagation and context cancellation.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Go — Replace sequential HTTP calls with bounded concurrency: Given Go code that fetches 500 independent remote resources one after another, optimize it to improve latency without overwhelming the remote service. Identify the bottleneck and include complexity and concurrency analysis before and after."
+    },
+    "969": {
+      "id": 969,
+      "answer": "Python — Reduce repeated parsing of timestamps. BEFORE: Multiple passes each call parse_date(r['ts']) per record: pass1 = [parse_date(r['ts']) for r in data]; pass2 = [parse_date(r['ts']) for r in data]. Bottleneck: parse_date is expensive (dateutil is slow; strptime is faster but still O(1) with high constant). Called k times per record across k passes = O(k * n) total parses. AFTER — parse once and cache in the record: for r in data: r['parsed_ts'] = parse_date(r['ts']); pass1 = [use(r['parsed_ts']) for r in data]; pass2 = [use(r['parsed_ts']) for r in data]. Or use a dict: parsed = {r['id']: parse_date(r['ts']) for r in data}. Big-O after: O(n) parses once + O(k*n) O(1) dict lookups. For k=3 passes with dateutil (which is ~10-100x slower than strptime): 3x speedup for parse overhead. Always use datetime.strptime with explicit format string over dateutil when format is known.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Python — Reduce repeated parsing of timestamps: Given Python ETL code that parses the same timestamp string format with expensive date parsing logic inside multiple passes over the same dataset, optimize it to avoid duplicate work. Explain the bottleneck and provide Big-O analysis before and after."
+    },
+    "970": {
+      "id": 970,
+      "answer": "Java — Optimize top-K selection. BEFORE: Collections.sort(scores); return scores.subList(0, 100). Bottleneck: sorting 10M elements: O(n log n) = ~230M comparisons just to retrieve top 100. AFTER — min-heap of size k: PriorityQueue<Integer> heap = new PriorityQueue<>(100); for (int s : scores) { heap.offer(s); if (heap.size() > 100) heap.poll(); } List<Integer> top = new ArrayList<>(heap); Collections.sort(top, Collections.reverseOrder()). Big-O after: O(n log k) to maintain heap + O(k log k) for final sort = O(n log k). For n=10M, k=100: ~10M * log(100) = ~70M operations vs ~230M. Space: O(k) vs O(n). For best average-case performance: QuickSelect algorithm achieves O(n) average for finding kth element. Java does not have a built-in QuickSelect but the heap approach at O(n log k) is practical for small k relative to n.",
+      "tier": "T4",
+      "category": "performance",
+      "task": "Java — Optimize top-K selection: Given Java code that sorts an entire list of 10M scores just to return the top 100, optimize it with a more appropriate algorithm/data structure. Identify the bottleneck and provide Big-O analysis before and after."
+    },
+    "971": {
+      "id": 971,
+      "answer": "Multi-tool chain — One-shot mode empty --message flag: (1) GREP claude-native.mjs for '--message' or 'oneShot' argument parsing to locate where the flag is handled. (2) READ the argument handling section to understand how --message is parsed and how interactive mode is entered as fallback when message is absent. (3) EDIT: add a guard immediately after argument parsing that checks if --message was supplied but its value is empty string or undefined, and exits with 'Error: --message requires a non-empty string' and exit code 2. (4) WRITE TEST in test-suite.mjs: add a regression test calling runCLI(['--message', '']) and asserting exit code 2 and the error string in stderr. (5) RUN: npm test targeting the new test section. (6) VERIFY: run existing one-shot tests with non-empty --message and confirm they still pass with exit code 0 and produce output.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "In the Node CLI, find where one-shot mode parses , read the argument handling code, fix it so  returns a clear validation error instead of entering interactive mode, add a regression test in , run the targeted test, then verify no other one-shot flag behavior changed."
+    },
+    "972": {
+      "id": 972,
+      "answer": "Multi-tool chain — Provider detection for OpenRouter Anthropic models: (1) GREP claude-native.mjs for the Anthropic provider's detect(model) method, looking for 'claude-', 'anthropic', or provider detection logic. (2) READ how the Anthropic provider matches model strings — likely startsWith('claude-') or includes('anthropic'). (3) EDIT: update detect() to return false when the model string uses OpenRouter's namespaced format (e.g., 'anthropic/claude-3-opus') — check for a slash separator or 'openrouter' in the string before the Anthropic pattern. Only native model names like 'claude-3-5-sonnet-20241022' should match Anthropic. (4) ADD TEST: assert detect('anthropic/claude-3-opus') is false for Anthropic and true for OpenRouter provider. (5) RUN the provider detection test section. (6) VERIFY existing tests for native Anthropic model strings and OpenRouter models all pass without regression.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Search for provider detection logic in , read the code that maps model names to providers, update it so OpenRouter-hosted Anthropic models are not misclassified as native Anthropic, add a focused test covering the exact model string, run the relevant test subset, then verify existing Anthropic and OpenRouter cases still pass."
+    },
+    "973": {
+      "id": 973,
+      "answer": "Multi-tool chain — CLAUDE.md path resolution from nested subdirectory: (1) GREP claude-native.mjs for 'CLAUDE.md', fs.existsSync, or config loading functions that resolve the file path. (2) READ the path resolution logic — likely checking cwd for CLAUDE.md without walking up the directory tree. (3) EDIT: fix by walking up from cwd toward root: start at process.cwd(), check for CLAUDE.md, if not found move to parent directory, repeat until root or file found. Use path.dirname() to traverse upward. (4) ADD E2E TEST: create a temp directory with a root CLAUDE.md and a nested subdirectory, invoke runCLI from the nested dir, and assert the root CLAUDE.md content is loaded in the session context. (5) RUN: execute the new test. (6) VERIFY: run existing tests that start from the project root directory to confirm root-level CLAUDE.md loading still works identically.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Locate the code that loads , read the path resolution and precedence rules, fix a bug where the nearest project file is ignored when running from a nested subdirectory, add an end-to-end test that creates nested fixtures, run the test, then verify root-level behavior remains unchanged."
+    },
+    "974": {
+      "id": 974,
+      "answer": "Multi-tool chain — Deferred tool ToolSearch conditional surfacing: (1) GREP claude-native.mjs for 'ToolSearch' injection and deferred tool registry. (2) READ how ToolSearch is added to the tool list and how the deferred registry is populated. (3) EDIT: wrap ToolSearch tool injection with a condition — only add ToolSearch when deferredTools.length > 0 (or deferredToolsMap.size > 0): if (deferredTools.length > 0) { tools.push(toolSearchDefinition); }. (4) ADD TESTS: write two tests — zero deferred tools (assert ToolSearch absent from the tool list sent to the model) and one deferred tool (assert ToolSearch present). (5) RUN: execute the new tests. (6) VERIFY: run existing eager tool registration tests confirming that tools registered normally (non-deferred) still appear correctly in the tool list without ToolSearch being incorrectly suppressed.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Find the deferred tool registration flow, read how  and  interact, modify the logic so  is only surfaced when at least one deferred tool is actually available, add a test for both zero and nonzero deferred-tool cases, run the tests, then verify normal eager tool registration still works."
+    },
+    "975": {
+      "id": 975,
+      "answer": "Multi-tool chain — NDJSON multiline content fix: (1) GREP claude-native.mjs and claude-tool-loop.js for NDJSON serialization, JSON.stringify of events, or event emission logic. (2) READ the event serialization to find where assistant text is emitted — if template literals embed raw newlines into the NDJSON stream, each embedded newline breaks the one-event-per-line invariant. (3) EDIT: ensure all event objects are serialized via JSON.stringify(event) + '\\n' — JSON.stringify automatically escapes embedded newlines as \\n, so the output remains a single line per event. If raw text is being streamed directly, wrap it in a proper event object first. (4) ADD REGRESSION TEST: construct an assistant message with a literal newline in its text, serialize it to NDJSON, and assert each output line parses as a valid complete JSON object. (5) RUN. (6) VERIFY: run existing single-line event tests to confirm they are unchanged.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Search for NDJSON output formatting, read the event serialization code, fix it so assistant text containing newlines is emitted as a single valid JSON event instead of fragmented output, add a regression test that simulates multiline assistant content, run the test, then verify existing single-line events are unchanged."
+    },
+    "976": {
+      "id": 976,
+      "answer": "Multi-tool chain — Read-only Bash commands in accept-edits mode: (1) GREP claude-native.mjs for permission/approval logic, 'acceptEdits', or Bash tool execution gating. (2) READ how approval modes determine whether a Bash command is allowed — likely a boolean gate on the approval mode without distinguishing read-only vs write commands. (3) EDIT: classify Bash commands as read-only by pattern-matching against a whitelist (ls, cat, grep, find, pwd, echo, head, tail, wc, stat) and in acceptEdits mode allow read-only commands automatically while still requiring approval for write-capable commands (rm, mv, cp, write, chmod, kill). (4) ADD TEST: assert that in acceptEdits mode a 'ls' command is auto-approved and 'rm -rf' still requires approval. (5) RUN: execute the test. (6) VERIFY: run write-command approval tests to confirm they are still gated properly.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Locate the permission prompt code for Bash tool execution, read how approval modes are enforced, modify it so read-only commands are not incorrectly blocked in the \"accept edits\" mode, add a targeted test for the exact approval path, run the tests, then verify write-capable shell commands still require approval."
+    },
+    "977": {
+      "id": 977,
+      "answer": "Multi-tool chain — Session resume duplicate messages fix: (1) GREP claude-native.mjs for session save/load logic, 'resume', or JSON session file handling. (2) READ where messages are appended after resume — the bug is likely that the final assistant message is both stored in the saved session file and re-appended when the first response arrives after resume. (3) EDIT: after loading a saved session, mark the last message as already-committed. When a new response arrives, check whether it duplicates the last stored message (compare content or message ID) and skip appending if it is a duplicate. (4) ADD TEST: use a saved session fixture with a known final assistant message, simulate resume, send a dummy trigger, and assert the final assistant message appears exactly once in the conversation history. (5) RUN. (6) VERIFY: run fresh session serialization tests to confirm new sessions still serialize identically without the deduplication logic interfering.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Find session persistence logic, read where conversation state is saved and restored, fix the bug causing duplicate assistant messages after resume, add a reproducible test using a saved session fixture, run the test, then verify fresh sessions still serialize identically."
+    },
+    "978": {
+      "id": 978,
+      "answer": "Multi-tool chain — Hook failure error surfacing: (1) GREP claude-native.mjs for hook execution, child_process.spawn/exec, or pre/post-tool hook logic. (2) READ how hook stdout/stderr is captured and how errors are surfaced — likely dumping the full error object or stderr buffer to the console. (3) EDIT: when a hook exits with non-zero code, emit a concise user-facing message: console.error('Hook failed: ' + hookName + '\\n' + firstLineOfStderr). Catch Error objects and use only err.message, not err.stack. (4) ADD TEST: register a hook script that exits with code 1 and writes a multi-line stack trace to stderr, then assert the CLI output contains the hook name and first error line but NOT the full stack trace. (5) RUN. (6) VERIFY: run tests with successful hooks to confirm their expected output is displayed unchanged.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Search for hook execution code, read how hook stderr/stdout is captured, update it so hook failures surface concise user-facing errors without dumping internal stack traces, add a test for a failing hook script, run the test, then verify successful hooks still show expected output."
+    },
+    "979": {
+      "id": 979,
+      "answer": "Multi-tool chain — Non-streaming model fallback: (1) GREP claude-native.mjs for streaming capability declaration, 'capabilities.streaming', or the code path that selects streaming vs non-streaming API calls. (2) READ how streaming is chosen — likely checking provider.capabilities.streaming before calling the streaming endpoint. (3) EDIT: add a fallback in the request path — if capabilities.streaming is false or the model does not support streaming, automatically set stream: false in the API call config rather than attempting a streaming call that will fail mid-request. (4) ADD REGRESSION TEST: mock a provider with capabilities.streaming = false, invoke a request, assert no streaming call is made and the response is received correctly via non-streaming path. (5) RUN. (6) VERIFY: run existing streaming model tests to confirm capabilities.streaming = true still takes the streaming code path correctly.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Locate model capability resolution, read how streaming support is declared per provider, fix the fallback so a non-streaming model automatically disables streaming instead of throwing mid-request, add a provider-specific regression test, run the tests, then verify streaming models still use the streaming path."
+    },
+    "980": {
+      "id": 980,
+      "answer": "Multi-tool chain — Provider-specific base URL override priority: (1) GREP claude-native.mjs for resolveBaseUrl(), OPENAI_BASE_URL, or provider-specific base URL env vars like GROQ_BASE_URL or MISTRAL_BASE_URL. (2) READ the lookup order in resolveBaseUrl() — if it checks OPENAI_BASE_URL before the provider-specific var, the generic var wins incorrectly when both are set. (3) EDIT: change the lookup order to check provider-specific env var first (e.g., process.env.GROQ_BASE_URL), fall back to OPENAI_BASE_URL only when provider-specific is absent. (4) ADD TEST: set both GROQ_BASE_URL=https://specific and OPENAI_BASE_URL=https://generic, invoke Groq provider's resolveBaseUrl(), assert result is 'https://specific'. (5) RUN. (6) VERIFY: run a test with only OPENAI_BASE_URL set (no provider-specific var) to confirm the generic fallback still works correctly.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Find auth/base-URL resolution for providers, read the environment variable lookup order, correct it so a provider-specific base URL overrides the generic OpenAI-compatible URL when both are set, add a test that sets both env vars, run the test, then verify generic fallback still works when only one variable exists."
+    },
+    "981": {
+      "id": 981,
+      "answer": "Multi-tool chain — Tool call JSON payload truncation in ink-ui.mjs: (1) GREP ink-ui.mjs for tool call rendering, JSON.stringify of tool inputs, or the Ink React component that displays tool arguments. (2) READ the component that renders tool call inputs to understand how the JSON string is produced and displayed. (3) EDIT: add a truncation helper — const MAX = 500; const display = json.length > MAX ? json.slice(0, MAX) + '... [truncated]' : json — apply before rendering the JSON string. (4) ADD SMOKE TEST: write a test in test-ink-smoke.mjs or test-suite.mjs that renders a tool call with a 2000-character JSON payload, asserts output contains '... [truncated]' and is under the length limit, and separately asserts a 100-character payload renders in full without truncation. (5) RUN: execute the test. (6) VERIFY: run existing short-payload tool call rendering tests.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Search for the code handling tool call rendering in , read the component that prints long tool inputs, modify it to truncate oversized JSON payloads with a clear suffix instead of wrapping the entire terminal, add a UI smoke test or snapshot-style assertion, run the relevant test, then verify short payloads still render in full."
+    },
+    "982": {
+      "id": 982,
+      "answer": "Multi-tool chain — MCP tool name case-insensitive collision detection: (1) GREP claude-native.mjs for MCP tool registration, 'registerTool', or where tools from MCP servers are added to the tool list. (2) READ how tool names are stored and checked for uniqueness — likely a Map or Set keyed by exact tool name with no case normalization. (3) EDIT: before registering each MCP tool, perform a case-insensitive collision check: const conflict = [...registeredToolNames].find(k => k.toLowerCase() === newName.toLowerCase()); if (conflict) throw new Error('MCP tool name collision: ' + newName + ' conflicts with ' + conflict). Use a deterministic error message. (4) ADD TEST: mock MCP server provides 'GetUser' and 'getuser', assert registration throws the exact collision error. (5) RUN. (6) VERIFY: run existing MCP tests with unique tool names to confirm they register normally.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Locate MCP tool registration code, read how server-provided tool names are normalized, fix it so case-insensitive collisions are rejected with a deterministic error, add a test with two colliding tool names from a fixture server, run the test, then verify unique MCP tools still register normally."
+    },
+    "983": {
+      "id": 983,
+      "answer": "Multi-tool chain — settings.json project-local override priority: (1) GREP claude-native.mjs for settings loading, 'settings.json', or config merge logic. (2) READ the merge order — likely Object.assign({}, userSettings, projectSettings) or spread merging. (3) EDIT: ensure project-local settings are spread last so they override user settings: const merged = { ...userSettings, ...projectSettings }. Specifically verify that tool permission keys within nested objects also merge correctly (may need deep merge for nested permission objects). (4) ADD REGRESSION TEST: create both user config { toolPermissions: { bash: false } } and project config { toolPermissions: { bash: true } }, merge them, and assert merged.toolPermissions.bash is true (project wins). (5) RUN. (6) VERIFY: run tests for unrelated keys (model, theme) to confirm they still merge correctly from either source.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Find the logic that loads , read the merge order across local and user settings, correct it so project-local settings override user settings for tool permissions, add a regression test with both config files present, run the test, then verify unrelated keys still merge correctly."
+    },
+    "984": {
+      "id": 984,
+      "answer": "Multi-tool chain — Developer instruction deduplication on retry: (1) GREP claude-native.mjs for system instruction injection, 'system' field in provider payloads, or retry/backoff logic that rebuilds message lists. (2) READ how the developer instruction is added — if it is appended inside the retry loop rather than set once before, each attempt duplicates it. (3) EDIT: move the developer instruction assignment outside the retry loop: payload.system = instruction; then inside the retry loop, only update dynamic fields (messages). If payload is rebuilt on retry, guard with: if (!payload.system && instruction) payload.system = instruction. (4) ADD REGRESSION TEST: simulate two attempts (first fails with 429, second succeeds), capture both payloads, assert each has exactly one system/developer instruction field. (5) RUN. (6) VERIFY: run tests for providers using other instruction placement styles (system-in-messages) to confirm they are unaffected.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Search for message conversion code for providers using  placement, read the transformation from internal messages to provider payloads, fix it so the developer instruction is emitted exactly once even after retries, add a regression test covering a retry path, run the test, then verify providers using  are unaffected."
+    },
+    "985": {
+      "id": 985,
+      "answer": "Multi-tool chain — CRLF line endings in patch parser: (1) GREP claude-native.mjs for patch parsing, fenced code block extraction, or file edit application logic. (2) READ the parser that extracts diff/patch content from model output — likely splits on '\\n' which leaves '\\r' at line ends on Windows CRLF input, causing mismatched lines. (3) EDIT: normalize line endings before parsing by replacing \\r\\n with \\n: content = content.replace(/\\r\\n/g, '\\n'). Apply this normalization at the earliest point where model output text is received, before any line splitting. (4) ADD REGRESSION TEST: create a test where the model output patch uses \\r\\n line endings and assert the patch applies correctly producing the expected file content. (5) RUN. (6) VERIFY: run existing LF-only patch application tests to confirm they still pass identically with no change in behavior.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Locate the code that extracts fenced patches or file edits from model output, read the parser logic, modify it so Windows-style CRLF line endings do not break patch application, add a regression test with CRLF input, run the tests, then verify LF-only behavior still passes."
+    },
+    "986": {
+      "id": 986,
+      "answer": "Multi-tool chain — NDJSON mode flag help documentation: (1) GREP claude-native.mjs for '--help' output generation, the flags listing, or the usage string. (2) READ the flag documentation block to identify which flags are listed and confirm the NDJSON output flag (e.g., '--output-format') is missing documentation. (3) EDIT: add the missing flag documentation in the help text, matching the style of existing entries (e.g., '  --output-format <format>  Set output format: text, json, ndjson (default: text)'). No behavior changes — documentation only. (4) ADD SNAPSHOT TEST: write a test calling runCLI(['--help']), capturing stdout, and asserting it contains the NDJSON flag name and a description substring. (5) RUN. (6) VERIFY: run all existing help-related tests and diff full --help output against a reference snapshot to confirm no other text changed unexpectedly.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Find the command-line help generation code, read where supported flags are listed, add the missing documentation for the existing NDJSON mode flag without changing behavior, add a test that snapshots  output, run the test, then verify no other help text changed unexpectedly."
+    },
+    "987": {
+      "id": 987,
+      "answer": "Multi-tool chain — Packaged binary entrypoint path resolution: (1) GREP claude-native.mjs for __dirname, import.meta.url, process.pkg, or SEA/pkg detection patterns. (2) READ the path detection logic that resolves resource paths — likely using fileURLToPath(import.meta.url) when run via Node and needing process.execPath-relative paths when run as a packaged binary. (3) EDIT: implement a context-aware base path resolver: const isPkg = typeof process.pkg !== 'undefined'; const basePath = isPkg ? path.dirname(process.execPath) : path.dirname(fileURLToPath(import.meta.url)). Use basePath for all relative resource references. (4) ADD INTEGRATION TEST: mock process.pkg = {} and assert resource paths resolve relative to a mocked execPath rather than the module file location. (5) RUN. (6) VERIFY: run existing direct Node execution tests to confirm paths still resolve correctly when process.pkg is undefined.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Search for the code that resolves the packaged binary entrypoint versus , read the path detection logic, fix it so relative resource paths still work when launched via , add an integration-style test for packaged invocation behavior, run the test, then verify direct Node execution still passes."
+    },
+    "988": {
+      "id": 988,
+      "answer": "Multi-tool chain — HTTP 429 Retry-After header handling: (1) GREP claude-native.mjs for retry logic, HTTP 429 handling, or backoff functions. (2) READ the 429 error handler — likely using a fixed or exponential backoff that ignores the Retry-After header. (3) EDIT: in the 429 handler, parse Retry-After before applying default backoff: const ra = response.headers['retry-after']; const waitMs = ra ? (isNaN(Number(ra)) ? Math.max(0, new Date(ra) - Date.now()) : Number(ra) * 1000) : computeDefaultBackoff(attempt). Handle both integer seconds (numeric string) and HTTP date formats. await sleep(waitMs). (4) ADD UNIT TEST: mock a 429 response with header Retry-After: 5, assert the resolved wait time is ~5000ms not the default. Also test with an HTTP date string. (5) RUN. (6) VERIFY: run tests for other transient errors (500, 503) to confirm they still use exponential backoff unaffected by the Retry-After change.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Locate rate-limit retry handling, read the logic that interprets provider errors, update it so HTTP 429 responses with  headers wait the correct duration instead of using the default backoff, add a focused unit test for header parsing, run the test, then verify other transient errors still use exponential retry."
+    },
+    "989": {
+      "id": 989,
+      "answer": "Multi-tool chain — Deferred tools duplicated in prompt: (1) GREP claude-native.mjs for system prompt construction, tool summary generation, or the code that describes available tools to the model. (2) READ how eager and deferred tools are listed — the bug is that deferred tools appear in both the eager tools section and the ToolSearch/deferred section of the prompt. (3) EDIT: when building the eager tool list for the prompt, filter out deferred tools: const eagerToolsForPrompt = allTools.filter(t => !deferredToolNames.has(t.name)). Only ToolSearch should reference the deferred tools by name. (4) ADD REGRESSION TEST: set up one eager tool and one deferred tool, build the system prompt, parse it, and assert the deferred tool name appears exactly once in the full prompt text. (5) RUN. (6) VERIFY: run eager-only configuration tests to confirm the prompt structure and content are unchanged.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Find the code that summarizes available tools to the model, read how deferred and eager tools are described, modify it so deferred tools are not duplicated in both sections of the prompt, add a regression test that inspects the constructed prompt text, run the test, then verify eager-only configurations are unchanged."
+    },
+    "990": {
+      "id": 990,
+      "answer": "Multi-tool chain — Path normalization with '..' segments: (1) GREP claude-native.mjs for path safety checks, workspace boundary enforcement, or Edit/Write tool path validation. (2) READ the path normalization — the bug is that a path like /workspace/src/../src/file.ts may fail the workspace containment check if normalization is not applied before comparison. (3) EDIT: apply path.resolve(workspaceRoot, targetPath) before the containment check, then verify: normalizedPath.startsWith(workspaceRoot + path.sep) || normalizedPath === workspaceRoot. This correctly handles '..' by resolving them. (4) ADD REGRESSION TESTS: (a) path '/workspace/src/../src/file.ts' resolves to inside workspace — assert allowed. (b) path '/workspace/../etc/passwd' resolves outside workspace — assert blocked. (5) RUN both tests. (6) VERIFY: run all existing path safety tests to confirm true traversal attempts are still blocked.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Search for file-edit safety checks, read the path normalization logic around the Edit/Write tools, fix a bug where paths containing  segments are incorrectly treated as outside the workspace, add a regression test covering normalized relative paths, run the tests, then verify true path traversal attempts are still blocked."
+    },
+    "991": {
+      "id": 991,
+      "answer": "Multi-tool chain — Preserve most recent tool result during truncation: (1) GREP claude-native.mjs for conversation trimming, token budget enforcement, or message list truncation. (2) READ how messages are selected for removal — likely removing oldest messages first by index until under the token limit. (3) EDIT: before trimming, identify the index of the most recent tool_result message (and its paired tool_use message). During trimming, protect these two messages from removal even if their age would otherwise qualify them. After trimming, re-validate message ordering (tool_use must precede tool_result). (4) ADD TARGETED TEST: create a conversation exceeding the token budget with the most recent messages being a tool_use + tool_result pair, trigger trimming, and assert both are present in the output payload. (5) RUN. (6) VERIFY: run short-conversation tests asserting their payloads are byte-identical before and after the change.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Locate the conversation trimming/token budgeting code, read how old messages are selected for removal, modify it so the most recent tool result is preserved when truncation occurs during long sessions, add a targeted test that forces truncation, run the test, then verify normal short conversations produce identical payloads."
+    },
+    "992": {
+      "id": 992,
+      "answer": "Multi-tool chain — Stop reason mislabeling after tool use: (1) GREP claude-native.mjs for stop reason mapping, finish_reason, 'end_turn', or 'tool_use' translation logic. (2) READ how provider finish reasons map to internal values — the bug is likely that 'tool_calls' (OpenAI) or 'tool_use' (Anthropic) is being mapped to 'end_turn' for tool-result continuation turns. (3) EDIT: ensure the mapping table is correct: OpenAI 'tool_calls' -> internal 'tool_use'; 'stop' -> 'end_turn'; 'length' -> 'max_tokens'. For Anthropic, 'tool_use' -> 'tool_use', 'end_turn' -> 'end_turn'. Do not let continuation responses overwrite the stop reason from the initial tool call turn. (4) ADD REGRESSION TEST: mock a provider payload with finish_reason 'tool_calls', assert internal stop reason is 'tool_use'. (5) RUN. (6) VERIFY: test a genuine end_turn completion still maps to 'end_turn'.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Find the logic that emits assistant stop reasons after tool use, read the code mapping provider-specific finish reasons into internal values, fix it so tool-result continuations are not mislabeled as , add a regression test for the exact provider payload, run the test, then verify genuine  completions still map correctly."
+    },
+    "993": {
+      "id": 993,
+      "answer": "Multi-tool chain — Case-insensitive image file extension detection: (1) GREP claude-native.mjs for image input handling, file extension checks, or base64 encoding logic for local image files. (2) READ the extension detection — likely ['.jpg','.png','.gif','.webp'].includes(ext) where ext = path.extname(filePath) which preserves original case. (3) EDIT: normalize the extension to lowercase before the check: const ext = path.extname(filePath).toLowerCase(); then match against lowercase allowlist ['.jpg', '.jpeg', '.png', '.gif', '.webp']. (4) ADD TEST: write a test with a fixture file path ending in '.PNG' and another in '.JPG', assert both are accepted and produce correct base64-encoded image content. (5) RUN. (6) VERIFY: run tests with genuinely unsupported extensions ('.txt', '.pdf', '.mp4') to confirm they are still rejected with appropriate error messages.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Search for image input handling, read how local image paths are detected and encoded, fix it so uppercase file extensions like  are accepted the same as lowercase, add a focused test with a fixture image path, run the test, then verify unsupported extensions are still rejected."
+    },
+    "994": {
+      "id": 994,
+      "answer": "Multi-tool chain — Session title sanitization: (1) GREP claude-native.mjs for session naming, title derivation, or the code that writes session metadata to disk. (2) READ the title derivation — likely slicing the first N characters of the first user message without sanitization. (3) EDIT: add a sanitization pipeline before writing: title = prompt.slice(0, 60).replace(/[\\x00-\\x1f\\x7f]/g, '').replace(/\\s+/g, ' ').trim().replace(/[\\/\\\\:*?\"<>|]/g, '_'). This removes control characters, collapses whitespace, and sanitizes filesystem-unsafe characters. (4) ADD REGRESSION TEST: create a first user prompt containing a null byte (\\x00), tab (\\t), multiple spaces, and newlines, trigger session creation, and assert the written title contains none of those characters and is readable. (5) RUN. (6) VERIFY: run tests with normal one-line prompts to confirm their titles remain fully readable and unchanged.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Locate session naming logic, read how automatic session titles are derived from the first user prompt, update it so control characters and excessive whitespace are sanitized before writing to disk, add a regression test for a malformed prompt string, run the test, then verify normal titles remain readable."
+    },
+    "995": {
+      "id": 995,
+      "answer": "Multi-tool chain — CLI --model flag wins over resumed session model: (1) GREP claude-native.mjs for --model CLI argument parsing, session resume, and model selection priority. (2) READ the model resolution order — the bug is that the session model from the restored file overwrites the CLI --model value if session loading happens after CLI argument application, or CLI args are applied before session load. (3) EDIT: apply model resolution in the correct order: (a) start with default model, (b) apply session model if resuming, (c) override with CLI --model if explicitly provided (check cliArgs.model !== undefined). Final active model = cliArgs.model || sessionModel || defaultModel. (4) ADD TEST: save a session with model 'claude-3-haiku', resume with --model claude-3-5-sonnet, assert activeModel is 'claude-3-5-sonnet'. (5) RUN. (6) VERIFY: resume without --model override and assert the saved session model is preserved.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Find the code that applies  overrides, read how CLI flags interact with persisted session configuration, fix it so an explicit CLI model always wins over the resumed session model, add a test that resumes a saved session with a different , run the test, then verify resume without override still preserves the saved model."
+    },
+    "996": {
+      "id": 996,
+      "answer": "Multi-tool chain — Preserve enum values in tool schema serialization: (1) GREP claude-native.mjs for tool schema transformation, JSON Schema reduction, or the function that converts tool definitions before sending to providers. (2) READ the schema reduction logic — likely an allowlist of fields to preserve (type, description, properties, required) that inadvertently omits 'enum'. (3) EDIT: add 'enum' to the list of preserved fields for string properties in the schema reduction function: const ALLOWED_FIELDS = ['type', 'description', 'enum', 'items', 'properties', 'required', 'additionalProperties']. (4) ADD REGRESSION TEST: define a mock tool schema with a string property having enum: ['a', 'b', 'c'], serialize it, parse the output JSON, and assert the enum array is present and correct. (5) RUN. (6) VERIFY: run existing tests for non-enum string properties, number properties, and boolean properties to confirm they serialize identically to before.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Search for tool schema serialization sent to providers, read how JSON Schema is reduced for model prompts, modify it so enum values on string properties are preserved instead of flattened away, add a regression test using a small mock tool schema, run the test, then verify non-enum properties serialize as before."
+    },
+    "997": {
+      "id": 997,
+      "answer": "Multi-tool chain — Ctrl+C cleanup in Ink UI during pending model request: (1) GREP ink-ui.mjs for SIGINT handling, process.on('SIGINT'), useInput for Ctrl+C, or cleanup/exit logic. (2) READ the Ctrl+C handler — likely using Ink's useInput or a raw process.on('SIGINT'). The issue: in-flight fetch is not aborted and terminal may be left in alternate screen or raw mode. (3) EDIT: in the SIGINT handler, (a) abort any in-flight request via AbortController.abort(), (b) write '\\x1b[?1049l' to exit alternate screen if used, (c) write '\\x1b[?25h' to restore cursor visibility, (d) call process.exit(0) or process.exit(1) for interrupted state. (4) ADD/EXTEND SMOKE TEST in test-ink-smoke.mjs: spawn CLI, send SIGINT during a mock pending request, assert process exits cleanly with expected code and terminal escape sequences are emitted. (5) RUN. (6) VERIFY: run normal exit tests to confirm they are unchanged.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Locate the code that handles aborted interactive input in the Ink UI, read the cleanup path for Ctrl+C during a pending model request, fix it so the terminal state is restored cleanly and the process exits with the expected code, add or extend a smoke test for interrupted execution, run the test, then verify normal exits are unchanged."
+    },
+    "998": {
+      "id": 998,
+      "answer": "Multi-tool chain — Broken memory file links handled gracefully: (1) GREP claude-native.mjs for memory loading, project memory directory, or link/import parsing in memory index files. (2) READ how linked memory files are resolved — likely resolving relative paths and reading with fs.readFileSync which throws on missing files, crashing startup. (3) EDIT: wrap each linked file read in try/catch: try { const content = fs.readFileSync(linkedPath, 'utf8'); loadMemory(content); } catch (e) { console.warn('Warning: memory link not found: ' + linkedPath); continue; }. Do not throw or crash — log the warning and continue loading other links. (4) ADD REGRESSION TEST: create a memory index file with one valid link and one non-existent link path, run the memory loader, and assert: valid memory is loaded, a warning is logged for the broken link, no exception is thrown. (5) RUN. (6) VERIFY: run existing valid memory loading tests to confirm they still load correctly.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Find the memory loading/index logic under the project memory directory, read how  links are parsed, fix it so broken links are ignored with a warning instead of crashing startup, add a regression test with one valid and one missing memory file, run the test, then verify valid memories still load."
+    },
+    "999": {
+      "id": 999,
+      "answer": "Multi-tool chain — Omit empty instruction strings in provider payloads: (1) GREP claude-native.mjs for 'instructions' field, OpenAI Responses API payload builder, or where the instruction/system field is set on request payloads. (2) READ the payload builder for the Responses API style — likely always setting payload.instructions = systemPrompt even when systemPrompt is '' (empty string), which triggers API validation errors. (3) EDIT: add a conditional: if (instructions && instructions.trim().length > 0) { payload.instructions = instructions; }. The field is omitted entirely when empty or whitespace-only. (4) ADD TARGETED TESTS: (a) non-empty instruction — assert payload.instructions is present and equal to the value; (b) empty string instruction — assert payload.instructions is undefined/absent. (5) RUN both tests. (6) VERIFY: run tests for providers using other instruction placement styles (system-in-messages, Anthropic system field) to confirm they are unaffected by this change.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Search for provider request construction for  style APIs, read the payload builder, fix it so empty instruction strings are omitted rather than sent as blank fields that trigger API validation errors, add a targeted test for empty vs non-empty instructions, run the test, then verify providers using other instruction placement styles are unaffected."
+    },
+    "1000": {
+      "id": 1000,
+      "answer": "Multi-tool chain — Deduplicate LSP diagnostics before display: (1) GREP claude-native.mjs for LSP diagnostic handling, diagnostic formatting, or the agent loop integration point where file errors are surfaced. (2) READ the formatting path — likely building an array of diagnostic message strings from a payload and appending them all, even duplicates. (3) EDIT: before displaying, deduplicate diagnostics by content: const seen = new Set(); const deduped = diagnostics.filter(d => { const key = d.file + ':' + d.line + ':' + d.col + ':' + d.message; if (seen.has(key)) return false; seen.add(key); return true; }). Display deduped instead of the raw array. (4) ADD REGRESSION TEST: create a fixture payload with three diagnostics where two are identical (same file, line, col, message) and one is distinct. Assert exactly two unique diagnostics are displayed. (5) RUN. (6) VERIFY: run a test with all distinct diagnostics and assert all are shown without any being filtered.",
+      "tier": "T4",
+      "category": "multi_tool_chain",
+      "task": "Locate the code that reports LSP diagnostics or file errors back into the agent loop, read the formatting path, modify it so repeated identical diagnostics from the same file are deduplicated before display, add a regression test with duplicate diagnostics in a fixture payload, run the test, then verify distinct diagnostics are still all shown."
+    }
+  }
+}

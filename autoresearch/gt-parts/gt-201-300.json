@@ -1,0 +1,704 @@
+{
+  "answers": {
+    "201": {
+      "id": 201,
+      "answer": "// Reverse a string using split/reverse/join\nfunction solution(str) {\n  return str.split('').reverse().join('');\n}\n// Example: solution('hello') => 'olleh'",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Reverse a string"
+    },
+    "202": {
+      "id": 202,
+      "answer": "// Check if string is palindrome by comparing to its reverse\nfunction solution(str) {\n  const reversed = str.split('').reverse().join('');\n  return str === reversed;\n}\n// Example: solution('racecar') => true, solution('hello') => false",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Check if a string is a palindrome"
+    },
+    "203": {
+      "id": 203,
+      "answer": "// Find the maximum number using Math.max with spread\nfunction solution(arr) {\n  return Math.max(...arr);\n}\n// Example: solution([3, 1, 4, 1, 5, 9]) => 9",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Find the maximum number in an array"
+    },
+    "204": {
+      "id": 204,
+      "answer": "// Sum all numbers using reduce\nfunction solution(arr) {\n  return arr.reduce((sum, n) => sum + n, 0);\n}\n// Example: solution([1, 2, 3, 4]) => 10",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Sum all numbers in an array"
+    },
+    "205": {
+      "id": 205,
+      "answer": "// Count vowels by matching against a regex\nfunction solution(str) {\n  const matches = str.match(/[aeiouAEIOU]/g);\n  return matches ? matches.length : 0;\n}\n// Example: solution('Hello World') => 3",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Count vowels in a string"
+    },
+    "206": {
+      "id": 206,
+      "answer": "// Remove duplicates using Set\nfunction solution(arr) {\n  return [...new Set(arr)];\n}\n// Example: solution([1, 2, 2, 3, 3, 3]) => [1, 2, 3]",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Remove duplicates from an array"
+    },
+    "207": {
+      "id": 207,
+      "answer": "// FizzBuzz classic implementation\nfunction solution(n) {\n  const result = [];\n  for (let i = 1; i <= n; i++) {\n    if (i % 15 === 0) result.push('FizzBuzz');\n    else if (i % 3 === 0) result.push('Fizz');\n    else if (i % 5 === 0) result.push('Buzz');\n    else result.push(String(i));\n  }\n  return result;\n}\n// Example: solution(15) => ['1','2','Fizz','4','Buzz','Fizz','7','8','Fizz','Buzz','11','Fizz','13','14','FizzBuzz']",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "FizzBuzz"
+    },
+    "208": {
+      "id": 208,
+      "answer": "function solution(n) {\n  // Factorial iteratively\n  if (n <= 1) return 1;\n  let result = 1;\n  for (let i = 2; i <= n; i++) result *= i;\n  return result;\n}",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Factorial"
+    },
+    "209": {
+      "id": 209,
+      "answer": "// Find missing number in array 0..n using sum formula\nfunction solution(nums) {\n  const n = nums.length;\n  const expected = (n * (n + 1)) / 2;\n  const actual = nums.reduce((sum, x) => sum + x, 0);\n  return expected - actual;\n}\n// Example: solution([3,0,1]) => 2",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Find the missing number"
+    },
+    "210": {
+      "id": 210,
+      "answer": "// Capitalize first letter of each word using regex\nfunction solution(str) {\n  return str.replace(/\\b\\w/g, c => c.toUpperCase());\n}\n// Example: solution('hello world') => 'Hello World'",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Capitalize the first letter of each word"
+    },
+    "211": {
+      "id": 211,
+      "answer": "// Merge two sorted arrays using two-pointer technique\nfunction solution(a, b) {\n  const result = [];\n  let i = 0, j = 0;\n  while (i < a.length && j < b.length) {\n    if (a[i] <= b[j]) result.push(a[i++]);\n    else result.push(b[j++]);\n  }\n  while (i < a.length) result.push(a[i++]);\n  while (j < b.length) result.push(b[j++]);\n  return result;\n}\n// Example: solution([1,3,5],[2,4,6]) => [1,2,3,4,5,6]",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Merge two sorted arrays"
+    },
+    "212": {
+      "id": 212,
+      "answer": "// Find first non-repeating character using frequency map\nfunction solution(str) {\n  const freq = {};\n  for (const c of str) freq[c] = (freq[c] || 0) + 1;\n  for (const c of str) if (freq[c] === 1) return c;\n  return null;\n}\n// Example: solution('leetcode') => 'l'",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Find the first non-repeating character"
+    },
+    "213": {
+      "id": 213,
+      "answer": "// Check anagram by sorting both strings and comparing\nfunction solution(a, b) {\n  if (a.length !== b.length) return false;\n  const sort = s => s.split('').sort().join('');\n  return sort(a) === sort(b);\n}\n// Example: solution('listen','silent') => true",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Check if two strings are anagrams"
+    },
+    "214": {
+      "id": 214,
+      "answer": "// Flatten one level using Array.prototype.flat\nfunction solution(arr) {\n  return arr.flat();\n}\n// Example: solution([1,[2,3],[4,[5]]]) => [1,2,3,4,[5]]",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Flatten a one-level nested array"
+    },
+    "215": {
+      "id": 215,
+      "answer": "// Find intersection of two arrays, deduplicated\nfunction solution(a, b) {\n  const setB = new Set(b);\n  return [...new Set(a.filter(x => setB.has(x)))];\n}\n// Example: solution([1,2,3],[2,3,4]) => [2,3]",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Find the intersection of two arrays"
+    },
+    "216": {
+      "id": 216,
+      "answer": "// Chunk array into sub-arrays of a given size\nfunction solution(arr, size) {\n  const chunks = [];\n  for (let i = 0; i < arr.length; i += size) {\n    chunks.push(arr.slice(i, i + size));\n  }\n  return chunks;\n}\n// Example: solution([1,2,3,4,5],2) => [[1,2],[3,4],[5]]",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Chunk an array"
+    },
+    "217": {
+      "id": 217,
+      "answer": "// Rotate array right by k positions using slice\nfunction solution(arr, k) {\n  const n = arr.length;\n  if (n === 0) return arr;\n  const steps = k % n;\n  return [...arr.slice(n - steps), ...arr.slice(0, n - steps)];\n}\n// Example: solution([1,2,3,4,5],2) => [4,5,1,2,3]",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Rotate an array to the right"
+    },
+    "218": {
+      "id": 218,
+      "answer": "// Count word frequencies using reduce\nfunction solution(str) {\n  const words = str.toLowerCase().match(/\\b\\w+\\b/g) || [];\n  const freq = {};\n  for (const w of words) freq[w] = (freq[w] || 0) + 1;\n  return freq;\n}\n// Example: solution('hello world hello') => {hello:2, world:1}",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Count word frequencies"
+    },
+    "219": {
+      "id": 219,
+      "answer": "// Two Sum: find indices of two numbers that add up to target\nfunction solution(nums, target) {\n  const seen = {};\n  for (let i = 0; i < nums.length; i++) {\n    const complement = target - nums[i];\n    if (seen[complement] !== undefined) return [seen[complement], i];\n    seen[nums[i]] = i;\n  }\n  return [];\n}\n// Example: solution([2,7,11,15],9) => [0,1]",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Find two numbers that sum to a target"
+    },
+    "220": {
+      "id": 220,
+      "answer": "// Group strings by their length using reduce\nfunction solution(arr) {\n  return arr.reduce((groups, str) => {\n    const len = str.length;\n    if (!groups[len]) groups[len] = [];\n    groups[len].push(str);\n    return groups;\n  }, {});\n}\n// Example: solution(['a','bb','cc','ddd']) => {1:['a'],2:['bb','cc'],3:['ddd']}",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Group strings by length"
+    },
+    "221": {
+      "id": 221,
+      "answer": "// Validate balanced parentheses using a stack\nfunction solution(str) {\n  const stack = [];\n  const map = { ')': '(', ']': '[', '}': '{' };\n  for (const c of str) {\n    if ('([{'.includes(c)) stack.push(c);\n    else if (')]}'.includes(c)) {\n      if (stack.pop() !== map[c]) return false;\n    }\n  }\n  return stack.length === 0;\n}\n// Example: solution('({[]})') => true, solution('([)]') => false",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Validate balanced parentheses"
+    },
+    "222": {
+      "id": 222,
+      "answer": "// Binary search returning index or -1\nfunction solution(arr, target) {\n  let lo = 0, hi = arr.length - 1;\n  while (lo <= hi) {\n    const mid = Math.floor((lo + hi) / 2);\n    if (arr[mid] === target) return mid;\n    else if (arr[mid] < target) lo = mid + 1;\n    else hi = mid - 1;\n  }\n  return -1;\n}\n// Example: solution([1,3,5,7,9],7) => 3",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Binary search"
+    },
+    "223": {
+      "id": 223,
+      "answer": "// Deep flatten array using recursion\nfunction solution(arr) {\n  return arr.reduce((flat, item) =>\n    Array.isArray(item) ? flat.concat(solution(item)) : flat.concat(item), []);\n}\n// Example: solution([1,[2,[3,[4]]]]) => [1,2,3,4]",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Deeply flatten an array"
+    },
+    "224": {
+      "id": 224,
+      "answer": "function solution(str) {\n  // Generate all permutations of a string via backtracking\n  const results = [];\n  const chars = str.split('');\n  function permute(start) {\n    if (start === chars.length) {\n      results.push(chars.join(''));\n      return;\n    }\n    for (let i = start; i < chars.length; i++) {\n      [chars[start], chars[i]] = [chars[i], chars[start]];\n      permute(start + 1);\n      [chars[start], chars[i]] = [chars[i], chars[start]];\n    }\n  }\n  permute(0);\n  return results;\n}",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Generate all permutations of a string"
+    },
+    "225": {
+      "id": 225,
+      "answer": "// Find longest common prefix among array of strings\nfunction solution(strs) {\n  if (!strs.length) return '';\n  let prefix = strs[0];\n  for (let i = 1; i < strs.length; i++) {\n    while (!strs[i].startsWith(prefix)) prefix = prefix.slice(0, -1);\n    if (!prefix) return '';\n  }\n  return prefix;\n}\n// Example: solution(['flower','flow','flight']) => 'fl'",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Find the longest common prefix"
+    },
+    "226": {
+      "id": 226,
+      "answer": "// Convert Roman numeral to integer using value map\nfunction solution(s) {\n  const vals = { I:1, V:5, X:10, L:50, C:100, D:500, M:1000 };\n  let result = 0;\n  for (let i = 0; i < s.length; i++) {\n    const curr = vals[s[i]], next = vals[s[i+1]];\n    if (next && curr < next) result -= curr;\n    else result += curr;\n  }\n  return result;\n}\n// Example: solution('MCMXCIV') => 1994",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Convert a Roman numeral to an integer"
+    },
+    "227": {
+      "id": 227,
+      "answer": "function solution(tokens) {\n  // Evaluate a postfix (RPN) expression\n  const stack = [];\n  const ops = new Set(['+', '-', '*', '/']);\n  for (const token of tokens) {\n    if (!ops.has(token)) {\n      stack.push(Number(token));\n    } else {\n      const b = stack.pop();\n      const a = stack.pop();\n      if (token === '+') stack.push(a + b);\n      else if (token === '-') stack.push(a - b);\n      else if (token === '*') stack.push(a * b);\n      else stack.push(Math.trunc(a / b));\n    }\n  }\n  return stack[0];\n}",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Evaluate a postfix expression"
+    },
+    "228": {
+      "id": 228,
+      "answer": "function solution(s) {\n  // Longest substring without repeating characters — sliding window\n  const seen = new Map();\n  let start = 0, maxLen = 0;\n  for (let end = 0; end < s.length; end++) {\n    const ch = s[end];\n    if (seen.has(ch) && seen.get(ch) >= start) {\n      start = seen.get(ch) + 1;\n    }\n    seen.set(ch, end);\n    maxLen = Math.max(maxLen, end - start + 1);\n  }\n  return maxLen;\n}",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Find the longest substring without repeating characters"
+    },
+    "229": {
+      "id": 229,
+      "answer": "// Find majority element (appears > n/2 times) using Boyer-Moore voting\nfunction solution(nums) {\n  let candidate = nums[0], count = 1;\n  for (let i = 1; i < nums.length; i++) {\n    if (count === 0) { candidate = nums[i]; count = 1; }\n    else if (nums[i] === candidate) count++;\n    else count--;\n  }\n  return candidate;\n}\n// Example: solution([3,2,3]) => 3",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Find the majority element"
+    },
+    "230": {
+      "id": 230,
+      "answer": "// Merge overlapping intervals after sorting by start\nfunction solution(intervals) {\n  if (!intervals.length) return [];\n  intervals.sort((a, b) => a[0] - b[0]);\n  const merged = [intervals[0]];\n  for (let i = 1; i < intervals.length; i++) {\n    const last = merged[merged.length - 1];\n    if (intervals[i][0] <= last[1]) last[1] = Math.max(last[1], intervals[i][1]);\n    else merged.push(intervals[i]);\n  }\n  return merged;\n}\n// Example: solution([[1,3],[2,6],[8,10],[15,18]]) => [[1,6],[8,10],[15,18]]",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Merge overlapping intervals"
+    },
+    "231": {
+      "id": 231,
+      "answer": "// Debounce: delays invoking fn until after wait ms since last call\nfunction solution(fn, wait) {\n  let timer = null;\n  return function(...args) {\n    clearTimeout(timer);\n    timer = setTimeout(() => fn.apply(this, args), wait);\n  };\n}\n// Example: const debounced = solution(console.log, 300); debounced('x');",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Implement debounce"
+    },
+    "232": {
+      "id": 232,
+      "answer": "// Throttle: invokes fn at most once per wait ms\nfunction solution(fn, wait) {\n  let lastTime = 0;\n  return function(...args) {\n    const now = Date.now();\n    if (now - lastTime >= wait) {\n      lastTime = now;\n      return fn.apply(this, args);\n    }\n  };\n}\n// Example: const throttled = solution(console.log, 1000); throttled('x');",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Implement throttle"
+    },
+    "233": {
+      "id": 233,
+      "answer": "// Deep clone an object using JSON serialization (handles plain objects/arrays)\nfunction solution(obj) {\n  return JSON.parse(JSON.stringify(obj));\n}\n// For objects with functions/undefined, use structuredClone:\n// function solution(obj) { return structuredClone(obj); }\n// Example: solution({a:1,b:{c:2}}) => {a:1,b:{c:2}} (new reference)",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Clone an object deeply"
+    },
+    "234": {
+      "id": 234,
+      "answer": "function solution() {\n  // Build a simple event emitter class\n  class EventEmitter {\n    constructor() { this._events = {}; }\n    on(event, listener) {\n      if (!this._events[event]) this._events[event] = [];\n      this._events[event].push(listener);\n      return this;\n    }\n    off(event, listener) {\n      if (this._events[event]) {\n        this._events[event] = this._events[event].filter(l => l !== listener);\n      }\n      return this;\n    }\n    emit(event, ...args) {\n      if (this._events[event]) {\n        this._events[event].forEach(l => l(...args));\n      }\n      return this;\n    }\n    once(event, listener) {\n      const wrapper = (...args) => { listener(...args); this.off(event, wrapper); };\n      return this.on(event, wrapper);\n    }\n  }\n  return new EventEmitter();\n}",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Build a simple event emitter"
+    },
+    "235": {
+      "id": 235,
+      "answer": "// Top K frequent elements using frequency map and sort\nfunction solution(nums, k) {\n  const freq = {};\n  for (const n of nums) freq[n] = (freq[n] || 0) + 1;\n  return Object.entries(freq)\n    .sort((a, b) => b[1] - a[1])\n    .slice(0, k)\n    .map(([n]) => Number(n));\n}\n// Example: solution([1,1,1,2,2,3],2) => [1,2]",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Top K frequent elements"
+    },
+    "236": {
+      "id": 236,
+      "answer": "function solution(head) {\n  // Detect a cycle in a linked list using Floyd's two-pointer algorithm\n  // head is a node object with a .next property\n  let slow = head, fast = head;\n  while (fast !== null && fast.next !== null) {\n    slow = slow.next;\n    fast = fast.next.next;\n    if (slow === fast) return true;\n  }\n  return false;\n}",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Detect a cycle in a linked list"
+    },
+    "237": {
+      "id": 237,
+      "answer": "// Memoize a function: cache results keyed by serialized arguments\nfunction solution(fn) {\n  const cache = new Map();\n  return function(...args) {\n    const key = JSON.stringify(args);\n    if (cache.has(key)) return cache.get(key);\n    const result = fn.apply(this, args);\n    cache.set(key, result);\n    return result;\n  };\n}\n// Example: const memoFib = solution(n => n<=1?n:memoFib(n-1)+memoFib(n-2));",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Implement memoization"
+    },
+    "238": {
+      "id": 238,
+      "answer": "// Serialize and deserialize a binary tree using BFS level-order encoding\nconst solution = {\n  serialize(root) {\n    if (!root) return '[]';\n    const queue = [root], res = [];\n    while (queue.length) {\n      const node = queue.shift();\n      if (node) {\n        res.push(node.val);\n        queue.push(node.left, node.right);\n      } else res.push('null');\n    }\n    while (res[res.length-1] === 'null') res.pop();\n    return '[' + res.join(',') + ']';\n  },\n  deserialize(data) {\n    const vals = data.slice(1,-1).split(',');\n    if (!vals[0] || vals[0]==='null') return null;\n    const root = {val: parseInt(vals[0]), left:null, right:null};\n    const queue = [root];\n    let i = 1;\n    while (queue.length && i < vals.length) {\n      const node = queue.shift();\n      if (i < vals.length && vals[i] !== 'null') {\n        node.left = {val:parseInt(vals[i]),left:null,right:null};\n        queue.push(node.left);\n      }\n      i++;\n      if (i < vals.length && vals[i] !== 'null') {\n        node.right = {val:parseInt(vals[i]),left:null,right:null};\n        queue.push(node.right);\n      }\n      i++;\n    }\n    return root;\n  }\n};",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Serialize and deserialize a binary tree"
+    },
+    "239": {
+      "id": 239,
+      "answer": "// Implement a min stack that supports push, pop, top, and getMin in O(1)\nclass MinStack {\n  constructor() {\n    this.stack = [];\n    this.minStack = [];\n  }\n  push(val) {\n    this.stack.push(val);\n    const min = this.minStack.length === 0\n      ? val\n      : Math.min(val, this.minStack[this.minStack.length - 1]);\n    this.minStack.push(min);\n  }\n  pop() {\n    this.stack.pop();\n    this.minStack.pop();\n  }\n  top() {\n    return this.stack[this.stack.length - 1];\n  }\n  getMin() {\n    return this.minStack[this.minStack.length - 1];\n  }\n}\n\nfunction solution() { return new MinStack(); }",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Implement a min stack"
+    },
+    "240": {
+      "id": 240,
+      "answer": "// Implement an LRU cache using a Map (which preserves insertion order)\nclass LRUCache {\n  constructor(capacity) {\n    this.capacity = capacity;\n    this.cache = new Map();\n  }\n  get(key) {\n    if (!this.cache.has(key)) return -1;\n    const val = this.cache.get(key);\n    this.cache.delete(key);\n    this.cache.set(key, val);\n    return val;\n  }\n  put(key, value) {\n    if (this.cache.has(key)) this.cache.delete(key);\n    else if (this.cache.size >= this.capacity) {\n      this.cache.delete(this.cache.keys().next().value);\n    }\n    this.cache.set(key, value);\n  }\n}\n\nfunction solution(capacity) { return new LRUCache(capacity); }",
+      "tier": "T2",
+      "category": "code_js",
+      "task": "Implement an LRU cache"
+    },
+    "241": {
+      "id": 241,
+      "answer": "def solution(start, end):\n    # FizzBuzz: returns list of strings for numbers start to end inclusive\n    result = []\n    for i in range(start, end + 1):\n        if i % 15 == 0:\n            result.append('FizzBuzz')\n        elif i % 3 == 0:\n            result.append('Fizz')\n        elif i % 5 == 0:\n            result.append('Buzz')\n        else:\n            result.append(str(i))\n    return result\n# Example: solution(1, 15) => ['1','2','Fizz','4','Buzz','Fizz','7','8','Fizz','Buzz','11','Fizz','13','14','FizzBuzz']",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "FizzBuzz — Write a function that returns a list of strings for numbers from to inclusive. For multiples of 3 use , for multiples of 5 use , and for multiples of both use . Otherwise use the number as a string."
+    },
+    "242": {
+      "id": 242,
+      "answer": "def solution(s):\n    # Palindrome check: case-sensitive, spaces/punctuation included\n    return s == s[::-1]\n# Example: solution('racecar') => True, solution('Hello') => False",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Palindrome Check — Write a function that returns if reads the same forward and backward, and otherwise. Treat uppercase and lowercase letters as different. Do not ignore spaces or punctuation."
+    },
+    "243": {
+      "id": 243,
+      "answer": "def solution(n):\n    # Factorial: n! for n >= 0 using recursion\n    if n <= 1:\n        return 1\n    return n * solution(n - 1)\n# Example: solution(5) => 120",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Factorial — Write a function that returns . Assume ."
+    },
+    "244": {
+      "id": 244,
+      "answer": "def solution(s):\n    # Count vowels (a, e, i, o, u) in both cases\n    return sum(1 for c in s if c in 'aeiouAEIOU')\n# Example: solution('Hello World') => 3",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Count Vowels — Write a function that counts how many characters in are vowels: , in either lowercase or uppercase."
+    },
+    "245": {
+      "id": 245,
+      "answer": "def solution(nums, target):\n    # Two sum: return indices of two elements that sum to target\n    seen = {}\n    for i, n in enumerate(nums):\n        complement = target - n\n        if complement in seen:\n            return [seen[complement], i]\n        seen[n] = i\n    return []\n# Example: solution([2,7,11,15], 9) => [0, 1]",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Two Sum Indices — Write a function that returns the indices of two distinct elements whose sum is . Return the pair with the smaller first index if multiple answers exist. Return if no such pair exists."
+    },
+    "246": {
+      "id": 246,
+      "answer": "def solution(lst):\n    # Remove duplicates preserving order using dict (Python 3.7+ ordered)\n    seen = set()\n    result = []\n    for x in lst:\n        if x not in seen:\n            seen.add(x)\n            result.append(x)\n    return result\n# Example: solution([1,2,2,3,1]) => [1,2,3]",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Remove Duplicates While Preserving Order — Write a function that returns a new list containing the first occurrence of each value in , preserving original order."
+    },
+    "247": {
+      "id": 247,
+      "answer": "def solution(a, b):\n    # Merge two sorted lists using two pointers\n    result = []\n    i = j = 0\n    while i < len(a) and j < len(b):\n        if a[i] <= b[j]:\n            result.append(a[i]); i += 1\n        else:\n            result.append(b[j]); j += 1\n    result.extend(a[i:])\n    result.extend(b[j:])\n    return result\n# Example: solution([1,3,5],[2,4,6]) => [1,2,3,4,5,6]",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Merge Two Sorted Lists — Write a function that merges two lists sorted in nondecreasing order into one sorted list."
+    },
+    "248": {
+      "id": 248,
+      "answer": "def solution(lst, target):\n    # Binary search returning leftmost index or -1\n    lo, hi = 0, len(lst) - 1\n    result = -1\n    while lo <= hi:\n        mid = (lo + hi) // 2\n        if lst[mid] == target:\n            result = mid\n            hi = mid - 1  # continue left for leftmost occurrence\n        elif lst[mid] < target:\n            lo = mid + 1\n        else:\n            hi = mid - 1\n    return result\n# Example: solution([1,2,2,3,4], 2) => 1",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Binary Search — Write a function that returns the index of in a sorted list , or if is not present. If appears multiple times, return the leftmost index."
+    },
+    "249": {
+      "id": 249,
+      "answer": "def solution(s):\n    # Validate balanced parentheses using a stack\n    stack = []\n    mapping = {')': '(', ']': '[', '}': '{'}\n    for c in s:\n        if c in '([{':\n            stack.append(c)\n        elif c in ')]}':\n            if not stack or stack.pop() != mapping[c]:\n                return False\n    return len(stack) == 0\n# Example: solution('({[]})') => True, solution('([)]') => False",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Valid Parentheses — Write a function that returns if every opening bracket is closed in the correct order. The string contains only the characters ."
+    },
+    "250": {
+      "id": 250,
+      "answer": "def solution(s):\n    # Character frequency map\n    freq = {}\n    for c in s:\n        freq[c] = freq.get(c, 0) + 1\n    return freq\n# Example: solution('aabb') => {'a': 2, 'b': 2}",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Character Frequency Map — Write a function that returns a dictionary mapping each character in to its number of occurrences."
+    },
+    "251": {
+      "id": 251,
+      "answer": "def solution(lst, k):\n    # Rotate list right by k positions\n    if not lst:\n        return []\n    n = len(lst)\n    k = k % n\n    if k == 0:\n        return lst[:]\n    return lst[-k:] + lst[:-k]\n# Example: solution([1,2,3,4,5], 2) => [4,5,1,2,3]",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Rotate Array Right — Write a function that returns a new list formed by rotating to the right by positions. If is larger than the list length, wrap around. If is empty, return an empty list."
+    },
+    "252": {
+      "id": 252,
+      "answer": "def solution(a, b):\n    # Intersection: distinct values present in both lists, sorted ascending\n    return sorted(set(a) & set(b))\n# Example: solution([1,2,3,4],[3,4,5]) => [3,4]",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Intersection of Two Lists — Write a function that returns the distinct values present in both lists, sorted in ascending order."
+    },
+    "253": {
+      "id": 253,
+      "answer": "def solution(strs):\n    # Longest common prefix by progressively trimming\n    if not strs:\n        return ''\n    prefix = strs[0]\n    for s in strs[1:]:\n        while not s.startswith(prefix):\n            prefix = prefix[:-1]\n            if not prefix:\n                return ''\n    return prefix\n# Example: solution(['flower','flow','flight']) => 'fl'",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Longest Common Prefix — Write a function that returns the longest prefix shared by all strings in . Return if is empty or no common prefix exists."
+    },
+    "254": {
+      "id": 254,
+      "answer": "def solution(s):\n    # Convert Roman numeral to integer using value map\n    vals = {'I':1,'V':5,'X':10,'L':50,'C':100,'D':500,'M':1000}\n    result = 0\n    for i in range(len(s)):\n        if i + 1 < len(s) and vals[s[i]] < vals[s[i+1]]:\n            result -= vals[s[i]]\n        else:\n            result += vals[s[i]]\n    return result\n# Example: solution('MCMXCIV') => 1994",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Roman Numeral to Integer — Write a function that converts a valid Roman numeral to its integer value. Support the standard symbols ."
+    },
+    "255": {
+      "id": 255,
+      "answer": "def solution(s):\n    # Run-length encoding: character followed by its run length\n    if not s:\n        return ''\n    result = []\n    count = 1\n    for i in range(1, len(s)):\n        if s[i] == s[i-1]:\n            count += 1\n        else:\n            result.append(s[i-1] + str(count))\n            count = 1\n    result.append(s[-1] + str(count))\n    return ''.join(result)\n# Example: solution('aaabbc') => 'a3b2c1'",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Run-Length Encoding — Write a function that compresses a string by replacing each maximal run of the same character with the character followed by the run length. Return the encoded string."
+    },
+    "256": {
+      "id": 256,
+      "answer": "def solution(n):\n    # Return nth row of Pascal's triangle (0-indexed)\n    row = [1]\n    for _ in range(n):\n        row = [1] + [row[i] + row[i+1] for i in range(len(row)-1)] + [1]\n    return row\n# Example: solution(0) => [1], solution(3) => [1,3,3,1]",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Pascal Row — Write a function that returns the th row of Pascal's triangle using 0-based indexing. Row 0 is ."
+    },
+    "257": {
+      "id": 257,
+      "answer": "def solution(s, t):\n    # Anagram check using character frequency comparison\n    if len(s) != len(t):\n        return False\n    from collections import Counter\n    return Counter(s) == Counter(t)",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Anagram Check"
+    },
+    "258": {
+      "id": 258,
+      "answer": "def solution(matrix):\n    # Transpose matrix: rows become columns using zip\n    return [list(row) for row in zip(*matrix)]\n# Example: solution([[1,2,3],[4,5,6]]) => [[1,4],[2,5],[3,6]]",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Matrix Transpose — Write a function that returns the transpose of a rectangular matrix. Assume the input matrix is non-empty and all rows have the same length."
+    },
+    "259": {
+      "id": 259,
+      "answer": "def solution(nums):\n    # Maximum subarray sum using Kadane's algorithm\n    max_sum = curr = nums[0]\n    for n in nums[1:]:\n        curr = max(n, curr + n)\n        max_sum = max(max_sum, curr)\n    return max_sum\n# Example: solution([-2,1,-3,4,-1,2,1,-5,4]) => 6",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Maximum Subarray Sum — Write a function that returns the largest possible sum of a non-empty contiguous subarray."
+    },
+    "260": {
+      "id": 260,
+      "answer": "def solution(nums):\n    # Product of array except self using prefix and suffix products\n    n = len(nums)\n    result = [1] * n\n    prefix = 1\n    for i in range(n):\n        result[i] = prefix\n        prefix *= nums[i]\n    suffix = 1\n    for i in range(n - 1, -1, -1):\n        result[i] *= suffix\n        suffix *= nums[i]\n    return result\n# Example: solution([1,2,3,4]) => [24,12,8,6]",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Product of Array Except Self — Write a function that returns a list where each element at index is the product of all elements in except . Do not use division."
+    },
+    "261": {
+      "id": 261,
+      "answer": "def solution(words):\n    # Group words by anagram using sorted key\n    from collections import defaultdict\n    groups = defaultdict(list)\n    for word in words:\n        key = ''.join(sorted(word))\n        groups[key].append(word)\n    # Return groups in order of first appearance\n    seen = {}\n    order = []\n    for word in words:\n        key = ''.join(sorted(word))\n        if key not in seen:\n            seen[key] = True\n            order.append(groups[key])\n    return order",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Group Words by Anagram"
+    },
+    "262": {
+      "id": 262,
+      "answer": "def solution(matrix):\n    # Set matrix zeroes: zero entire row and column for each 0 cell\n    if not matrix:\n        return matrix\n    zero_rows = set()\n    zero_cols = set()\n    for r in range(len(matrix)):\n        for c in range(len(matrix[0])):\n            if matrix[r][c] == 0:\n                zero_rows.add(r)\n                zero_cols.add(c)\n    result = [row[:] for row in matrix]\n    for r in range(len(result)):\n        for c in range(len(result[0])):\n            if r in zero_rows or c in zero_cols:\n                result[r][c] = 0\n    return result\n# Example: solution([[1,1,1],[1,0,1],[1,1,1]]) => [[1,0,1],[0,0,0],[1,0,1]]",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Set Matrix Zeroes — Write a function that returns a new matrix where if any cell in the input is , its entire row and column are set to ."
+    },
+    "263": {
+      "id": 263,
+      "answer": "def solution(matrix):\n    # Spiral order traversal of a matrix\n    result = []\n    if not matrix:\n        return result\n    top, bottom = 0, len(matrix) - 1\n    left, right = 0, len(matrix[0]) - 1\n    while top <= bottom and left <= right:\n        for c in range(left, right + 1):\n            result.append(matrix[top][c])\n        top += 1\n        for r in range(top, bottom + 1):\n            result.append(matrix[r][right])\n        right -= 1\n        if top <= bottom:\n            for c in range(right, left - 1, -1):\n                result.append(matrix[bottom][c])\n            bottom -= 1\n        if left <= right:\n            for r in range(bottom, top - 1, -1):\n                result.append(matrix[r][left])\n            left += 1\n    return result",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Spiral Order Traversal"
+    },
+    "264": {
+      "id": 264,
+      "answer": "def solution(coins, amount):\n    # Minimum coins for amount using DP (unbounded knapsack)\n    dp = [float('inf')] * (amount + 1)\n    dp[0] = 0\n    for i in range(1, amount + 1):\n        for c in coins:\n            if c <= i and dp[i - c] + 1 < dp[i]:\n                dp[i] = dp[i - c] + 1\n    return dp[amount] if dp[amount] != float('inf') else -1\n# Example: solution([1,5,6,9], 11) => 2",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Coin Change Minimum Coins — Write a function that returns the minimum number of coins needed to make exactly . Return if it is impossible. You may use each coin denomination any number of times."
+    },
+    "265": {
+      "id": 265,
+      "answer": "def solution(n):\n    # Climbing stairs: number of ways to reach top with 1 or 2 steps\n    if n == 0:\n        return 1\n    if n == 1:\n        return 1\n    a, b = 1, 1\n    for _ in range(2, n + 1):\n        a, b = b, a + b\n    return b\n# Example: solution(4) => 5",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Climbing Stairs — Write a function that returns the number of distinct ways to reach the top of a staircase with steps, when each move can climb either 1 or 2 steps. Assume , and there is exactly 1 way to climb 0 steps."
+    },
+    "266": {
+      "id": 266,
+      "answer": "def solution(nums):\n    # Longest strictly increasing subsequence length using patience sort O(n log n)\n    import bisect\n    tails = []\n    for n in nums:\n        pos = bisect.bisect_left(tails, n)\n        if pos == len(tails):\n            tails.append(n)\n        else:\n            tails[pos] = n\n    return len(tails)\n# Example: solution([10,9,2,5,3,7,101,18]) => 4",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Longest Increasing Subsequence Length — Write a function that returns the length of the longest strictly increasing subsequence in ."
+    },
+    "267": {
+      "id": 267,
+      "answer": "def solution(s):\n    # Decode ways: count decodings of digit string (1-26 map to A-Z)\n    if not s or s[0] == '0':\n        return 0\n    n = len(s)\n    dp = [0] * (n + 1)\n    dp[0] = 1\n    dp[1] = 1\n    for i in range(2, n + 1):\n        one = int(s[i-1])\n        two = int(s[i-2:i])\n        if one != 0:\n            dp[i] += dp[i-1]\n        if 10 <= two <= 26:\n            dp[i] += dp[i-2]\n    return dp[n]\n# Example: solution('226') => 3",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Decode Ways — Write a function that returns how many ways a digit string can be decoded where , ..., . A cannot be decoded by itself."
+    },
+    "268": {
+      "id": 268,
+      "answer": "def solution(nums):\n    # Generate all subsets using backtracking\n    result = []\n    def backtrack(start, current):\n        result.append(list(current))\n        for i in range(start, len(nums)):\n            current.append(nums[i])\n            backtrack(i + 1, current)\n            current.pop()\n    backtrack(0, [])\n    return result",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Generate All Subsets"
+    },
+    "269": {
+      "id": 269,
+      "answer": "def solution(nums):\n    # All permutations of distinct integers using backtracking\n    result = []\n    def backtrack(path, remaining):\n        if not remaining:\n            result.append(path[:])\n            return\n        for i in range(len(remaining)):\n            path.append(remaining[i])\n            backtrack(path, remaining[:i] + remaining[i+1:])\n            path.pop()\n    backtrack([], nums)\n    return result\n# Example: solution([1,2,3]) => [[1,2,3],[1,3,2],[2,1,3],[2,3,1],[3,1,2],[3,2,1]]",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Permutations of Distinct Integers — Write a function that returns all permutations of a list of distinct integers. The output may be in any order."
+    },
+    "270": {
+      "id": 270,
+      "answer": "def solution(candidates, target):\n    # Combination sum with unlimited use, no duplicate combos\n    result = []\n    candidates.sort()\n    def backtrack(start, path, remaining):\n        if remaining == 0:\n            result.append(path[:])\n            return\n        for i in range(start, len(candidates)):\n            if candidates[i] > remaining:\n                break\n            path.append(candidates[i])\n            backtrack(i, path, remaining - candidates[i])\n            path.pop()\n    backtrack(0, [], target)\n    return result\n# Example: solution([2,3,6,7], 7) => [[2,2,3],[7]]",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Combination Sum — Write a function that returns all unique combinations of numbers from that sum to . Each number may be used unlimited times. Two combinations are considered the same if they contain the same values with the same multiplicities, regardless of order. Return combinations in any order."
+    },
+    "271": {
+      "id": 271,
+      "answer": "def solution(s, word_dict):\n    # Word break using DP: check if s can be segmented using word_dict\n    word_set = set(word_dict)\n    n = len(s)\n    dp = [False] * (n + 1)\n    dp[0] = True\n    for i in range(1, n + 1):\n        for j in range(i):\n            if dp[j] and s[j:i] in word_set:\n                dp[i] = True\n                break\n    return dp[n]\n# Example: solution('leetcode', ['leet','code']) => True",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Word Break — Write a function that returns if can be segmented into a sequence of one or more dictionary words from , and otherwise. Words may be reused."
+    },
+    "272": {
+      "id": 272,
+      "answer": "def solution(grid):\n    # Number of islands using DFS flood-fill\n    if not grid:\n        return 0\n    rows, cols = len(grid), len(grid[0])\n    grid = [row[:] for row in grid]  # copy to avoid mutating input\n    count = 0\n    def dfs(r, c):\n        if r < 0 or r >= rows or c < 0 or c >= cols or grid[r][c] != '1':\n            return\n        grid[r][c] = '0'\n        dfs(r+1, c); dfs(r-1, c); dfs(r, c+1); dfs(r, c-1)\n    for r in range(rows):\n        for c in range(cols):\n            if grid[r][c] == '1':\n                dfs(r, c)\n                count += 1\n    return count\n# Example: solution([['1','1','0'],['0','1','0'],['0','0','1']]) => 2",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Number of Islands — Write a function that counts how many connected components of land exist in a 2D grid. Each cell is (land) or (water). Cells are connected horizontally or vertically."
+    },
+    "273": {
+      "id": 273,
+      "answer": "def solution(grid):\n    # Shortest path in binary grid using BFS (8 directions)\n    from collections import deque\n    n = len(grid)\n    if not n or grid[0][0] == 1 or grid[n-1][n-1] == 1:\n        return -1\n    if n == 1:\n        return 1\n    queue = deque([(0, 0, 1)])\n    visited = {(0, 0)}\n    dirs = [(-1,-1),(-1,0),(-1,1),(0,-1),(0,1),(1,-1),(1,0),(1,1)]\n    while queue:\n        r, c, dist = queue.popleft()\n        for dr, dc in dirs:\n            nr, nc = r + dr, c + dc\n            if 0 <= nr < n and 0 <= nc < n and (nr, nc) not in visited and grid[nr][nc] == 0:\n                if nr == n-1 and nc == n-1:\n                    return dist + 1\n                visited.add((nr, nc))\n                queue.append((nr, nc, dist + 1))\n    return -1\n# Example: solution([[0,0,0],[1,1,0],[1,1,0]]) => 4",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Shortest Path in Binary Grid — Write a function that returns the length of the shortest path from the top-left cell to the bottom-right cell in a binary matrix, moving in 8 directions. A cell value of is open and is blocked. Return if no path exists. The path length counts both the starting and ending cells."
+    },
+    "274": {
+      "id": 274,
+      "answer": "def solution(root):\n    # Validate BST using recursive min/max range checking\n    def is_valid(node, lo, hi):\n        if node is None:\n            return True\n        if not (lo < node.val < hi):\n            return False\n        return is_valid(node.left, lo, node.val) and is_valid(node.right, node.val, hi)\n    return is_valid(root, float('-inf'), float('inf'))\n# Node has .val, .left, .right. Example: valid BST tree => True",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Validate Binary Search Tree — Write a function that returns if a binary tree is a valid binary search tree, and otherwise. Each node has attributes , , and . In a valid BST, all values in the left subtree are strictly less than the node value, and all values in the right subtree are strictly greater."
+    },
+    "275": {
+      "id": 275,
+      "answer": "def solution(root, p, q):\n    # Lowest Common Ancestor in binary tree using recursive post-order\n    if root is None or root is p or root is q:\n        return root\n    left = solution(root.left, p, q)\n    right = solution(root.right, p, q)\n    if left and right:\n        return root\n    return left if left else right\n# Node has .val, .left, .right. Returns the LCA node object.",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Lowest Common Ancestor in a Binary Tree — Write a function that returns the node representing the lowest common ancestor of nodes and in a binary tree. Each node has attributes , , and . Assume both nodes exist in the tree and all node objects are unique."
+    },
+    "276": {
+      "id": 276,
+      "answer": "def solution(n, edges):\n    # Topological sort using Kahn's BFS algorithm\n    from collections import defaultdict, deque\n    graph = defaultdict(list)\n    in_degree = [0] * n\n    for u, v in edges:\n        graph[u].append(v)\n        in_degree[v] += 1\n    queue = deque(i for i in range(n) if in_degree[i] == 0)\n    order = []\n    while queue:\n        node = queue.popleft()\n        order.append(node)\n        for neighbor in graph[node]:\n            in_degree[neighbor] -= 1\n            if in_degree[neighbor] == 0:\n                queue.append(neighbor)\n    return order if len(order) == n else []\n# Returns [] if cycle detected. Example: solution(4, [(0,1),(0,2),(1,3),(2,3)]) => [0,1,2,3] or [0,2,1,3]",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Topological Sort — Write a function that returns a topological ordering of a directed graph with nodes to . Each edge means . If the graph contains a cycle, return . If multiple valid orders exist, any one is acceptable."
+    },
+    "277": {
+      "id": 277,
+      "answer": "def solution(n, edges, src):\n    # Dijkstra shortest paths from src using a min-heap\n    import heapq\n    graph = [[] for _ in range(n)]\n    for u, v, w in edges:\n        graph[u].append((v, w))\n    dist = [float('inf')] * n\n    dist[src] = 0\n    heap = [(0, src)]\n    while heap:\n        d, u = heapq.heappop(heap)\n        if d > dist[u]:\n            continue\n        for v, w in graph[u]:\n            if dist[u] + w < dist[v]:\n                dist[v] = dist[u] + w\n                heapq.heappush(heap, (dist[v], v))\n    return dist\n# Example: solution(3, [(0,1,4),(0,2,1),(2,1,2)], 0) => [0,3,1]",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Dijkstra Shortest Paths — Write a function that returns the shortest distance from to every node in a directed weighted graph with nonnegative edge weights. Each edge is . Use for unreachable nodes."
+    },
+    "278": {
+      "id": 278,
+      "answer": "def solution(n, edges):\n    # Detect cycle in directed graph using DFS with color marking\n    from collections import defaultdict\n    graph = defaultdict(list)\n    for u, v in edges:\n        graph[u].append(v)\n    # 0=unvisited, 1=in-stack, 2=done\n    color = [0] * n\n    def dfs(u):\n        color[u] = 1\n        for v in graph[u]:\n            if color[v] == 1:\n                return True\n            if color[v] == 0 and dfs(v):\n                return True\n        color[u] = 2\n        return False\n    return any(dfs(i) for i in range(n) if color[i] == 0)\n# Example: solution(3, [(0,1),(1,2),(2,0)]) => True",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Detect Cycle in Directed Graph — Write a function that returns if a directed graph contains at least one cycle, and otherwise. Nodes are labeled to ."
+    },
+    "279": {
+      "id": 279,
+      "answer": "def solution(n, edges):\n    # Count connected components using Union-Find with path compression\n    parent = list(range(n))\n    def find(x):\n        while parent[x] != x:\n            parent[x] = parent[parent[x]]  # path halving\n            x = parent[x]\n        return x\n    def union(a, b):\n        pa, pb = find(a), find(b)\n        if pa == pb:\n            return False\n        parent[pa] = pb\n        return True\n    components = n\n    for u, v in edges:\n        if union(u, v):\n            components -= 1\n    return components\n# Example: solution(5, [(0,1),(1,2),(3,4)]) => 2",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Union-Find Connected Components — Write a function that returns the number of connected components in an undirected graph with nodes to ."
+    },
+    "280": {
+      "id": 280,
+      "answer": "def solution(n, edges):\n    # Minimum spanning tree weight using Kruskal's algorithm\n    edges = sorted(edges, key=lambda e: e[2])\n    parent = list(range(n))\n    rank = [0] * n\n    def find(x):\n        while parent[x] != x:\n            parent[x] = parent[parent[x]]\n            x = parent[x]\n        return x\n    def union(x, y):\n        px, py = find(x), find(y)\n        if px == py:\n            return False\n        if rank[px] < rank[py]:\n            px, py = py, px\n        parent[py] = px\n        if rank[px] == rank[py]:\n            rank[px] += 1\n        return True\n    total = 0\n    edge_count = 0\n    for u, v, w in edges:\n        if union(u, v):\n            total += w\n            edge_count += 1\n    return total if edge_count == n - 1 else -1",
+      "tier": "T2",
+      "category": "code_python",
+      "task": "Minimum Spanning Tree Weight"
+    },
+    "281": {
+      "id": 281,
+      "answer": "find . -not -path './.git/*' -type f -printf '%s\\t%p\\n' | sort -rn | awk '{print $2}'\n# Uses printf to get size and path, sorts numerically descending, then prints just the path",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Find all files under the current directory, excluding , and print their paths sorted by size descending."
+    },
+    "282": {
+      "id": 282,
+      "answer": "grep -cF 'ERROR' file.log\n# -c prints count of matching lines; -F treats pattern as fixed string",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Count how many lines in  contain the exact string  and print only the count."
+    },
+    "283": {
+      "id": 283,
+      "answer": "awk -F, 'NR>1 && $3==\"active\" {print $2}' data.csv\n# -F, sets comma delimiter; NR>1 skips header; $3==\"active\" filters; $2 prints email field",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "In , print the email address field from rows where the third column is , assuming comma-separated fields and a header row."
+    },
+    "284": {
+      "id": 284,
+      "answer": "awk '{print $1}' access.log | sort | uniq -c | sort -rn | head -10\n# Extract first field (IP), sort, count unique, sort by count descending, show top 10",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Show the 10 most frequent IP addresses in the first whitespace-separated field of , along with their counts."
+    },
+    "285": {
+      "id": 285,
+      "answer": "find . -name 'config.yaml' | awk -F/ 'NF <= 4'\n# NF<=4 means at most 3 slashes after leading '.', i.e. depth <= 3",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Recursively find all files named  under the current directory and print only those located at depth 3 or less."
+    },
+    "286": {
+      "id": 286,
+      "answer": "find . -name '*.txt' -exec sed -i 's/foo/bar/g' {} +\n# Recursively find all .txt files and replace all occurrences of 'foo' with 'bar' in-place",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Replace every occurrence of  with  in all  files under the current directory."
+    },
+    "287": {
+      "id": 287,
+      "answer": "echo \"Files: $(find . -not -path './.git/*' -type f | wc -l)\"; echo \"Dirs: $(find . -not -path './.git/*' -mindepth 1 -type d | wc -l)\"\n# Count files and directories separately excluding .git",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Print the total number of files and the total number of directories under the current directory, excluding ."
+    },
+    "288": {
+      "id": 288,
+      "answer": "find /path/to/dir -type f -empty -delete\n# -empty matches zero-byte files; -delete removes them",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Find all empty files under  and delete them."
+    },
+    "289": {
+      "id": 289,
+      "answer": "tar -czf archive.tar.gz src/ dist/ docs/\n# -c create, -z gzip compress, -f specify filename, then list directories",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Create a gzipped tar archive named  containing the directories , , and ."
+    },
+    "290": {
+      "id": 290,
+      "answer": "tar -xzf archive.tar.gz -C /target/dir --preserve-permissions\n# -x extract, -z decompress gzip, -f file, -C target directory, --preserve-permissions keeps modes",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Extract  into  and preserve file permissions."
+    },
+    "291": {
+      "id": 291,
+      "answer": "find . -type f -printf '%s %p\\n' | sort -rn | head -5 | while read size path; do echo \"$(numfmt --to=iec $size)\\t$path\"; done\n# Get size+path, sort by size desc, take top 5, convert size to human-readable",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Print the 5 largest files under the current directory, showing size in human-readable form and path."
+    },
+    "292": {
+      "id": 292,
+      "answer": "find /var/log -name '*.log' -mtime -2 -type f\n# -mtime -2 matches files modified within the last 2 days",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Find all  files modified in the last 2 days under  and print their paths."
+    },
+    "293": {
+      "id": 293,
+      "answer": "grep 'ERROR' file.log | grep -v 'DEBUG'\n# First grep selects lines with ERROR; pipe to grep -v removes lines with DEBUG",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "In , print lines that contain  but do not contain ."
+    },
+    "294": {
+      "id": 294,
+      "answer": "grep -nP 'your_regex_here' file.txt | cut -d: -f1\n# -n adds line numbers; cut extracts just the line number before the colon",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Print the line numbers of all matches for the regex  in ."
+    },
+    "295": {
+      "id": 295,
+      "answer": "awk -F'\\t' '$1 ~ /^prefix/ {print $2, $4}' data.tsv\n# -F'\\t' sets tab delimiter; $1~/^prefix/ filters rows; print $2,$4 outputs columns 2 and 4",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "From , print the second and fourth tab-separated columns for rows where the first column starts with ."
+    },
+    "296": {
+      "id": 296,
+      "answer": "sort input.txt | uniq > output.txt\n# sort lexicographically then uniq removes consecutive duplicates; write to output.txt",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Sort , remove duplicates, and write the result to ."
+    },
+    "297": {
+      "id": 297,
+      "answer": "env | cut -d= -f1 | sort\n# env lists all variables as NAME=VALUE; cut extracts just the NAME part; sort alphabetically",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Print all environment variable names currently defined in the shell, sorted alphabetically."
+    },
+    "298": {
+      "id": 298,
+      "answer": "uname -s -r -m\n# -s kernel name, -r kernel release, -m machine hardware (architecture)",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Show the current machine architecture, kernel name, and kernel release in one line."
+    },
+    "299": {
+      "id": 299,
+      "answer": "ps aux --sort=-%mem | head -11 | awk 'NR>1 {print $2, $11, $4}'\n# --sort=-%mem sorts by memory desc; head -11 gets header+10 processes; awk prints PID, CMD, %MEM",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Print the top 10 processes by memory usage, showing PID, command name, and %MEM."
+    },
+    "300": {
+      "id": 300,
+      "answer": "df -h\n# -h outputs sizes in human-readable form (K, M, G); shows all mounted filesystems",
+      "tier": "T2",
+      "category": "bash_tasks",
+      "task": "Show disk usage for all mounted filesystems in human-readable form."
+    }
+  }
+}

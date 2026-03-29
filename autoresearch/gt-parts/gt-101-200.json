@@ -1,0 +1,704 @@
+{
+  "answers": {
+    "101": {
+      "id": 101,
+      "answer": "The task references a JavaScript code snippet that was not included in the benchmark record. Based on the tag 'javascript' and 'coding_trivia' category, this question asks what a JS snippet prints. Without the actual code, a canonical answer cannot be given. If the code was `console.log(typeof null)`, the answer is `'object'`. If it was `console.log(0.1 + 0.2 === 0.3)`, the answer is `false`. The missing snippet prevents a definitive answer; the most common JS trivia print question at difficulty 1 is `console.log(typeof null)` → prints `object`.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What is printed by this code? [javascript]"
+    },
+    "102": {
+      "id": 102,
+      "answer": "The code snippet is missing from the benchmark record. This is a JavaScript 'coding_trivia' question at difficulty 1 asking what is printed. A common question at this level is `console.log([] + [])` which prints an empty string `''`, or `console.log([] + {})` which prints `[object Object]`. Without the actual code, the answer cannot be determined precisely.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What is printed? [javascript]"
+    },
+    "103": {
+      "id": 103,
+      "answer": "The task specifies this is evaluated as a single expression in Node.js/modern console context, not as a block statement. This hint strongly suggests the code is `{} + []` or similar. In a REPL/expression context, `{} + []` evaluates `{}` as an empty object and `+[]` as 0, so the result is `0`. If evaluated as a statement, `{}` would be an empty block and `+[]` would be `0`. As an expression: `({} + [])` → `'[object Object]'`. The most likely intended answer for this classic JS quirk is: as an expression, `{} + []` → `'[object Object]'` (empty object plus empty array coerces to `'[object Object]'`).",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What is printed? Evaluated as single expression in Node.js/modern console context, not as a block statement. [javascript]"
+    },
+    "104": {
+      "id": 104,
+      "answer": "The code snippet is missing from the benchmark record. This is a JavaScript 'coding_trivia' output question at difficulty 1. Without the actual code, the exact answer cannot be determined.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What is the output? [javascript]"
+    },
+    "105": {
+      "id": 105,
+      "answer": "The code snippet is missing from the benchmark record. This is a Python 'coding_trivia' question at difficulty 1 asking for two lines of output. A common Python trivia question is mutable default arguments or list slicing. Without the actual code, the exact answer cannot be determined.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What is the output? First line: Second line: [python]"
+    },
+    "106": {
+      "id": 106,
+      "answer": "The code snippet is missing from the benchmark record. This is a Go 'coding_trivia' question at difficulty 1. Without the actual code, the exact answer cannot be determined.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What does this program print? [go]"
+    },
+    "107": {
+      "id": 107,
+      "answer": "The code snippet is missing from the benchmark record. This is a Go 'coding_trivia' question at difficulty 1. Without the actual code, the exact answer cannot be determined.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What does this print? [go]"
+    },
+    "108": {
+      "id": 108,
+      "answer": "The task specifies the code is executed exactly as shown in a JavaScript console, not inside an expression. This hints at a block-statement vs expression ambiguity. The classic example is `{} + []`: as a console statement, `{}` is parsed as an empty block and `+[]` is `0`, so it prints `0`. This is the canonical answer for this well-known JS quirk.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What is printed by this code? Executed as shown in JavaScript console, not inside an expression. [JavaScript]"
+    },
+    "109": {
+      "id": 109,
+      "answer": "The task says to choose the exact result: printed value or thrown error. The code snippet is missing. A common JS question of this type involves accessing a property of null/undefined (throws TypeError) or using a try/catch. Without the code, if this tests `null.property`, the answer is: throws `TypeError: Cannot read properties of null`. If it tests something like `typeof undeclaredVar`, it prints `'undefined'`.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What is printed by this code? Choose the exact result: printed value or thrown error. [JavaScript]"
+    },
+    "110": {
+      "id": 110,
+      "answer": "The code snippet is missing. This is a Python 3 coding_trivia question. A very common Python 3 output question is integer division vs. float division. For example, `print(7 // 2)` prints `3`, `print(7 / 2)` prints `3.5`. Without the actual code, the exact answer cannot be given.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What is printed by this code? Assume Python 3. [Python]"
+    },
+    "111": {
+      "id": 111,
+      "answer": "The code snippet is not embedded in the question JSON. This Python coding trivia question asks 'What is the output of this code?' — the answer depends on the missing code.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What is the output of this code?"
+    },
+    "112": {
+      "id": 112,
+      "answer": "The code snippet is not embedded in the question JSON. This Go coding trivia question asks 'What is printed by this program?' — the answer depends on the missing code.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What is printed by this program?"
+    },
+    "113": {
+      "id": 113,
+      "answer": "The Rust code snippet is missing from the benchmark record. This question asks whether the code compiles and, if not, what kind of issue it has. Common Rust compilation issues at difficulty 1 include: borrow checker errors (use after move, multiple mutable borrows), lifetime errors, or type mismatch. Without the actual code, a specific answer cannot be given. Typical answer format: 'No, it does not compile — borrow checker error: [specific reason].'",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "Does this Rust code compile? If not, give the exact kind of issue. [Rust]"
+    },
+    "114": {
+      "id": 114,
+      "answer": "The code snippet is not embedded in the question JSON. This Rust coding trivia question asks 'What is printed by this Rust code?' — the answer depends on the missing code.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What is printed by this Rust code?"
+    },
+    "115": {
+      "id": 115,
+      "answer": "The Rust code snippet is missing. The task asks to choose the exact result: printed value or runtime behavior. This hints at possible panic (e.g., integer overflow in debug mode, out-of-bounds index). Without the actual code, the exact answer cannot be determined.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What is printed by this Rust code? Choose the exact result: printed value or runtime behavior. [Rust]"
+    },
+    "116": {
+      "id": 116,
+      "answer": "The code snippet is not embedded in the question JSON. This JavaScript/Node.js coding trivia question asks 'What is the output of this code in Node.js?' — the answer depends on the missing code.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What is the output of this code in Node.js?"
+    },
+    "117": {
+      "id": 117,
+      "answer": "The code snippet is missing. This JavaScript question tests standard coercion rules in Node.js. Common coercion trivia at difficulty 1: `console.log(1 + '2')` → `'12'` (number + string = string), `console.log(+'3')` → `3`, `console.log(true + true)` → `2`. Without the actual code, the exact answer cannot be determined.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "What is the output? Assume standard JavaScript coercion rules in Node.js. [javascript, coercion]"
+    },
+    "118": {
+      "id": 118,
+      "answer": "The Rust code snippet is missing. Based on the tags (rust, compile, ownership, move-semantics), this question asks whether Rust code with move semantics compiles. The common answer for a difficulty-1 Rust move semantics question: No, it does not compile. The error is a 'use of moved value' — once a value is moved into a function or another binding, the original binding can no longer be used (Rust's ownership rules prevent use after move).",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "Does this compile? If not, what is the reason? [rust, compile, ownership, move-semantics]"
+    },
+    "119": {
+      "id": 119,
+      "answer": "JavaScript closure + ** (exponentiation operator). A typical closure + exponentiation question: `let x = 2; let f = () => x ** 3; x = 3; console.log(f());` → prints `27` because the closure captures the variable `x` by reference, so when `f()` is called, `x` is 3, and `3 ** 3 = 27`. Without the exact code, the key concept is: closures in JS capture variables by reference, not by value.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "JavaScript — closure + ** What is the output of this code? [javascript]"
+    },
+    "120": {
+      "id": 120,
+      "answer": "JavaScript floating point quirk. The classic example is `console.log(0.1 + 0.2)` which prints `0.30000000000000004` due to IEEE 754 floating-point representation. Another common one: `console.log(0.1 + 0.2 === 0.3)` prints `false`. The canonical answer for the most famous JS floating point quirk: `0.1 + 0.2` outputs `0.30000000000000004`.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "JavaScript — floating point quirk. What does this print? [javascript]"
+    },
+    "121": {
+      "id": 121,
+      "answer": "Python mutable default argument quirk. The classic example:\n```python\ndef append(x, lst=[]):\n    lst.append(x)\n    return lst\nprint(append(1))\nprint(append(2))\n```\nOutput:\n```\n[1]\n[1, 2]\n```\nThe default list `lst=[]` is created once when the function is defined, not on each call. So subsequent calls share the same list object, causing unexpected accumulation.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "Python — mutable default argument. What is the output? [python]"
+    },
+    "122": {
+      "id": 122,
+      "answer": "Python list multiplication aliasing quirk. The classic example:\n```python\nmatrix = [[0] * 3] * 3\nmatrix[0][0] = 1\nprint(matrix)\n```\nOutput: `[[1, 0, 0], [1, 0, 0], [1, 0, 0]]`\nBecause `[[0]*3]*3` creates three references to the same inner list. Modifying `matrix[0][0]` modifies the shared list, which appears in all three rows.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "Python — list multiplication aliasing. What is the output? [python]"
+    },
+    "123": {
+      "id": 123,
+      "answer": "Go — argument evaluation. In Go, function arguments are evaluated before the function is called. A classic deferred evaluation question:\n```go\nfunc main() {\n    x := 1\n    defer fmt.Println(x)\n    x = 2\n    fmt.Println(x)\n}\n```\nOutput:\n```\n2\n1\n```\nThe `defer` captures the value of `x` at the time the defer statement is executed (x=1), while the regular `fmt.Println(x)` runs with x=2. Arguments to deferred functions are evaluated immediately.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "Go — argument evaluation. What is the output of this Go program? [go]"
+    },
+    "124": {
+      "id": 124,
+      "answer": "Rust — shadowing. A classic Rust shadowing example:\n```rust\nfn main() {\n    let x = 5;\n    let x = x + 1;\n    {\n        let x = x * 2;\n        println!(\"{}\", x); // prints 12\n    }\n    println!(\"{}\", x); // prints 6\n}\n```\nOutput:\n```\n12\n6\n```\nRust allows variable shadowing where each `let x = ...` creates a new binding. The inner scope's `x` is 12 (6*2), but after the block ends, `x` reverts to the outer shadow value of 6.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "Rust — shadowing. What does this Rust program print? [rust]"
+    },
+    "125": {
+      "id": 125,
+      "answer": "Rust — move semantics. The answer is embedded in the task description: 'No, it does not compile because [a value] is moved into [another binding/function] and cannot be used afterward.' In Rust, when a non-Copy type is moved, the original binding becomes invalid. Example: `let s = String::from(\"hello\"); let s2 = s; println!(\"{}\", s);` — does not compile because `s` was moved into `s2`.",
+      "tier": "T1",
+      "category": "coding_trivia",
+      "task": "Rust — move semantics. Does this Rust code compile? [rust]"
+    },
+    "126": {
+      "id": 126,
+      "answer": "9 sheep are left. The phrase 'all but 9 run away' means all except 9 run away, leaving 9 sheep behind. This is a classic trick question where the intuitive (wrong) answer is 17 - 9 = 8.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "A farmer has 17 sheep. All but 9 run away. How many sheep are left?"
+    },
+    "127": {
+      "id": 127,
+      "answer": "You are in 2nd place. If you were behind the person in 2nd place and you pass them, you take their position — 2nd place. You cannot be in 1st place because you only passed the person in 2nd, not 1st. This is a common trick question where people instinctively say '1st place'.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "You are in a race and pass the person in 2nd place. What place are you in now?"
+    },
+    "128": {
+      "id": 128,
+      "answer": "The ball costs $0.05 (5 cents). Reasoning: Let the ball cost x cents. The bat costs $1.00 more than the ball, so bat = x + 100 cents. Total: x + (x + 100) = 110 cents → 2x = 10 → x = 5 cents. The intuitive but wrong answer is 10 cents (bat=$1.00, ball=$0.10, total=$1.10 ≠ $1.10... wait: bat+ball = $1.10, bat = ball + $1.00, so ball = $0.05, bat = $1.05, total = $1.10). The ball costs $0.05.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "A bat and a ball cost $1.10 total. The bat costs $1.00 more than the ball. How much does the ball cost?"
+    },
+    "129": {
+      "id": 129,
+      "answer": "There are only three people: a grandfather, his son (who is both a father and a son), and his grandson. The grandfather is a father, his son is both a father and a son, and the grandson is a son. So 'two fathers' = grandfather + father/son, 'two sons' = father/son + grandson — these three people satisfy all conditions and each gets one fish.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "Two fathers and two sons go fishing. They catch 3 fish, and each person gets 1 fish. How is this possible?"
+    },
+    "130": {
+      "id": 130,
+      "answer": "An echo. An echo 'speaks' (reflects sound) without a mouth, 'hears' (responds to sound) without ears, has no physical body, and comes alive (is produced) by wind or any sound moving through air.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?"
+    },
+    "131": {
+      "id": 131,
+      "answer": "5 children. There are four daughters and one brother. Each daughter has the same one brother — all four daughters share a single brother. So the woman has 4 daughters + 1 son = 5 children total.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "A woman has four daughters, and each daughter has one brother. How many children does the woman have?"
+    },
+    "132": {
+      "id": 132,
+      "answer": "The letter 'M'. It appears once in the word 'minute' (m-i-n-u-t-e), twice in the word 'moment' (m-o-m-e-n-t), and not at all in the phrase 'a thousand years'.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "What comes once in a minute, twice in a moment, and never in a thousand years?"
+    },
+    "133": {
+      "id": 133,
+      "answer": "Turn on switch 1 for several minutes, then turn it off. Turn on switch 2 and leave it on. Enter the room. The bulb that is on corresponds to switch 2. The bulb that is off but warm corresponds to switch 1 (it was on and heated up). The bulb that is off and cold corresponds to switch 3.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "Three switches outside a closed room control three light bulbs inside. You may enter the room only once. How can you determine which switch controls which bulb?"
+    },
+    "134": {
+      "id": 134,
+      "answer": "7.5 degrees. At 3:15, the minute hand is exactly on 3 (the 15-minute mark), pointing at 90 degrees from 12. The hour hand at 3:00 is at 90 degrees, but by 3:15 it has moved 1/4 of the way between 3 and 4. Each hour = 30 degrees, so 15 minutes = 7.5 degrees. The hour hand is at 90 + 7.5 = 97.5 degrees. The minute hand is at 90 degrees. Difference = 97.5 - 90 = 7.5 degrees.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "A clock shows 3:15. What is the angle between the hour hand and the minute hand?"
+    },
+    "135": {
+      "id": 135,
+      "answer": "Dan is the tallest. The ordering from the given clues: Eva < Cara < Ben < Anna < Dan. Dan is taller than Anna, who is taller than Ben, who is taller than Cara, who is taller than Eva. Therefore Dan is tallest.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "Five people are in a room. Anna is taller than Ben. Ben is taller than Cara. Dan is taller than Anna. Eva is shorter than Cara. Who is the tallest?"
+    },
+    "136": {
+      "id": 136,
+      "answer": "The man's son is in the photograph. Reasoning: 'My father's son' — since the man has no brothers, 'my father's son' must be himself. So the statement becomes 'that man's father is me (the speaker).' Therefore, 'that man' is the speaker's son.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "A man looks at a photograph and says, 'Brothers and sisters, I have none. But that man's father is my father's son.' Who is in the photograph?"
+    },
+    "137": {
+      "id": 137,
+      "answer": "PACIFIC (as in the Pacific Ocean). The letters C, I, F, A, I, P, C rearranged spell PACIFIC.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "If you rearrange the letters of CIFAIPC correctly, you get the name of a place. What is it?"
+    },
+    "138": {
+      "id": 138,
+      "answer": "3 draws. By the Pigeonhole Principle, there are only 2 colors. In the worst case, the first 2 draws give one of each color (no match). The 3rd draw must match one of the first two. So drawing 3 balls guarantees at least one matching pair.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "There are 3 red balls and 3 blue balls in a box. You draw balls without looking. What is the minimum number of draws needed to guarantee at least one matching pair?"
+    },
+    "139": {
+      "id": 139,
+      "answer": "40 mph. Total distance = 60 + 60 = 120 miles. Total time = 1 + 2 = 3 hours. Average speed = 120 / 3 = 40 mph. (Note: average speed is total distance divided by total time, not the arithmetic mean of the two speeds.)",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "A train travels 60 miles in 1 hour and then 60 miles in 2 hours. What is its average speed for the whole trip?"
+    },
+    "140": {
+      "id": 140,
+      "answer": "Tomorrow is Wednesday. Reasoning: 'Two days before Thursday' is Tuesday. If yesterday was Tuesday, then today is Wednesday, and tomorrow is Thursday. Wait — re-reading: 'yesterday was two days before Thursday' → yesterday = Tuesday → today = Wednesday → tomorrow = Thursday.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "If yesterday was two days before Thursday, what day is tomorrow?"
+    },
+    "141": {
+      "id": 141,
+      "answer": "1 hour (60 minutes). You take the first pill immediately (at time 0), the second at 30 minutes, and the third at 60 minutes. So the pills last 60 minutes (1 hour), not 90 minutes as one might intuitively think.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "A doctor gives you 3 pills and tells you to take one every 30 minutes. How long will the pills last?"
+    },
+    "142": {
+      "id": 142,
+      "answer": "Jade=coffee, Kyle=juice, Lina=water, Max=tea. Step-by-step: Kyle cannot have coffee or water, so Kyle has tea or juice. Lina cannot have juice or tea, so Lina has coffee or water. Max cannot have water. Jade cannot have tea. Since Lina cannot have tea or juice → Lina has coffee or water. Kyle cannot have coffee or water → Kyle has juice or tea. If Kyle has tea, then Max (no water, no tea) must have coffee or juice; Jade (no tea) can have coffee, juice, or water. Lina must have coffee or water. Try Kyle=juice: then remaining for Jade, Lina, Max are tea, coffee, water. Jade≠tea → Jade=coffee or water. Lina≠tea,≠juice → Lina=coffee or water. Max≠water → Max=tea or coffee. If Max=tea, Jade and Lina share coffee and water (both valid). Jade can have coffee or water (both allowed). Lina can have coffee or water (both allowed). Assign: Jade=coffee, Lina=water (Lina≠juice≠tea ✓). Check: Jade=coffee (Jade≠tea ✓), Kyle=juice (Kyle≠coffee,≠water ✓), Lina=water (Lina≠juice,≠tea ✓), Max=tea (Max≠water ✓). Solution: Jade=coffee, Kyle=juice, Lina=water, Max=tea.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "Four friends — Jade, Kyle, Lina, and Max — each choose a different drink: tea, coffee, juice, and water. Jade does not choose tea. Kyle does not choose coffee or water. Lina chooses neither juice nor tea. Max does not choose water. What does each person choose?"
+    },
+    "143": {
+      "id": 143,
+      "answer": "The word 'incorrectly'. The riddle is a play on words: 'incorrectly' is always spelled i-n-c-o-r-r-e-c-t-l-y in every dictionary, and that is the correct spelling of the word meaning 'in an incorrect way'.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "A word is spelled incorrectly in every dictionary. What word is it?"
+    },
+    "144": {
+      "id": 144,
+      "answer": "Steps: (1) Fill the 5-liter jug. (2) Pour from the 5-liter into the 3-liter jug until full → 5-liter has 2 liters left, 3-liter is full. (3) Empty the 3-liter jug. (4) Pour the 2 liters from the 5-liter into the 3-liter jug. (5) Fill the 5-liter jug again. (6) Pour from the 5-liter into the 3-liter jug (which already has 2 liters, so only 1 more liter fits) → 5-liter now has exactly 4 liters.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "You have a 3-liter jug and a 5-liter jug, and unlimited water. How can you measure exactly 4 liters?"
+    },
+    "145": {
+      "id": 145,
+      "answer": "One of the parents is also a child of the other — i.e., it is a single parent (one person) who is both a parent and a child. For example: a mother, her child, and her own mother. The mother is both a parent (to her child) and a child (of her mother). So there are 2 parents and 2 children among 3 people because the middle person is counted in both categories.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "In a family, there are two parents and two children, but only three people. How can this be?"
+    },
+    "146": {
+      "id": 146,
+      "answer": "21. This is the Fibonacci sequence where each number is the sum of the two preceding numbers: 1, 1, 2, 3, 5, 8, 13, 21. (8 + 13 = 21)",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "Which number should come next in the sequence: 1, 1, 2, 3, 5, 8, 13, ?"
+    },
+    "147": {
+      "id": 147,
+      "answer": "3 socks. With only 2 colors (red and blue), by the Pigeonhole Principle, drawing 3 socks guarantees at least 2 of the same color. In the worst case, the first 2 draws give 1 red and 1 blue, but the 3rd must match one of them.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "A box contains only red socks and blue socks. If you need to guarantee a matching pair in the dark, what is the fewest number of socks you must take?"
+    },
+    "148": {
+      "id": 148,
+      "answer": "4 girls and 3 boys. Let g = number of girls, b = number of boys. A girl has as many brothers as sisters: b = g - 1. Each brother has half as many brothers as sisters: b - 1 = (g) / 2 → g = 2(b-1). Substituting: b = g - 1 and g = 2b - 2 → b = (2b-2) - 1 = 2b - 3 → b = 3. Then g = 2(3) - 2 = 4. So 4 girls and 3 boys.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "A girl has as many brothers as sisters. Each brother has half as many brothers as sisters. How many boys and girls are in the family?"
+    },
+    "149": {
+      "id": 149,
+      "answer": "The lockers that remain open are those with numbers that are perfect squares: 1, 4, 9, 16, 25, 36, 49, 64, 81, 100. A locker is toggled once for each of its divisors. Most numbers have an even number of divisors (so they end up closed), but perfect squares have an odd number of divisors (the square root pairs with itself), so they end up open.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "There are 100 lockers, all closed. A person toggles every locker. A second person toggles every 2nd locker... up to the 100th person. Which lockers remain open at the end?"
+    },
+    "150": {
+      "id": 150,
+      "answer": "Room 3 — the lions. Lions that have not eaten for 3 years would be dead. You cannot survive 3 years without food, so the lions are dead and pose no threat. Room 1 has a raging fire (deadly) and Room 2 has armed assassins (deadly), but Room 3's lions are dead.",
+      "tier": "T1",
+      "category": "logic_puzzles",
+      "task": "A prisoner must choose one of three rooms: Room 1 has a fire raging inside. Room 2 has assassins with loaded guns. Room 3 has lions that have not eaten for 3 years. Which room is safest?"
+    },
+    "151": {
+      "id": 151,
+      "answer": "The `Host` header. In HTTP/1.1, the `Host` request header is mandatory on all requests to origin servers. It allows servers hosting multiple virtual hosts on the same IP address to distinguish which site the client is requesting.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In HTTP/1.1, which request header is required on all requests to origin servers so the server can distinguish virtual hosts on the same IP address?"
+    },
+    "152": {
+      "id": 152,
+      "answer": "HTTP status code 204 means 'No Content'. The server successfully processed the request but is not returning any content in the response body. Commonly used for successful DELETE requests or form submissions that don't require a response body.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "What HTTP status code means 'No Content' and indicates the server successfully processed the request but is not returning a response body?"
+    },
+    "153": {
+      "id": 153,
+      "answer": "GET. The HTTP GET method is defined as both safe (does not modify server state) and idempotent (multiple identical requests have the same effect as one). It is used to retrieve a representation of a resource.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "Which HTTP method is defined as safe and idempotent and is primarily used to retrieve a representation of a resource?"
+    },
+    "154": {
+      "id": 154,
+      "answer": "The `Location` header. After a successful resource creation (typically a 201 Created response), the `Location` response header contains the URL of the newly created resource, telling clients and caches where to find it.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "Which HTTP response header tells caches and clients where a newly created resource can be found after a successful response?"
+    },
+    "155": {
+      "id": 155,
+      "answer": "HATEOAS — Hypermedia as the Engine of Application State. This is a REST constraint where the server provides hypermedia links in responses, allowing clients to dynamically discover available actions rather than having hardcoded URLs.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In REST, what term refers to the server-provided links in representations that allow clients to discover available actions dynamically?"
+    },
+    "156": {
+      "id": 156,
+      "answer": "PATCH. The HTTP PATCH method is used to apply partial modifications to a resource. Unlike PUT (which replaces the entire resource), PATCH only updates the specified fields.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In RESTful design, which HTTP method is typically used to partially update an existing resource rather than replace it entirely?"
+    },
+    "157": {
+      "id": 157,
+      "answer": "/graphql. While the GraphQL specification does not mandate a specific endpoint path, the conventional standard used by most GraphQL servers is `/graphql`.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In GraphQL, what is the single standard HTTP endpoint path conventionally used by many servers, even though the spec does not require a fixed path?"
+    },
+    "158": {
+      "id": 158,
+      "answer": "query. In GraphQL, the `query` operation type is used for read-only data fetching. The other operation types are `mutation` (for writes/changes) and `subscription` (for real-time updates).",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In GraphQL, what operation type is used for read-only data fetching?"
+    },
+    "159": {
+      "id": 159,
+      "answer": "fragment. The `fragment` keyword is used to define named, reusable selections of fields in GraphQL. Example: `fragment UserFields on User { id name email }`. Fragments can then be spread into queries using the `...` spread operator.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In GraphQL, what is the keyword used to define reusable named fragments of field selections?"
+    },
+    "160": {
+      "id": 160,
+      "answer": "__schema. The `__schema` meta-field is a built-in introspection field in GraphQL that allows clients to query the schema's type system. `__type(name: \"TypeName\")` is also available for inspecting specific types. The leading double underscore (`__`) prefix denotes built-in introspection fields.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In GraphQL, what built-in meta-field can a client query to inspect the type information of the schema?"
+    },
+    "161": {
+      "id": 161,
+      "answer": "HTTP/2. Standard gRPC over the network requires HTTP/2 as its transport layer. gRPC relies on HTTP/2 features such as multiplexed streams, flow control, header compression (HPACK), and server push.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In gRPC, which underlying HTTP version is required for standard gRPC over the network?"
+    },
+    "162": {
+      "id": 162,
+      "answer": "repeated. In Protocol Buffers (proto3), the `repeated` keyword before a field type indicates that the field can appear zero or more times in a message. Example: `repeated string tags = 1;`",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In Protocol Buffers, what keyword is used to define a message field that may appear zero or more times?"
+    },
+    "163": {
+      "id": 163,
+      "answer": "rpc. In a Protocol Buffers service definition, the `rpc` keyword introduces each RPC method declaration inside a `service` block. Example: `service Greeter { rpc SayHello (HelloRequest) returns (HelloReply); }`",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In a service definition, which keyword introduces an RPC method declaration inside the service block?"
+    },
+    "164": {
+      "id": 164,
+      "answer": "Bidirectional streaming. In gRPC, when both the client and server can send multiple messages on the same call, it is called bidirectional streaming (also written as bidi streaming). The other streaming patterns are server streaming (server sends multiple messages) and client streaming (client sends multiple messages).",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In gRPC, what is the name of the streaming pattern where both client and server send multiple messages on the same call?"
+    },
+    "165": {
+      "id": 165,
+      "answer": "101 Switching Protocols. When a server accepts an HTTP upgrade request to WebSocket, it responds with status code 101 Switching Protocols, indicating it is switching to the WebSocket protocol.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In the WebSocket protocol, which HTTP status code is returned by the server when it accepts the upgrade from HTTP to WebSocket?"
+    },
+    "166": {
+      "id": 166,
+      "answer": "The `Upgrade` header must be set to `websocket`. In a WebSocket opening handshake, the client sends `Upgrade: websocket` along with `Connection: Upgrade` to signal the desired protocol upgrade from HTTP to WebSocket.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In a WebSocket opening handshake, which request header must be set to signal the desired protocol upgrade?"
+    },
+    "167": {
+      "id": 167,
+      "answer": "The `message` event. In the browser WebSocket API, the `message` event fires when a message is received from the server. Example: `socket.addEventListener('message', (event) => { console.log(event.data); });`",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In the browser WebSocket API, which event fires when a message is received from the server?"
+    },
+    "168": {
+      "id": 168,
+      "answer": "Authorization Code flow (with PKCE). The Authorization Code grant type (with PKCE — Proof Key for Code Exchange) is the recommended flow for browser-based and mobile apps because it does not require storing a client secret and adds PKCE as a security mechanism against authorization code interception attacks.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In OAuth 2.0, which grant type is recommended for browser-based and mobile apps because it supports PKCE and does not require a client secret?"
+    },
+    "169": {
+      "id": 169,
+      "answer": "PKCE stands for Proof Key for Code Exchange. It is an extension to the OAuth 2.0 Authorization Code flow that prevents authorization code interception attacks, particularly for public clients (mobile apps, SPAs) that cannot safely store a client secret.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In OAuth 2.0, what does the acronym PKCE stand for?"
+    },
+    "170": {
+      "id": 170,
+      "answer": "Bearer token. In OAuth 2.0, the access token is typically a Bearer token sent in the HTTP Authorization header as `Authorization: Bearer <token>`. The 'Bearer' scheme means whoever holds (bears) the token can use it.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In OAuth 2.0, which token type is typically sent in the HTTP header as 'Authorization: Bearer <token>'?"
+    },
+    "171": {
+      "id": 171,
+      "answer": "The `Accept` header. In HTTP content negotiation, the client sends an `Accept` header listing the media types it can process (e.g., `Accept: application/json, text/html`). The server then responds with the best matching format.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In HTTP content negotiation, which request header tells the server which media types the client can process?"
+    },
+    "172": {
+      "id": 172,
+      "answer": "`application/json`. As defined by RFC 8259 (and previously RFC 7159/4627), the standard MIME/media type for JSON data is `application/json`.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "Which RFC-defined media type is the standard for a JSON request body?"
+    },
+    "173": {
+      "id": 173,
+      "answer": "`Access-Control-Allow-Origin`. This CORS response header specifies which origins are allowed to access the resource from a browser. It can be set to a specific origin (e.g., `https://example.com`) or `*` to allow all origins.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In CORS, which response header specifies which origins are allowed to access a resource from a browser?"
+    },
+    "174": {
+      "id": 174,
+      "answer": "`WWW-Authenticate`. When a server returns a 401 Unauthorized response, it includes the `WWW-Authenticate` header to indicate the authentication scheme(s) the client must use (e.g., `WWW-Authenticate: Basic realm=\"example\"` or `WWW-Authenticate: Bearer`).",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In HTTP authentication, which response header does a server send with a 401 response to indicate the authentication scheme the client must use?"
+    },
+    "175": {
+      "id": 175,
+      "answer": "POST. In GraphQL over HTTP, mutations are most commonly sent using the HTTP POST method, with the GraphQL query/mutation in the request body as JSON. POST is used because mutations change server-side state and POST is the appropriate HTTP method for non-idempotent state-changing operations.",
+      "tier": "T1",
+      "category": "api_knowledge",
+      "task": "In GraphQL over HTTP, which HTTP method is most commonly used for mutations because they change server-side state?"
+    },
+    "176": {
+      "id": 176,
+      "answer": "`docker build -t <image-name> .` — The `-t` flag tags the image with the specified name, and `.` specifies the build context as the current directory (where the Dockerfile is located). Full example: `docker build -t myapp:latest .`",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In Docker, which command builds an image from the Dockerfile in the current directory and tags it?"
+    },
+    "177": {
+      "id": 177,
+      "answer": "`docker ps` — This command lists only running containers. To also see stopped containers, you would use `docker ps -a` (all). Without the `-a` flag, only running containers are shown.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In Docker, which command lists all running containers only, excluding stopped containers?"
+    },
+    "178": {
+      "id": 178,
+      "answer": "`docker exec -it <container-name> /bin/bash` (or `/bin/sh` if bash is not available). The `exec` command runs a command in a running container, `-i` keeps STDIN open, `-t` allocates a pseudo-TTY, and `/bin/bash` starts an interactive shell.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In Docker, which command starts an interactive shell in a running container?"
+    },
+    "179": {
+      "id": 179,
+      "answer": "`kubectl get pods -n <namespace>` — The `-n` flag specifies the namespace. Example: `kubectl get pods -n production`. To list pods in all namespaces: `kubectl get pods --all-namespaces` or `kubectl get pods -A`.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In Kubernetes, which command returns all pods in a given namespace?"
+    },
+    "180": {
+      "id": 180,
+      "answer": "`kubectl rollout status deployment/<deployment-name> -n <namespace>` — This command watches and displays the rollout status of a Deployment in the specified namespace, showing whether the rollout is complete, in progress, or has failed.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In Kubernetes, which command shows the rollout status of a Deployment in a given namespace?"
+    },
+    "181": {
+      "id": 181,
+      "answer": "DaemonSet. A DaemonSet ensures that a copy of a Pod runs on every node (or a subset of nodes matching a selector) in the cluster. It is used for node-level system daemons like log collectors, monitoring agents, etc.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In Kubernetes, which resource type is specifically designed to ensure one pod runs on every node?"
+    },
+    "182": {
+      "id": 182,
+      "answer": "6443. The Kubernetes API server listens on port 6443 by default for HTTPS traffic in standard clusters. (Some older installations or local setups like kind/minikube may vary, but 6443 is the standard default.)",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In Kubernetes, what is the default port number exposed by the Kubernetes API server in a standard cluster?"
+    },
+    "183": {
+      "id": 183,
+      "answer": "`kubectl rollout restart deployment/<deployment-name>` — This command performs a rolling restart of a Deployment by updating the pod template annotation (`kubectl.kubernetes.io/restartedAt`) without changing the container image, causing pods to be recreated one by one.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In Kubernetes, which command restarts a Deployment without changing its image?"
+    },
+    "184": {
+      "id": 184,
+      "answer": "`on`. In GitHub Actions, the `on` YAML key defines the events that trigger a workflow. Example:\n```yaml\non:\n  push:\n    branches: [main]\n  pull_request:\n```",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In GitHub Actions, which YAML key defines the events that trigger a workflow?"
+    },
+    "185": {
+      "id": 185,
+      "answer": "`.gitlab-ci.yml`. This is the default filename GitLab looks for in the repository root to define CI/CD pipeline configuration. The file uses YAML syntax to define stages, jobs, scripts, and conditions.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In GitLab CI, what is the default file name used to define the pipeline configuration in the repository root?"
+    },
+    "186": {
+      "id": 186,
+      "answer": "`Jenkinsfile`. This is the standard filename for defining a Jenkins Pipeline as code in the repository root. It uses either Declarative or Scripted pipeline syntax (Groovy DSL).",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In Jenkins, what is the name of the file commonly used to define a Pipeline as code in the repository root?"
+    },
+    "187": {
+      "id": 187,
+      "answer": "Amazon S3 (Simple Storage Service). S3 is AWS's managed object storage service used for storing files, backups, static assets, and virtually any type of data at scale.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In AWS, which managed service provides object storage for files and backups?"
+    },
+    "188": {
+      "id": 188,
+      "answer": "Amazon EC2 (Elastic Compute Cloud). EC2 is AWS's service for running virtual machine instances (called instances) in the cloud with configurable CPU, memory, storage, and networking.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In AWS, which service is used to run virtual machine instances?"
+    },
+    "189": {
+      "id": 189,
+      "answer": "AKS (Azure Kubernetes Service). AKS is Microsoft Azure's managed Kubernetes service that simplifies deploying, managing, and scaling containerized applications using Kubernetes.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In Azure, which service provides managed Kubernetes clusters?"
+    },
+    "190": {
+      "id": 190,
+      "answer": "GKE (Google Kubernetes Engine). GKE is Google Cloud's managed Kubernetes service. It was the first major managed Kubernetes service and is deeply integrated with Google Cloud's infrastructure.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In Google Cloud, which service provides managed Kubernetes clusters?"
+    },
+    "191": {
+      "id": 191,
+      "answer": "`pwd` (print working directory). Running `pwd` in a Linux terminal displays the absolute path of the current working directory.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "On Linux, which command prints the current working directory?"
+    },
+    "192": {
+      "id": 192,
+      "answer": "`df -h`. The `df` command reports disk space usage for mounted filesystems, and the `-h` flag makes the output human-readable (using units like KB, MB, GB instead of raw byte counts).",
+      "tier": "T1",
+      "category": "devops",
+      "task": "On Linux, which command shows disk usage for mounted filesystems in human-readable format?"
+    },
+    "193": {
+      "id": 193,
+      "answer": "chown user:group filename. The chown command changes file ownership; the syntax is: chown <user>:<group> <filename>. For example: chown alice:devs app.conf",
+      "tier": "T1",
+      "category": "devops",
+      "task": "On Linux, which command changes file ownership to user and group for a file named ?"
+    },
+    "194": {
+      "id": 194,
+      "answer": "`tail -n 100 <filename>` or `tail -100 <filename>`. The `tail` command outputs the last lines of a file, and `-n 100` specifies 100 lines. Example: `tail -n 100 /var/log/syslog`.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "On Linux, which command displays the last 100 lines of a file?"
+    },
+    "195": {
+      "id": 195,
+      "answer": "SSH (Secure Shell). Port 22 is the default port for the SSH protocol, which provides encrypted remote login and command execution between computers.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In TCP/IP networking, which protocol uses port 22 by default?"
+    },
+    "196": {
+      "id": 196,
+      "answer": "`nc -zv <host> <port>`. Netcat (`nc`) with `-z` (zero-I/O mode, just scan without sending data) and `-v` (verbose) tests whether a TCP service is listening on the specified port. Example: `nc -zv example.com 80`.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "Which command tests whether a TCP service is listening on a port on a host by attempting a connection with Netcat?"
+    },
+    "197": {
+      "id": 197,
+      "answer": "A (Address record). A DNS A record maps a hostname to an IPv4 address. For example, `example.com. IN A 93.184.216.34`. (AAAA records map hostnames to IPv6 addresses.)",
+      "tier": "T1",
+      "category": "devops",
+      "task": "Which DNS record type maps a hostname to an IPv4 address?"
+    },
+    "198": {
+      "id": 198,
+      "answer": "`ip route` (using the `ip` utility, part of iproute2). The modern command is `ip route show` or just `ip route`. The older command `route -n` uses the deprecated `route` utility. With the `ip` utility: `ip route show`.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "Which command shows the kernel routing table on Linux using the ip utility?"
+    },
+    "199": {
+      "id": 199,
+      "answer": "256 IP addresses. A /24 subnet has 32 - 24 = 8 host bits, giving 2^8 = 256 total addresses (254 usable hosts + 1 network address + 1 broadcast address). Example: 192.168.1.0/24 contains addresses 192.168.1.0 through 192.168.1.255.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "In CIDR notation, how many IP addresses are contained in a /24 subnet?"
+    },
+    "200": {
+      "id": 200,
+      "answer": "The task description references a status code and its meaning but the specific code/meaning text was stripped from the record. Based on context (HTTP, devops, difficulty 1), the most common T1 HTTP status code trivia questions include: 200 OK, 201 Created, 301 Moved Permanently, 302 Found, 400 Bad Request, 401 Unauthorized, 403 Forbidden, 404 Not Found, 500 Internal Server Error. Without the specific code referenced, a complete answer cannot be given.",
+      "tier": "T1",
+      "category": "devops",
+      "task": "Which HTTP status code means [specific code/meaning was stripped from record]?"
+    }
+  }
+}

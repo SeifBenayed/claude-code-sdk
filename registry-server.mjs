@@ -648,13 +648,28 @@ function _remoteClientHtml(baseUrl, token, mode, expiresAt) {
 <script>
 const BASE = "${baseUrl}";
 const TOKEN = "${token}";
+const WS_URL = BASE.replace(/^http/, "ws") + "/ws/remote/" + TOKEN;
 const STREAM = BASE + "/api/remote/stream/" + TOKEN;
 const SEND = BASE + "/api/remote/send/" + TOKEN;
 const EXPIRES = "${expiresAt}";
-let evtSrc = null, curAsst = null, reconnTimer = null;
+let ws = null, evtSrc = null, curAsst = null, reconnTimer = null;
 
 function connect() {
   if (reconnTimer) { clearTimeout(reconnTimer); reconnTimer = null; }
+  // Try WebSocket first, fall back to SSE
+  try {
+    if (ws) { try { ws.close(); } catch {} }
+    ws = new WebSocket(WS_URL);
+    ws.onopen = () => setStatus("connected", "green");
+    ws.onerror = () => connectSSE();
+    ws.onclose = () => { setStatus("disconnected", "red"); reconnTimer = setTimeout(connect, 3000); };
+    ws.onmessage = (e) => {
+      try { handleMsg(JSON.parse(e.data)); } catch {}
+    };
+  } catch { connectSSE(); }
+}
+
+function connectSSE() {
   if (evtSrc) { try { evtSrc.close(); } catch {} }
   setStatus("connecting", "yellow");
   evtSrc = new EventSource(STREAM);
@@ -771,6 +786,7 @@ const server = createServer(async (req, res) => {
 });
 
 // ── WebSocket Upgrade Handler ────────────────────────────────
+// Handles /ws/remote/<token> upgrade requests from both host CLI and web clients
 
 server.on("upgrade", (req, socket, head) => {
   const { pathname } = parseUrl(req.url);

@@ -1,0 +1,1096 @@
+[
+  {
+    "id": 751,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain binary search, then implement it in Python as a function that returns the index of a target in a sorted integer list or if not found.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "binary-search",
+      "python",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 752,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain merge sort, then implement it in JavaScript as a function that sorts an array of numbers in ascending order without using built-in sort utilities.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "merge-sort",
+      "javascript",
+      "algorithms",
+      "sorting"
+    ]
+  },
+  {
+    "id": 753,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain quicksort, then implement it in Java with an in-place version that sorts an array using the last element as the pivot.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "quicksort",
+      "java",
+      "algorithms",
+      "sorting"
+    ]
+  },
+  {
+    "id": 754,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain depth-first search (DFS), then implement it in C++ to traverse a directed graph represented as an adjacency list and return the visitation order from a given start node.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "dfs",
+      "c++",
+      "graphs",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 755,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain breadth-first search (BFS), then implement it in Go to find the shortest path length in an unweighted grid from a start cell to a target cell.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "bfs",
+      "go",
+      "graphs",
+      "grids",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 756,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain Dijkstra’s algorithm, then implement it in Python to compute the shortest distances from a source node to all other nodes in a weighted graph with nonnegative edge weights.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "dijkstra",
+      "python",
+      "graphs",
+      "shortest-path",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 757,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the A* search algorithm, then implement it in JavaScript for pathfinding on a 2D grid using Manhattan distance as the heuristic.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "a-star",
+      "javascript",
+      "pathfinding",
+      "grids",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 758,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain dynamic programming, then implement the classic coin change problem in Python to return the minimum number of coins needed for a target amount.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "dynamic-programming",
+      "python",
+      "coin-change",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 759,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain memoization, then implement Fibonacci in Ruby with top-down memoization and demonstrate it for.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "memoization",
+      "ruby",
+      "fibonacci",
+      "dynamic-programming"
+    ]
+  },
+  {
+    "id": 760,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain tabulation, then implement the 0/1 knapsack problem in C# to return the maximum achievable value for a given capacity.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "tabulation",
+      "c-sharp",
+      "knapsack",
+      "dynamic-programming"
+    ]
+  },
+  {
+    "id": 761,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the sliding window technique, then implement it in JavaScript to find the length of the longest substring without repeating characters.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "sliding-window",
+      "javascript",
+      "strings",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 762,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the two-pointer technique, then implement it in Python to determine whether a sorted array contains two numbers whose sum equals a target.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "two-pointers",
+      "python",
+      "arrays",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 763,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain prefix sums, then implement them in Java to answer multiple range-sum queries over an integer array in O(1) per query after preprocessing.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "prefix-sums",
+      "java",
+      "arrays",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 764,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain a difference array, then implement it in C++ to apply multiple range increment operations efficiently and output the final array.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "difference-array",
+      "c++",
+      "arrays",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 765,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain backtracking, then implement a Python solver for the N-Queens problem that returns all valid board configurations for.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "backtracking",
+      "python",
+      "n-queens",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 766,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain branch and bound, then implement a simplified Java solution for the Traveling Salesman Problem on 4 cities using cost matrix pruning.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "branch-and-bound",
+      "java",
+      "tsp",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 767,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain recursion, then implement a TypeScript function to generate all permutations of a list of distinct integers.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "recursion",
+      "typescript",
+      "permutations",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 768,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain divide and conquer, then implement Python code to find the maximum subarray sum using the divide-and-conquer approach.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "divide-and-conquer",
+      "python",
+      "maximum-subarray",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 769,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain greedy algorithms, then implement a C++ solution to the activity selection problem that chooses the maximum number of non-overlapping intervals.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "greedy",
+      "c++",
+      "activity-selection",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 770,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the union-find (disjoint set) data structure, then implement it in JavaScript with path compression and union by rank.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "union-find",
+      "disjoint-set",
+      "javascript",
+      "data-structures"
+    ]
+  },
+  {
+    "id": 771,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain Kruskal’s algorithm, then implement it in Python to compute the minimum spanning tree of an undirected weighted graph.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "kruskal",
+      "python",
+      "graphs",
+      "mst",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 772,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain Prim’s algorithm, then implement it in Go to compute the total weight of a minimum spanning tree using a priority queue.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "prim",
+      "go",
+      "graphs",
+      "mst",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 773,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain topological sorting, then implement Kahn’s algorithm in Java to return a valid ordering of tasks with dependencies or detect a cycle.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "topological-sort",
+      "kahn-algorithm",
+      "java",
+      "graphs",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 774,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain cycle detection in graphs, then implement it in Python to detect a cycle in a directed graph using DFS coloring.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "cycle-detection",
+      "python",
+      "graphs",
+      "dfs",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 775,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain trie data structures, then implement a trie in C# supporting , , and for lowercase English words.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "trie",
+      "c-sharp",
+      "data-structures",
+      "strings"
+    ]
+  },
+  {
+    "id": 776,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain hash tables, then implement a simple separate-chaining hash map in JavaScript supporting string keys and integer values.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "hash-table",
+      "javascript",
+      "data-structures"
+    ]
+  },
+  {
+    "id": 777,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain binary search trees, then implement one in Python with , , and in-order traversal methods.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "binary-search-tree",
+      "python",
+      "data-structures",
+      "trees"
+    ]
+  },
+  {
+    "id": 778,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain AVL trees, then implement insertion with rotations in Java and print the tree in-order after a sequence of inserts.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "avl-tree",
+      "java",
+      "data-structures",
+      "trees"
+    ]
+  },
+  {
+    "id": 779,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain heaps, then implement a min-heap in C++ with , , and operations.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "heap",
+      "min-heap",
+      "c++",
+      "data-structures"
+    ]
+  },
+  {
+    "id": 780,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the monotonic stack pattern, then implement it in Python to solve the “next greater element” problem for an integer array.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "monotonic-stack",
+      "python",
+      "arrays",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 781,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the monotonic queue pattern, then implement it in JavaScript to compute the maximum value in every sliding window of size .",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "monotonic-queue",
+      "javascript",
+      "sliding-window",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 782,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain linked lists, then implement reversal of a singly linked list in Go, both iteratively and recursively.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "linked-list",
+      "go",
+      "data-structures"
+    ]
+  },
+  {
+    "id": 783,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain Floyd’s cycle detection algorithm, then implement it in Python to detect whether a singly linked list contains a cycle.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "floyd-cycle-detection",
+      "python",
+      "linked-list",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 784,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain LRU cache design, then implement an LRU cache in Java with O(1) and using a hash map plus doubly linked list.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "lru-cache",
+      "java",
+      "data-structures",
+      "design"
+    ]
+  },
+  {
+    "id": 785,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain producer-consumer concurrency, then implement it in Python using threads and a bounded queue with one producer and one consumer.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "producer-consumer",
+      "python",
+      "concurrency",
+      "threads"
+    ]
+  },
+  {
+    "id": 786,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the mutex lock pattern, then implement a thread-safe counter in C++ using and multiple worker threads.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "mutex",
+      "c++",
+      "concurrency",
+      "threads"
+    ]
+  },
+  {
+    "id": 787,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the semaphore pattern, then implement it in Java to limit access to a resource pool with 3 concurrent permits.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "semaphore",
+      "java",
+      "concurrency"
+    ]
+  },
+  {
+    "id": 788,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the observer pattern, then implement it in Python with a weather station subject and two subscriber displays.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "observer-pattern",
+      "python",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 789,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the strategy pattern, then implement it in JavaScript with interchangeable payment strategies for credit card, PayPal, and bank transfer.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "strategy-pattern",
+      "javascript",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 790,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the factory method pattern, then implement it in Java to create different notification senders for email, SMS, and push notifications.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "factory-method",
+      "java",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 791,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the singleton pattern, then implement a thread-safe singleton logger in C#.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "singleton-pattern",
+      "c-sharp",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 792,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the decorator pattern, then implement it in Python to wrap a text component with bold and italic formatting behaviors.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "decorator-pattern",
+      "python",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 793,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the adapter pattern, then implement it in TypeScript to adapt a legacy XML service to a JSON-based interface.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "adapter-pattern",
+      "typescript",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 794,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the command pattern, then implement it in JavaScript with commands for turning a light on and off, including undo support.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "command-pattern",
+      "javascript",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 795,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the state pattern, then implement it in Java for a vending machine with , , and states.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "state-pattern",
+      "java",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 796,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the template method pattern, then implement it in C# for a data parser with CSV and JSON subclasses.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "template-method",
+      "c-sharp",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 797,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the repository pattern, then implement it in Python with an in-memory supporting add, get-by-id, and list-all.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "repository-pattern",
+      "python",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 798,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain middleware chaining, then implement it in Node.js to process an HTTP-like request through logging, authentication, and handler middleware.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "middleware",
+      "nodejs",
+      "backend",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 799,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain rate limiting with the token bucket algorithm, then implement it in Go to allow or reject requests based on refill rate and bucket capacity.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "rate-limiting",
+      "token-bucket",
+      "go",
+      "algorithms",
+      "backend"
+    ]
+  },
+  {
+    "id": 800,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain consistent hashing, then implement it in Python to map string keys to nodes on a hash ring with virtual nodes.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "consistent-hashing",
+      "python",
+      "distributed-systems",
+      "algorithms"
+    ]
+  }
+]

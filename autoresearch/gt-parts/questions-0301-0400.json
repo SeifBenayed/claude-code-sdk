@@ -1,0 +1,2029 @@
+[
+  {
+    "id": 301,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Print the number of CPU cores available on the system.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "cpu",
+      "system-info",
+      "count",
+      "hardware"
+    ]
+  },
+  {
+    "id": 302,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Show all listening TCP ports with the process names that own them.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "network",
+      "tcp",
+      "ports",
+      "processes"
+    ]
+  },
+  {
+    "id": 303,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "In , sum the values in the fifth column for rows where the second column is , skipping the header.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "csv",
+      "aggregation",
+      "sum",
+      "filtering"
+    ]
+  },
+  {
+    "id": 304,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Print the first 20 lines of  that match either  or .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "text-processing",
+      "regex",
+      "head",
+      "filtering"
+    ]
+  },
+  {
+    "id": 305,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Find files under  whose names contain spaces and rename them by replacing spaces with underscores.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "files",
+      "rename",
+      "spaces",
+      "batch"
+    ]
+  },
+  {
+    "id": 306,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Create the directory tree  if it does not already exist.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "directories",
+      "create",
+      "filesystem"
+    ]
+  },
+  {
+    "id": 307,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Copy all  files from  into , preserving timestamps.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "copy",
+      "files",
+      "timestamps",
+      "preserve"
+    ]
+  },
+  {
+    "id": 308,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Move all  files from the current directory into .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "move",
+      "files",
+      "filesystem"
+    ]
+  },
+  {
+    "id": 309,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Print the SHA-256 checksum of every  file in .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "checksum",
+      "sha256",
+      "files",
+      "integrity"
+    ]
+  },
+  {
+    "id": 310,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Find duplicate lines in  and print each duplicated value once.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "text-processing",
+      "duplicates",
+      "deduplication",
+      "file"
+    ]
+  },
+  {
+    "id": 311,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Show the most recent commit on the current Git branch as: abbreviated hash, author name, and subject.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "commit",
+      "history",
+      "formatting"
+    ]
+  },
+  {
+    "id": 312,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Print the list of files changed between  and  in Git.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "diff",
+      "files",
+      "history"
+    ]
+  },
+  {
+    "id": 313,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Show all Git branches already merged into the current branch, excluding the current branch itself.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "branches",
+      "merged",
+      "repository"
+    ]
+  },
+  {
+    "id": 314,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Count how many commits in the current Git repository have  in the commit message, case-insensitive.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "commits",
+      "search",
+      "count"
+    ]
+  },
+  {
+    "id": 315,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Restore  from the version in , discarding local unstaged changes to that file only.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "restore",
+      "file",
+      "changes"
+    ]
+  },
+  {
+    "id": 316,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Print the names of files tracked by Git that are currently deleted from the working tree.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "git",
+      "tracked-files",
+      "deleted-files",
+      "status"
+    ]
+  },
+  {
+    "id": 317,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "In all  files under , print lines containing  with filenames and line numbers.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "search",
+      "line-numbers",
+      "filenames",
+      "files"
+    ]
+  },
+  {
+    "id": 318,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Concatenate all  files in  into , keeping the header only from the first file.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "concatenate",
+      "files",
+      "header",
+      "merge"
+    ]
+  },
+  {
+    "id": 319,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Print the last 50 lines of  and continue following new lines as they are appended.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "tail",
+      "follow",
+      "logs",
+      "file"
+    ]
+  },
+  {
+    "id": 320,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Find every symbolic link under the current directory and print the link path along with its target path.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "symlinks",
+      "find",
+      "filesystem",
+      "paths"
+    ]
+  },
+  {
+    "id": 321,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Create a file named containing exactly these 4 lines:",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "file-creation"
+    ]
+  },
+  {
+    "id": 322,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Create a file named with this exact JSON content:",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "file-creation",
+      "json"
+    ]
+  },
+  {
+    "id": 323,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Create a file named with this exact content:",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "file-creation"
+    ]
+  },
+  {
+    "id": 324,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create where every line is converted to uppercase, preserving line order.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "file-transform",
+      "text"
+    ]
+  },
+  {
+    "id": 325,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create where the lines appear in reverse order.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "file-transform",
+      "text"
+    ]
+  },
+  {
+    "id": 326,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create where each line is prefixed with its 1-based line number and a period, for example .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "file-transform",
+      "text"
+    ]
+  },
+  {
+    "id": 327,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create containing only the column values, one name per line, in the original order.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "csv",
+      "column-extraction"
+    ]
+  },
+  {
+    "id": 328,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create containing only rows where is greater than or equal to 28, including the header row.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "csv",
+      "filtering"
+    ]
+  },
+  {
+    "id": 329,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create with all rows sorted by in ascending numeric order, keeping the header first.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "csv",
+      "sorting"
+    ]
+  },
+  {
+    "id": 330,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create with the same data but formatted with 2-space indentation and keys in the order , , .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "formatting"
+    ]
+  },
+  {
+    "id": 331,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create by changing to and to , leaving all other fields unchanged.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "update"
+    ]
+  },
+  {
+    "id": 332,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Search for the exact word and write the 1-based line number where it appears into a file named .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "search",
+      "text"
+    ]
+  },
+  {
+    "id": 333,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Search for the row containing and write that entire row exactly as-is into .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "search",
+      "csv"
+    ]
+  },
+  {
+    "id": 334,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Create a file named with this exact JSON array:",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "file-creation",
+      "json"
+    ]
+  },
+  {
+    "id": 335,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create containing only the sum of all values as plain text.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "aggregation"
+    ]
+  },
+  {
+    "id": 336,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create containing only objects where is less than 10, preserving original order.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "filtering"
+    ]
+  },
+  {
+    "id": 337,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create by adding a new column equal to , rounded to 2 decimal places.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "csv",
+      "derived-column"
+    ]
+  },
+  {
+    "id": 338,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create as a JSON object where each key is and each value is the corresponding .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "csv",
+      "json",
+      "mapping"
+    ]
+  },
+  {
+    "id": 339,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Create a file named containing exactly these 5 lines:",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "file-creation"
+    ]
+  },
+  {
+    "id": 340,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create containing only the lines that start with , in the same order.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "text",
+      "filtering"
+    ]
+  },
+  {
+    "id": 341,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create with exact keys , , and , where each value is the count of lines with that prefix.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "text",
+      "counting",
+      "json"
+    ]
+  },
+  {
+    "id": 342,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create containing the names of employees in the department, one per line, in original order.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "csv",
+      "filtering",
+      "column-extraction"
+    ]
+  },
+  {
+    "id": 343,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create as a JSON object mapping each department to its employee count.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "csv",
+      "aggregation",
+      "json"
+    ]
+  },
+  {
+    "id": 344,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Create a file named containing exactly:",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "file-creation"
+    ]
+  },
+  {
+    "id": 345,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create containing the count of each distinct word as a JSON object.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "text",
+      "counting",
+      "json"
+    ]
+  },
+  {
+    "id": 346,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create containing the distinct words in first-appearance order, one per line.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "text",
+      "deduplication"
+    ]
+  },
+  {
+    "id": 347,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read and create with header and one row per tag from the array, in order.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "json",
+      "csv",
+      "expansion"
+    ]
+  },
+  {
+    "id": 348,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Create a JSON file and a CSV file with exact contents, then verify them. Create a file named with the exact JSON content provided. Create a file named with the exact content provided. Read both files and report the total number of employee records in the JSON file, the location of the department from the CSV file, and the names of all employees in the department.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "files",
+      "json",
+      "csv",
+      "verification"
+    ]
+  },
+  {
+    "id": 349,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Read a text file, transform its contents, and write the result to a new file. Create a file named with the exact content provided. Read the file and create a new file named that contains all lines converted to lowercase, duplicate lines removed, and remaining lines sorted alphabetically. Ensure the final content matches the expected content provided. After writing the new file, report the original line count and the final line count.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "files",
+      "text-processing",
+      "transformation"
+    ]
+  },
+  {
+    "id": 350,
+    "tier": "T2",
+    "category": "file_ops",
+    "task": "Search within files and manipulate structured data. Create a file named with the exact content provided. Create a file named with the exact JSON content provided. Search the file for all rows where the specified field is the specified value. Using the JSON file, compute the total ordered quantity for each SKU that appears in the orders. Produce a new file named with the specified columns. Sort the rows in the output file by SKU ascending.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "files",
+      "search",
+      "json",
+      "structured-data",
+      "csv"
+    ]
+  },
+  {
+    "id": 351,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match a basic email address",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "email",
+      "validation"
+    ]
+  },
+  {
+    "id": 352,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match a corporate email only",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "email",
+      "domain-restriction"
+    ]
+  },
+  {
+    "id": 353,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Extract URLs starting with http or https",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "url",
+      "http",
+      "https"
+    ]
+  },
+  {
+    "id": 354,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match URLs from a specific domain",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "url",
+      "domain-restriction"
+    ]
+  },
+  {
+    "id": 355,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match IPv4 addresses",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "ipv4",
+      "networking"
+    ]
+  },
+  {
+    "id": 356,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match private IPv4 addresses only",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "ipv4",
+      "private-network"
+    ]
+  },
+  {
+    "id": 357,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match North American phone numbers",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "phone",
+      "north-america"
+    ]
+  },
+  {
+    "id": 358,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match international phone numbers with country code",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "phone",
+      "international"
+    ]
+  },
+  {
+    "id": 359,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match dates in format",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "date",
+      "format"
+    ]
+  },
+  {
+    "id": 360,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match dates in with valid month/day ranges",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "date",
+      "validation"
+    ]
+  },
+  {
+    "id": 361,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match times in 24-hour format",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "time",
+      "24-hour"
+    ]
+  },
+  {
+    "id": 362,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match US ZIP codes",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "zipcode",
+      "us"
+    ]
+  },
+  {
+    "id": 363,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match hexadecimal color codes",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "hex",
+      "color",
+      "css"
+    ]
+  },
+  {
+    "id": 364,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match MAC addresses",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "mac-address",
+      "networking"
+    ]
+  },
+  {
+    "id": 365,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match UUIDs",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "uuid",
+      "identifier"
+    ]
+  },
+  {
+    "id": 366,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match strong passwords",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "password",
+      "validation",
+      "security"
+    ]
+  },
+  {
+    "id": 367,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match usernames",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "username",
+      "validation"
+    ]
+  },
+  {
+    "id": 368,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match invoice IDs",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "invoice",
+      "identifier"
+    ]
+  },
+  {
+    "id": 369,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match product codes",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "product-code",
+      "identifier"
+    ]
+  },
+  {
+    "id": 370,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match HTML hex entities",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "html",
+      "entity",
+      "hex"
+    ]
+  },
+  {
+    "id": 371,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match file names with allowed extensions",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "filename",
+      "extension",
+      "validation"
+    ]
+  },
+  {
+    "id": 372,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match version strings",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "semantic-version",
+      "versioning"
+    ]
+  },
+  {
+    "id": 373,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match repeated words",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "backreference",
+      "text"
+    ]
+  },
+  {
+    "id": 374,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match lines that are blank or whitespace only",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "whitespace",
+      "text"
+    ]
+  },
+  {
+    "id": 375,
+    "tier": "T2",
+    "category": "regex",
+    "task": "Match quoted strings",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "string",
+      "escaping",
+      "quotes"
+    ]
+  },
+  {
+    "id": 376,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Write a query to return name and salary for employees in the Engineering department with salary greater than 80000.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "select",
+      "where",
+      "filter"
+    ]
+  },
+  {
+    "id": 377,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Return the 2 most expensive products, showing product_name and price, ordered by price descending.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "select",
+      "order-by",
+      "limit"
+    ]
+  },
+  {
+    "id": 378,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Return each order with order_id, customer_name, and total_amount.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "inner-join",
+      "join",
+      "select"
+    ]
+  },
+  {
+    "id": 379,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Return the students who are not enrolled in any course. Show student_id and student_name.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "left-join",
+      "anti-join",
+      "null-filter"
+    ]
+  },
+  {
+    "id": 380,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Count how many tickets exist for each priority. Return priority and ticket_count, ordered by priority ascending.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "group-by",
+      "count",
+      "order-by"
+    ]
+  },
+  {
+    "id": 381,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Return salespeople whose total sales amount is greater than 1000. Show salesperson and total_sales.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "group-by",
+      "having",
+      "sum"
+    ]
+  },
+  {
+    "id": 382,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Return author_name, title, and copies_sold for all books sold.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "join",
+      "multi-table-join",
+      "select"
+    ]
+  },
+  {
+    "id": 383,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Return employees whose salary is greater than the average salary of all employees. Show name and salary, ordered by salary ascending.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "subquery",
+      "where",
+      "aggregate"
+    ]
+  },
+  {
+    "id": 384,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Return the highest-paid employee in each department. Show department, name, and salary.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "correlated-subquery",
+      "groupwise-maximum",
+      "select"
+    ]
+  },
+  {
+    "id": 385,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Return employees who work in departments whose name starts with 'E'. Show name.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "subquery",
+      "in",
+      "like"
+    ]
+  },
+  {
+    "id": 386,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Return customers who have at least one order. Show customer_id and customer_name.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "exists",
+      "subquery",
+      "filter"
+    ]
+  },
+  {
+    "id": 387,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Return order_id, total_amount, and a derived column size_category using these rules: total_amount < 100 => Small, 100 to 500 => Medium, total_amount > 500 => Large.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "case",
+      "derived-column",
+      "categorization"
+    ]
+  },
+  {
+    "id": 388,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Count page views per day. Return view_date and view_count, ordered by view_date.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "group-by",
+      "count",
+      "date"
+    ]
+  },
+  {
+    "id": 389,
+    "tier": "T2",
+    "category": "sql",
+    "task": "For each login_date, return the number of distinct users who logged in. Show login_date and distinct_user_count.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "group-by",
+      "count-distinct",
+      "date"
+    ]
+  },
+  {
+    "id": 390,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Return each employee who has a manager, showing employee_name and manager_name.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "self-join",
+      "join",
+      "hierarchy"
+    ]
+  },
+  {
+    "id": 391,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Rank salespeople within each region by amount descending using RANK(). Return region, salesperson, amount, and rank_in_region.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "window-function",
+      "rank",
+      "partition-by"
+    ]
+  },
+  {
+    "id": 392,
+    "tier": "T2",
+    "category": "sql",
+    "task": "For each account, compute a running total of amount ordered by txn_date. Return account_id, txn_date, amount, and running_total.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "window-function",
+      "running-total",
+      "sum-over"
+    ]
+  },
+  {
+    "id": 393,
+    "tier": "T2",
+    "category": "sql",
+    "task": "For symbol 'XYZ', return price_date, close_price, and the previous day's closing price as prev_close_price using LAG().",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "window-function",
+      "lag",
+      "time-series"
+    ]
+  },
+  {
+    "id": 394,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Rank students by score descending using DENSE_RANK(). Return student_name, score, and score_rank.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "window-function",
+      "dense-rank",
+      "ranking"
+    ]
+  },
+  {
+    "id": 395,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Using a CTE, compute the total value of each order as quantity * unit_price summed per order_id. Return order_id and order_total.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "cte",
+      "aggregation",
+      "sum"
+    ]
+  },
+  {
+    "id": 396,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Using a subquery in the HAVING clause, return the customer with the highest total payment amount. Show customer_id and total_paid.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "subquery",
+      "having",
+      "group-by"
+    ]
+  },
+  {
+    "id": 397,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Return products that have never appeared in any order. Show product_id and product_name.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "anti-join",
+      "not-exists",
+      "filter"
+    ]
+  },
+  {
+    "id": 398,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Return a single row with three columns: completed_count, pending_count, and cancelled_count.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "conditional-aggregation",
+      "case",
+      "count"
+    ]
+  },
+  {
+    "id": 399,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Return each department’s average salary. Show department_name and avg_salary.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "join",
+      "aggregation",
+      "avg"
+    ]
+  },
+  {
+    "id": 400,
+    "tier": "T2",
+    "category": "sql",
+    "task": "Return each employee with their department average salary using a window function. Show name, department, salary, and dept_avg_salary.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sql",
+      "window-function",
+      "avg-over",
+      "partition-by"
+    ]
+  }
+]

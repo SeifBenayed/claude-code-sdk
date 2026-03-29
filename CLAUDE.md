@@ -2,9 +2,14 @@
 
 ## Architecture
 
-Single-file CLI (`claude-native.mjs`, ~7900 lines) with multi-language ports (`claude-native.py`, `claude-native.go`, `rust-sdk/`). The JS version is the primary implementation. Ink UI in `ink-ui.mjs` (optional runtime deps: `ink`, `ink-select-input`, `ink-text-input`, `react`). NDJSON bridge in `claude-tool-loop.js` (~943 lines, supports `stream` and `mcp` modes). `gstack/` is a vendored skill/tool framework sub-project.
+**CRITICAL: `claude-native.mjs` is a BUILD OUTPUT. NEVER edit it directly.**
+All source code lives in `src/` (19 modules). Edit there, then run `node build.mjs` to regenerate `claude-native.mjs`. Any direct edit to `claude-native.mjs` will be lost on next build.
 
-npm package: `cloclo`. Binary: `cloclo`. Shipped files: `claude-native.mjs`, `ink-ui.mjs`, `README.md`, `ROADMAP.md`.
+Source modules in `src/`: `utils.mjs`, `config.mjs`, `providers.mjs`, `auth.mjs`, `security-rules.mjs`, `security.mjs`, `browser.mjs`, `tools.mjs`, `lsp.mjs`, `auto-memory.mjs`, `audit.mjs`, `teams.mjs`, `sandbox.mjs`, `context-refs.mjs`, `smart-routing.mjs`, `cron.mjs`, `engine.mjs`, `session.mjs`, `index.mjs`.
+
+Ink UI in `ink-ui.mjs` (runtime deps: `ink`, `ink-select-input`, `ink-text-input`, `react`). NDJSON bridge in `claude-tool-loop.js` (~943 lines, supports `stream` and `mcp` modes). `gstack/` is a vendored skill/tool framework sub-project.
+
+npm package: `cloclo` (v1.0.1). Binary: `cloclo`. Shipped files: `claude-native.mjs`, `ink-ui.mjs`, `README.md`, `ROADMAP.md`.
 
 ## Provider Contract
 
@@ -20,8 +25,8 @@ Provider-aware: Anthropic → `CLAUDE.md`, OpenAI/Mistral → `AGENTS.md`, Gemin
 
 ```bash
 npm test                         # 133 test sections, 760+ assertions
-node test-ink-smoke.mjs          # Ink UI smoke tests
-node test-e2e-deferred.mjs       # Deferred tool E2E
+npm run test:ink                 # Ink UI smoke tests
+npm run test:e2e                 # Deferred tool E2E
 node test-openai-integration.mjs # OpenAI provider E2E
 node test-loop.js                # Agent loop tests
 node test-mcp.js                 # MCP integration tests
@@ -52,6 +57,12 @@ Add new test sections before the summary block (~line 3457) in `test-suite.mjs`.
 
 - `Error:` prefix — all user-facing errors that exit
 - `Fatal:` prefix — only the top-level unhandled exception catch
+
+## Key Directories
+
+- `gstack/` — Vendored skill/tool framework with sub-skills (`agents/`, `qa/`, `review/`, `ship/`, etc.), Supabase edge functions (`supabase/functions/`), and browser automation (`browse/`).
+- `rust-sdk/` — Rust port (Cargo workspace in `rust-sdk/Cargo.toml`).
+- `package/` — Packaged build output for npm publishing.
 
 ## Known Limitations
 

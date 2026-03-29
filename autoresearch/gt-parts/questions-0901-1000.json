@@ -1,0 +1,2290 @@
+[
+  {
+    "id": 901,
+    "tier": "T4",
+    "category": "security",
+    "task": "SSRF in webhook tester\nAnalyze this implementation and explain how an attacker could use it to reach unintended destinations.\nThen design a validation policy that would allow only HTTPS URLs to a fixed partner host.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "ssrf",
+      "webhooks",
+      "url-validation",
+      "allowlist",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 902,
+    "tier": "T4",
+    "category": "security",
+    "task": "SQL injection in bulk delete\nReview this code and explain the vulnerability, including how list inputs can be abused.\nDELETE FROM messages WHERE id IN ()\nThen write a secure version for numeric IDs using placeholders.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "sql-injection",
+      "bulk-delete",
+      "in-clause",
+      "placeholders",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 903,
+    "tier": "T4",
+    "category": "security",
+    "task": "XSS through Markdown rendering\nA service accepts Markdown, converts it to HTML, and returns the HTML directly to browsers. Explain the XSS risk and when Markdown features become dangerous. Then propose a secure rendering pipeline with at least two defenses.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "xss",
+      "markdown",
+      "html-rendering",
+      "sanitization",
+      "secure-pipeline"
+    ]
+  },
+  {
+    "id": 904,
+    "tier": "T4",
+    "category": "security",
+    "task": "Server-side request smuggling confusion check\nA teammate claims this code has SSRF because it accepts a user-supplied path:\nDecide whether SSRF is the right classification. Explain the real risk, if any, and write a safer version.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "ssrf",
+      "request-smuggling",
+      "classification",
+      "path-handling",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 905,
+    "tier": "T4",
+    "category": "security",
+    "task": "Escaping mismatch\nExplain why URL encoding does not prevent XSS in this example.\n<div></div>\nThen give a correct mitigation for HTML element context.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "xss",
+      "encoding",
+      "output-encoding",
+      "html-context",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 906,
+    "tier": "T4",
+    "category": "security",
+    "task": "Password reset token SQL injection\nIdentify the issue and describe a realistic impact.\nThen rewrite it securely and mention any additional validation that helps at the boundary.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "sql-injection",
+      "password-reset",
+      "tokens",
+      "input-validation",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 907,
+    "tier": "T4",
+    "category": "security",
+    "task": "SSRF through PDF generation\nA PDF service renders user-submitted HTML and allows external images/stylesheets. Explain how this can create SSRF even without an explicit fetch API in application code. Then list three mitigations.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "ssrf",
+      "pdf-generation",
+      "html-rendering",
+      "external-resources",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 908,
+    "tier": "T4",
+    "category": "security",
+    "task": "Client-side storage XSS propagation\nAnalyze this code and explain why the issue can persist across page loads.\nClassify the XSS type and provide a secure rewrite.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "xss",
+      "dom-xss",
+      "localstorage",
+      "persistent-client-state",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 909,
+    "tier": "T4",
+    "category": "security",
+    "task": "Secure code review task — mixed vulnerabilities\nReview the snippet and identify every security issue present. For each one, explain the attack vector and provide a minimal secure fix.\nINSERT INTO (payload) VALUES ('')\nAt minimum, consider SSRF and injection risks.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "security-review",
+      "ssrf",
+      "injection",
+      "sql-injection",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 910,
+    "tier": "T4",
+    "category": "security",
+    "task": "Threat explanation task\nCompare reflected XSS, stored XSS, SQL injection, and SSRF using one concrete example for each. For every category, explain:\n- where untrusted input enters,\n- what the dangerous sink is,\n- who/what executes the payload,\n- and one primary mitigation.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "security-concepts",
+      "xss",
+      "sql-injection",
+      "ssrf",
+      "threat-modeling"
+    ]
+  },
+  {
+    "id": 911,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "What is the value of  in JavaScript?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "JavaScript coercion"
+    ]
+  },
+  {
+    "id": 912,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "What is the value of  +  when evaluated as a standalone expression in a browser console?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "JavaScript coercion"
+    ]
+  },
+  {
+    "id": 913,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "Without running code, determine whether  is  or .",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "JavaScript equality trap"
+    ]
+  },
+  {
+    "id": 914,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "In JavaScript, what is the result of ?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "JavaScript chained comparison"
+    ]
+  },
+  {
+    "id": 915,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "Does  evaluate to  or ?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "JavaScript numeric precision"
+    ]
+  },
+  {
+    "id": 916,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "What does  return?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "JavaScript type confusion"
+    ]
+  },
+  {
+    "id": 917,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "Given , what is ?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "JavaScript sparse arrays"
+    ]
+  },
+  {
+    "id": 918,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "What is the result of ?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "JavaScript array mapping trap"
+    ]
+  },
+  {
+    "id": 919,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "Is  true or false?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "JavaScript reference equality"
+    ]
+  },
+  {
+    "id": 920,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "What is the value of ?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "JavaScript floating-point edge case"
+    ]
+  },
+  {
+    "id": 921,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "What does this function return on the second call: Assume  was already called once before with no arguments.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Python mutable default"
+    ]
+  },
+  {
+    "id": 922,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "What is the type of  and what is the type of ?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Python tuple syntax trap"
+    ]
+  },
+  {
+    "id": 923,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "After running what is ?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Python list multiplication"
+    ]
+  },
+  {
+    "id": 924,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "In Python, is  true or false?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Python NaN comparison"
+    ]
+  },
+  {
+    "id": 925,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "After what is the value of ?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Python chained assignment aliasing"
+    ]
+  },
+  {
+    "id": 926,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "Is  guaranteed to be  in Python?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Python identity vs equality"
+    ]
+  },
+  {
+    "id": 927,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "What is the result of  in Python?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Python negative zero"
+    ]
+  },
+  {
+    "id": 928,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "How many elements are in ?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Python set duplicate trap"
+    ]
+  },
+  {
+    "id": 929,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "What does this print?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Python loop variable capture"
+    ]
+  },
+  {
+    "id": 930,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "A store says: “Buy 2 items, get 1 free.” You buy exactly 2 items. How many free items do you receive if the promotion requires purchasing 2 items before a free item is awarded?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Logic wording trap"
+    ]
+  },
+  {
+    "id": 931,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "Is the statement “All that glitters is not gold” logically equivalent to “Nothing that glitters is gold”?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Logic quantifier trap"
+    ]
+  },
+  {
+    "id": 932,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "A ticket says: “Reject users without managers.” Should a CEO account with no manager be rejected if the system also says executive accounts are valid users?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Ambiguous requirement"
+    ]
+  },
+  {
+    "id": 933,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "A loop runs  in Python. How many times does it execute?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Off-by-one trap"
+    ]
+  },
+  {
+    "id": 934,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "A requirement says: “Sort names alphabetically, case-insensitive.” Should  come before  and should original casing be preserved in output?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Sorting requirement trap"
+    ]
+  },
+  {
+    "id": 935,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "A function must accept ages “under 18 only.” Is age  valid?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Inclusive/exclusive boundary"
+    ]
+  },
+  {
+    "id": 936,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "If a subscription starts on January 31 and lasts 1 month, on what date does it end if the rule is “same day number next month if possible, otherwise last day of next month”?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Date logic trap"
+    ]
+  },
+  {
+    "id": 937,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "A flag is named . If , is caching enabled or disabled?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Boolean wording trap"
+    ]
+  },
+  {
+    "id": 938,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "A report asks for “number of users who logged in.” If one user logs in 5 times, should that count as 1 or 5 when the requirement means unique users?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Distinct vs total counting"
+    ]
+  },
+  {
+    "id": 939,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "A validator must allow “non-empty strings.” Should a string containing only spaces, like , pass if the requirement does not explicitly say trimming is required?",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "Specification trap"
+    ]
+  },
+  {
+    "id": 940,
+    "tier": "T4",
+    "category": "trick_questions",
+    "task": "JavaScript coercion trap: Without running the code, determine exactly what is printed and explain why. Assume each line is executed exactly as written in a normal browser console, independently of the others.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "javascript"
+    ]
+  },
+  {
+    "id": 941,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Python — Remove quadratic duplicate detection: Given a Python function that builds a list of unique user IDs by scanning an input list and using membership checks on a Python list, optimize it for large inputs (10M+ items). Identify the bottleneck and rewrite it. Include Big-O time and space analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "performance",
+      "algorithms",
+      "data-structures",
+      "big-o"
+    ]
+  },
+  {
+    "id": 942,
+    "tier": "T4",
+    "category": "performance",
+    "task": "JavaScript — Speed up repeated DOM queries: Given frontend JavaScript that loops over 5,000 table rows and repeatedly calls querySelector inside nested loops to read cell values, optimize it to reduce rendering and query overhead. Identify the bottleneck and provide Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "javascript",
+      "frontend",
+      "dom",
+      "performance",
+      "big-o"
+    ]
+  },
+  {
+    "id": 943,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Java — Replace nested loop joins: Given Java code that matches every order against every customer using nested loops to attach customer data by ID, optimize the join logic for datasets with 1M orders and 100k customers. Include the exact bottleneck and Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "java",
+      "performance",
+      "algorithms",
+      "data-structures",
+      "big-o"
+    ]
+  },
+  {
+    "id": 944,
+    "tier": "T4",
+    "category": "performance",
+    "task": "C++ — Avoid repeated string concatenation copies: Given C++ code that constructs a large CSV string using operator+ inside a loop over 2M records, optimize it to avoid excessive allocations and copying. Explain the bottleneck and provide Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "c++",
+      "performance",
+      "strings",
+      "memory",
+      "big-o"
+    ]
+  },
+  {
+    "id": 945,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Go — Eliminate redundant JSON unmarshalling: Given a Go service that unmarshals the same JSON payload multiple times in different helper functions during a single request, refactor it to parse once and reuse structured data. Identify the bottleneck and give Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "go",
+      "performance",
+      "json",
+      "refactoring",
+      "big-o"
+    ]
+  },
+  {
+    "id": 946,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Python — Optimize frequency counting: Given Python code that counts word frequencies by calling list.count for every distinct word in the list, optimize it for a corpus of 50M tokens. Identify the bottleneck and include Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "performance",
+      "algorithms",
+      "collections",
+      "big-o"
+    ]
+  },
+  {
+    "id": 947,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Rust — Reduce hash map reallocation: Given Rust code that inserts millions of entries into a HashMap without preallocating capacity, optimize it to reduce resizing and rehashing overhead. Explain the bottleneck and give Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "rust",
+      "performance",
+      "hashmap",
+      "memory",
+      "big-o"
+    ]
+  },
+  {
+    "id": 948,
+    "tier": "T4",
+    "category": "performance",
+    "task": "SQL + application code — Fix N+1 query pattern: Given application code that loads 1,000 blog posts and then issues one SQL query per post to load comments, optimize the data access pattern. Identify the bottleneck and include Big-O query-count and runtime analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "sql",
+      "backend",
+      "database",
+      "performance",
+      "n-plus-one",
+      "big-o"
+    ]
+  },
+  {
+    "id": 949,
+    "tier": "T4",
+    "category": "performance",
+    "task": "JavaScript — Debounce expensive input handling: Given browser code that filters a 100k-item list on every keystroke with no throttling or debounce, optimize responsiveness while preserving correctness. Identify the bottleneck and provide Big-O per keystroke analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "javascript",
+      "frontend",
+      "performance",
+      "debounce",
+      "big-o"
+    ]
+  },
+  {
+    "id": 950,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Python — Replace repeated sorting: Given Python code that appends one element at a time to a list and calls sort after each insertion to keep it ordered, optimize it for 500k insertions. Identify the bottleneck and include Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "performance",
+      "sorting",
+      "algorithms",
+      "big-o"
+    ]
+  },
+  {
+    "id": 951,
+    "tier": "T4",
+    "category": "performance",
+    "task": "C# — Cache expensive reflection: Given C# code that uses reflection to discover property metadata inside a tight serialization loop for every object instance, optimize it to avoid repeated metadata lookup. Explain the bottleneck and provide Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "csharp",
+      "performance",
+      "reflection",
+      "serialization",
+      "big-o"
+    ]
+  },
+  {
+    "id": 952,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Java — Improve string building in loops: Given Java code that assembles a large HTML response using string concatenation inside a loop over 100k items, optimize it to reduce allocation and copy costs. Include the bottleneck and Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "java",
+      "performance",
+      "strings",
+      "memory",
+      "big-o"
+    ]
+  },
+  {
+    "id": 953,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Python — Convert recursive Fibonacci with repeated subproblems: Given a naive recursive Python implementation of Fibonacci used in a reporting job for many input values, optimize it without changing outputs. Identify the bottleneck and provide Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "performance",
+      "dynamic-programming",
+      "recursion",
+      "big-o"
+    ]
+  },
+  {
+    "id": 954,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Node.js — Parallelize independent I/O safely: Given Node.js code that reads 200 independent files using await inside a for loop, optimize total execution time while preserving result order. Identify the bottleneck and provide complexity analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "nodejs",
+      "javascript",
+      "io",
+      "concurrency",
+      "performance",
+      "big-o"
+    ]
+  },
+  {
+    "id": 955,
+    "tier": "T4",
+    "category": "performance",
+    "task": "C++ — Speed up membership checks: Given C++ code that checks whether each query ID exists in a large vector by linear scan, optimize it for 10M lookups against 1M IDs. Identify the bottleneck and include Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "c++",
+      "performance",
+      "algorithms",
+      "data-structures",
+      "big-o"
+    ]
+  },
+  {
+    "id": 956,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Python — Avoid repeated DataFrame row iteration: Given pandas code that iterates row by row with iterrows to compute a derived column from existing numeric columns, optimize it using vectorized operations. Explain the bottleneck and provide Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "pandas",
+      "performance",
+      "dataframe",
+      "vectorization",
+      "big-o"
+    ]
+  },
+  {
+    "id": 957,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Go — Reduce excessive allocations in hot loop: Given Go code in a request handler that creates temporary slices and strings on every loop iteration while parsing records, optimize it to reduce GC pressure. Identify the bottleneck and include Big-O plus allocation behavior before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "go",
+      "performance",
+      "memory",
+      "gc",
+      "allocations",
+      "big-o"
+    ]
+  },
+  {
+    "id": 958,
+    "tier": "T4",
+    "category": "performance",
+    "task": "JavaScript — Batch DOM updates: Given browser code that appends 20,000 elements directly to the DOM one at a time inside a loop, optimize it to reduce layout/reflow overhead. Explain the bottleneck and provide Big-O-style operation analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "javascript",
+      "frontend",
+      "dom",
+      "performance",
+      "rendering",
+      "big-o"
+    ]
+  },
+  {
+    "id": 959,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Python — Optimize matrix lookup logic: Given Python code that answers many membership queries on a 2D matrix by scanning every cell each time, optimize it for repeated queries on mostly static data. Identify the bottleneck and include Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "performance",
+      "algorithms",
+      "data-structures",
+      "big-o"
+    ]
+  },
+  {
+    "id": 960,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Java — Reuse compiled regular expressions: Given Java code that compiles the same regex pattern inside a loop over millions of log lines, optimize it to avoid repeated compilation. Explain the bottleneck and provide Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "java",
+      "performance",
+      "regex",
+      "strings",
+      "big-o"
+    ]
+  },
+  {
+    "id": 961,
+    "tier": "T4",
+    "category": "performance",
+    "task": "C — Improve file reading strategy: Given C code that reads a large file one byte at a time with repeated system calls, optimize it for throughput on multi-GB files. Identify the bottleneck and include Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "c",
+      "performance",
+      "io",
+      "systems",
+      "big-o"
+    ]
+  },
+  {
+    "id": 962,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Python — Replace nested aggregation loops: Given Python code that computes per-customer purchase totals by scanning the full transaction list once for every customer, optimize it for 5M transactions and 500k customers. Explain the bottleneck and provide Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "performance",
+      "aggregation",
+      "algorithms",
+      "big-o"
+    ]
+  },
+  {
+    "id": 963,
+    "tier": "T4",
+    "category": "performance",
+    "task": "TypeScript — Memoize repeated expensive computation: Given TypeScript code that recomputes the same expensive formatting/transformation result for identical inputs across a render cycle, optimize it using memoization or caching. Identify the bottleneck and include Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "typescript",
+      "performance",
+      "memoization",
+      "caching",
+      "big-o"
+    ]
+  },
+  {
+    "id": 964,
+    "tier": "T4",
+    "category": "performance",
+    "task": "C++ — Replace bubble sort in production path: Given C++ code that sorts a list of 200k integers using bubble sort before serving a request, replace it with a more appropriate approach. Identify the bottleneck and provide Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "c++",
+      "performance",
+      "sorting",
+      "algorithms",
+      "big-o"
+    ]
+  },
+  {
+    "id": 965,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Python — Speed up graph traversal setup: Given Python code that stores graph edges in a list and, during BFS, repeatedly scans the full edge list to find neighbors of the current node, optimize it for sparse graphs with 1M nodes and 5M edges. Explain the bottleneck and include Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "performance",
+      "graphs",
+      "bfs",
+      "algorithms",
+      "big-o"
+    ]
+  },
+  {
+    "id": 966,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Ruby — Remove repeated database existence checks: Given Ruby on Rails code that loops through records and performs an existence query for each item before insertion, optimize it for bulk imports. Identify the bottleneck and provide Big-O query-count and runtime analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "ruby",
+      "rails",
+      "database",
+      "performance",
+      "bulk-import",
+      "big-o"
+    ]
+  },
+  {
+    "id": 967,
+    "tier": "T4",
+    "category": "performance",
+    "task": "JavaScript — Optimize array intersection: Given JavaScript code that computes the intersection of two large arrays using nested loops, optimize it for arrays of length 1M each. Explain the bottleneck and provide Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "javascript",
+      "performance",
+      "algorithms",
+      "arrays",
+      "big-o"
+    ]
+  },
+  {
+    "id": 968,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Go — Replace sequential HTTP calls with bounded concurrency: Given Go code that fetches 500 independent remote resources one after another, optimize it to improve latency without overwhelming the remote service. Identify the bottleneck and include complexity and concurrency analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "go",
+      "performance",
+      "http",
+      "concurrency",
+      "big-o"
+    ]
+  },
+  {
+    "id": 969,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Python — Reduce repeated parsing of timestamps: Given Python ETL code that parses the same timestamp string format with expensive date parsing logic inside multiple passes over the same dataset, optimize it to avoid duplicate work. Explain the bottleneck and provide Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "etl",
+      "performance",
+      "parsing",
+      "big-o"
+    ]
+  },
+  {
+    "id": 970,
+    "tier": "T4",
+    "category": "performance",
+    "task": "Java — Optimize top-K selection: Given Java code that sorts an entire list of 10M scores just to return the top 100, optimize it with a more appropriate algorithm/data structure. Identify the bottleneck and provide Big-O analysis before and after.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "java",
+      "performance",
+      "algorithms",
+      "top-k",
+      "heaps",
+      "big-o"
+    ]
+  },
+  {
+    "id": 971,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "In the Node CLI, find where one-shot mode parses , read the argument handling code, fix it so  returns a clear validation error instead of entering interactive mode, add a regression test in , run the targeted test, then verify no other one-shot flag behavior changed.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "node-cli",
+      "one-shot-mode",
+      "argument-parsing",
+      "validation",
+      "regression-test"
+    ]
+  },
+  {
+    "id": 972,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Search for provider detection logic in , read the code that maps model names to providers, update it so OpenRouter-hosted Anthropic models are not misclassified as native Anthropic, add a focused test covering the exact model string, run the relevant test subset, then verify existing Anthropic and OpenRouter cases still pass.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "provider-detection",
+      "model-mapping",
+      "openrouter",
+      "anthropic",
+      "tests"
+    ]
+  },
+  {
+    "id": 973,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Locate the code that loads , read the path resolution and precedence rules, fix a bug where the nearest project file is ignored when running from a nested subdirectory, add an end-to-end test that creates nested fixtures, run the test, then verify root-level behavior remains unchanged.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "config-loading",
+      "path-resolution",
+      "precedence",
+      "nested-subdirectory",
+      "e2e-test"
+    ]
+  },
+  {
+    "id": 974,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Find the deferred tool registration flow, read how  and  interact, modify the logic so  is only surfaced when at least one deferred tool is actually available, add a test for both zero and nonzero deferred-tool cases, run the tests, then verify normal eager tool registration still works.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "deferred-tools",
+      "tool-registration",
+      "toolsearch",
+      "eager-tools",
+      "tests"
+    ]
+  },
+  {
+    "id": 975,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Search for NDJSON output formatting, read the event serialization code, fix it so assistant text containing newlines is emitted as a single valid JSON event instead of fragmented output, add a regression test that simulates multiline assistant content, run the test, then verify existing single-line events are unchanged.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "ndjson",
+      "output-formatting",
+      "event-serialization",
+      "multiline",
+      "regression-test"
+    ]
+  },
+  {
+    "id": 976,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Locate the permission prompt code for Bash tool execution, read how approval modes are enforced, modify it so read-only commands are not incorrectly blocked in the “accept edits” mode, add a targeted test for the exact approval path, run the tests, then verify write-capable shell commands still require approval.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "permissions",
+      "bash-tool",
+      "approval-modes",
+      "read-only-commands",
+      "tests"
+    ]
+  },
+  {
+    "id": 977,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Find session persistence logic, read where conversation state is saved and restored, fix the bug causing duplicate assistant messages after resume, add a reproducible test using a saved session fixture, run the test, then verify fresh sessions still serialize identically.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "sessions",
+      "persistence",
+      "resume",
+      "duplicate-messages",
+      "regression-test"
+    ]
+  },
+  {
+    "id": 978,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Search for hook execution code, read how hook stderr/stdout is captured, update it so hook failures surface concise user-facing errors without dumping internal stack traces, add a test for a failing hook script, run the test, then verify successful hooks still show expected output.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "hooks",
+      "error-handling",
+      "stderr",
+      "stdout",
+      "user-facing-errors"
+    ]
+  },
+  {
+    "id": 979,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Locate model capability resolution, read how streaming support is declared per provider, fix the fallback so a non-streaming model automatically disables streaming instead of throwing mid-request, add a provider-specific regression test, run the tests, then verify streaming models still use the streaming path.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "model-capabilities",
+      "streaming",
+      "provider-specific",
+      "fallback",
+      "regression-test"
+    ]
+  },
+  {
+    "id": 980,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Find auth/base-URL resolution for providers, read the environment variable lookup order, correct it so a provider-specific base URL overrides the generic OpenAI-compatible URL when both are set, add a test that sets both env vars, run the test, then verify generic fallback still works when only one variable exists.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "auth",
+      "base-url",
+      "environment-variables",
+      "provider-config",
+      "tests"
+    ]
+  },
+  {
+    "id": 981,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Search for the code handling tool call rendering in , read the component that prints long tool inputs, modify it to truncate oversized JSON payloads with a clear suffix instead of wrapping the entire terminal, add a UI smoke test or snapshot-style assertion, run the relevant test, then verify short payloads still render in full.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "ui",
+      "tool-call-rendering",
+      "json-payloads",
+      "truncation",
+      "smoke-test"
+    ]
+  },
+  {
+    "id": 982,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Locate MCP tool registration code, read how server-provided tool names are normalized, fix it so case-insensitive collisions are rejected with a deterministic error, add a test with two colliding tool names from a fixture server, run the test, then verify unique MCP tools still register normally.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "mcp",
+      "tool-registration",
+      "name-normalization",
+      "collision-detection",
+      "tests"
+    ]
+  },
+  {
+    "id": 983,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Find the logic that loads , read the merge order across local and user settings, correct it so project-local settings override user settings for tool permissions, add a regression test with both config files present, run the test, then verify unrelated keys still merge correctly.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "settings",
+      "merge-order",
+      "tool-permissions",
+      "project-local",
+      "regression-test"
+    ]
+  },
+  {
+    "id": 984,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Search for message conversion code for providers using  placement, read the transformation from internal messages to provider payloads, fix it so the developer instruction is emitted exactly once even after retries, add a regression test covering a retry path, run the test, then verify providers using  are unaffected.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "message-conversion",
+      "provider-payloads",
+      "developer-instructions",
+      "retries",
+      "regression-test"
+    ]
+  },
+  {
+    "id": 985,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Locate the code that extracts fenced patches or file edits from model output, read the parser logic, modify it so Windows-style CRLF line endings do not break patch application, add a regression test with CRLF input, run the tests, then verify LF-only behavior still passes.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "patch-parser",
+      "file-edits",
+      "crlf",
+      "windows",
+      "regression-test"
+    ]
+  },
+  {
+    "id": 986,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Find the command-line help generation code, read where supported flags are listed, add the missing documentation for the existing NDJSON mode flag without changing behavior, add a test that snapshots  output, run the test, then verify no other help text changed unexpectedly.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "cli-help",
+      "documentation",
+      "ndjson",
+      "snapshot-test",
+      "flags"
+    ]
+  },
+  {
+    "id": 987,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Search for the code that resolves the packaged binary entrypoint versus , read the path detection logic, fix it so relative resource paths still work when launched via , add an integration-style test for packaged invocation behavior, run the test, then verify direct Node execution still passes.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "entrypoint",
+      "packaged-binary",
+      "path-detection",
+      "relative-paths",
+      "integration-test"
+    ]
+  },
+  {
+    "id": 988,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Locate rate-limit retry handling, read the logic that interprets provider errors, update it so HTTP 429 responses with  headers wait the correct duration instead of using the default backoff, add a focused unit test for header parsing, run the test, then verify other transient errors still use exponential retry.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "rate-limiting",
+      "retry-handling",
+      "http-429",
+      "retry-after",
+      "unit-test"
+    ]
+  },
+  {
+    "id": 989,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Find the code that summarizes available tools to the model, read how deferred and eager tools are described, modify it so deferred tools are not duplicated in both sections of the prompt, add a regression test that inspects the constructed prompt text, run the test, then verify eager-only configurations are unchanged.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "tool-summary",
+      "prompt-construction",
+      "deferred-tools",
+      "eager-tools",
+      "regression-test"
+    ]
+  },
+  {
+    "id": 990,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Search for file-edit safety checks, read the path normalization logic around the Edit/Write tools, fix a bug where paths containing  segments are incorrectly treated as outside the workspace, add a regression test covering normalized relative paths, run the tests, then verify true path traversal attempts are still blocked.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "file-editing",
+      "safety-checks",
+      "path-normalization",
+      "workspace",
+      "regression-test"
+    ]
+  },
+  {
+    "id": 991,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Locate the conversation trimming/token budgeting code, read how old messages are selected for removal, modify it so the most recent tool result is preserved when truncation occurs during long sessions, add a targeted test that forces truncation, run the test, then verify normal short conversations produce identical payloads.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "token-budgeting",
+      "conversation-trimming",
+      "tool-results",
+      "long-sessions",
+      "targeted-test"
+    ]
+  },
+  {
+    "id": 992,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Find the logic that emits assistant stop reasons after tool use, read the code mapping provider-specific finish reasons into internal values, fix it so tool-result continuations are not mislabeled as , add a regression test for the exact provider payload, run the test, then verify genuine  completions still map correctly.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "stop-reasons",
+      "provider-mapping",
+      "tool-use",
+      "finish-reasons",
+      "regression-test"
+    ]
+  },
+  {
+    "id": 993,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Search for image input handling, read how local image paths are detected and encoded, fix it so uppercase file extensions like  are accepted the same as lowercase, add a focused test with a fixture image path, run the test, then verify unsupported extensions are still rejected.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "image-input",
+      "file-extensions",
+      "case-insensitive",
+      "encoding",
+      "tests"
+    ]
+  },
+  {
+    "id": 994,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Locate session naming logic, read how automatic session titles are derived from the first user prompt, update it so control characters and excessive whitespace are sanitized before writing to disk, add a regression test for a malformed prompt string, run the test, then verify normal titles remain readable.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "sessions",
+      "naming",
+      "sanitization",
+      "whitespace",
+      "regression-test"
+    ]
+  },
+  {
+    "id": 995,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Find the code that applies  overrides, read how CLI flags interact with persisted session configuration, fix it so an explicit CLI model always wins over the resumed session model, add a test that resumes a saved session with a different , run the test, then verify resume without override still preserves the saved model.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "cli-flags",
+      "model-override",
+      "session-config",
+      "resume",
+      "tests"
+    ]
+  },
+  {
+    "id": 996,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Search for tool schema serialization sent to providers, read how JSON Schema is reduced for model prompts, modify it so enum values on string properties are preserved instead of flattened away, add a regression test using a small mock tool schema, run the test, then verify non-enum properties serialize as before.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "tool-schema",
+      "json-schema",
+      "serialization",
+      "enum",
+      "regression-test"
+    ]
+  },
+  {
+    "id": 997,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Locate the code that handles aborted interactive input in the Ink UI, read the cleanup path for Ctrl+C during a pending model request, fix it so the terminal state is restored cleanly and the process exits with the expected code, add or extend a smoke test for interrupted execution, run the test, then verify normal exits are unchanged.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "ink-ui",
+      "interactive-input",
+      "ctrl-c",
+      "terminal-cleanup",
+      "smoke-test"
+    ]
+  },
+  {
+    "id": 998,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Find the memory loading/index logic under the project memory directory, read how  links are parsed, fix it so broken links are ignored with a warning instead of crashing startup, add a regression test with one valid and one missing memory file, run the test, then verify valid memories still load.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "memory",
+      "index-loading",
+      "broken-links",
+      "startup",
+      "regression-test"
+    ]
+  },
+  {
+    "id": 999,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Search for provider request construction for  style APIs, read the payload builder, fix it so empty instruction strings are omitted rather than sent as blank fields that trigger API validation errors, add a targeted test for empty vs non-empty instructions, run the test, then verify providers using other instruction placement styles are unaffected.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "provider-requests",
+      "payload-builder",
+      "instructions",
+      "api-validation",
+      "targeted-test"
+    ]
+  },
+  {
+    "id": 1000,
+    "tier": "T4",
+    "category": "multi_tool_chain",
+    "task": "Locate the code that reports LSP diagnostics or file errors back into the agent loop, read the formatting path, modify it so repeated identical diagnostics from the same file are deduplicated before display, add a regression test with duplicate diagnostics in a fixture payload, run the test, then verify distinct diagnostics are still all shown.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "lsp",
+      "diagnostics",
+      "deduplication",
+      "agent-loop",
+      "regression-test"
+    ]
+  }
+]

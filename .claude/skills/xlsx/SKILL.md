@@ -1,7 +1,7 @@
 ---
 name: xlsx
 description: "Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to: open, read, edit, or fix an existing .xlsx, .xlsm, .csv, or .tsv file (e.g., adding columns, computing formulas, formatting, charting, cleaning messy data); create a new spreadsheet from scratch or from other data sources; or convert between tabular file formats. Trigger especially when the user references a spreadsheet file by name or path — even casually (like \"the xlsx in my downloads\") — and wants something done to it or produced from it. Also trigger for cleaning or restructuring messy tabular data files (malformed rows, misplaced headers, junk data) into proper spreadsheets. The deliverable must be a spreadsheet file. Do NOT trigger when the primary deliverable is a Word document, HTML report, standalone Python script, database pipeline, or Google Sheets API integration, even if tabular data is involved."
-allowed-tools: Spreadsheet,Bash,Read,Write,Glob,Grep
+allowed-tools: Spreadsheet,Read,Write,Glob,Grep
 ---
 
 # Requirements for Outputs
@@ -62,29 +62,22 @@ Unless otherwise stated by the user or existing template
   - "Source: Company 10-K, FY2024, Page 45, Revenue Note, [SEC EDGAR URL]"
   - "Source: Bloomberg Terminal, 8/15/2025, AAPL US Equity"
 
-# Tool-First Workflow
+# Workflow
 
-## Priority: Spreadsheet tool first, Python/Bash only when needed
+## Use the Spreadsheet tool for everything
 
-The `Spreadsheet` tool handles most operations natively — faster than Python, no dependencies.
+The `Spreadsheet` tool handles ALL operations natively — no Python, no Bash, no dependencies.
 
-### When to use the Spreadsheet tool
-- Reading data: `inspect`, `list_sheets`, `get_sheet_info`, `read_range`
-- Writing data: `write_range`, `append_rows`, `set_cell`
+### Available actions
+- Reading: `inspect`, `list_sheets`, `get_sheet_info`, `read_range`
+- Writing: `write_range`, `append_rows`, `set_cell` (supports formulas: `value: "=SUM(A1:A10)"`)
 - Searching: `find_text`
-- Error checking: `check_errors` (replaces `recalc.py`)
-- Formulas: `inspect_formulas`
+- Validation: `check_errors`, `inspect_formulas`
 - Formatting: `format_cells`, `set_column_width`
 - Structure: `create`, `add_sheet`
 - Export: `export_csv`
 
-### When to fall back to Python/Bash
-- Formula persistence (SheetJS writes values but not formulas to disk — use openpyxl for formulas that must survive save)
-- Charts and graphs
-- Pivot tables
-- Complex conditional formatting with rules
-- Merged cells manipulation
-- Data validation rules
+Do NOT use Python/Bash for spreadsheet operations. The Spreadsheet tool is the single source of truth.
 
 ## Common Workflows
 
@@ -150,37 +143,16 @@ Spreadsheet { action: "find_text", file_path: "report.xlsx", query: "revenue" }
 Spreadsheet { action: "export_csv", file_path: "data.xlsx", sheet: "Summary" }
 ```
 
-### 7. Financial model with formulas (requires Python fallback)
-
-When formulas MUST persist in the saved file, use openpyxl via Bash:
-
-```bash
-python3 -c "
-from openpyxl import Workbook
-from openpyxl.styles import Font, PatternFill, Alignment
-
-wb = Workbook()
-sheet = wb.active
-sheet.title = 'Model'
-
-# Headers
-sheet['A1'] = 'Revenue'
-sheet['B1'] = 'Q1'
-sheet['A1'].font = Font(bold=True)
-
-# Data with formulas
-sheet['B2'] = 100
-sheet['B3'] = '=B2*1.1'  # 10% growth
-sheet['B4'] = '=SUM(B2:B3)'
-
-wb.save('model.xlsx')
-"
+### 7. Financial model with formulas
 ```
-
-Then verify:
-```
+Spreadsheet { action: "create", file_path: "model.xlsx", sheets: ["Model"] }
+Spreadsheet { action: "set_cell", file_path: "model.xlsx", sheet: "Model", cell: "A1", value: "Revenue" }
+Spreadsheet { action: "set_cell", file_path: "model.xlsx", sheet: "Model", cell: "B1", value: "Q1" }
+Spreadsheet { action: "format_cells", file_path: "model.xlsx", sheet: "Model", range: "A1:B1", format: {"bold": true} }
+Spreadsheet { action: "set_cell", file_path: "model.xlsx", sheet: "Model", cell: "B2", value: "100" }
+Spreadsheet { action: "set_cell", file_path: "model.xlsx", sheet: "Model", cell: "B3", value: "=B2*1.1" }
+Spreadsheet { action: "set_cell", file_path: "model.xlsx", sheet: "Model", cell: "B4", value: "=SUM(B2:B3)" }
 Spreadsheet { action: "check_errors", file_path: "model.xlsx" }
-Spreadsheet { action: "inspect_formulas", file_path: "model.xlsx" }
 ```
 
 ## Format Reference
@@ -221,6 +193,4 @@ Spreadsheet { action: "format_cells", file_path: "model.xlsx", range: "A1:F1", f
 | Column width | `Spreadsheet { action: "set_column_width" }` |
 | Export CSV | `Spreadsheet { action: "export_csv" }` |
 | See formulas | `Spreadsheet { action: "inspect_formulas" }` |
-| **Persist formulas** | **Python/openpyxl via Bash** |
-| **Charts** | **Python/openpyxl via Bash** |
-| **Pivot tables** | **Python via Bash** |
+| Formulas | `Spreadsheet { action: "set_cell", value: "=..." }` |

@@ -1,7 +1,7 @@
 {
   "name": "cloclo",
   "version": "1.0.1",
-  "description": "Open-source Claude Code alternative — multi-provider AI coding agent CLI. Single file, 13 providers, zero native deps.",
+  "description": "One CLI to orchestrate them all — open-source multi-provider agent runtime. 13 providers, agent teams, LSP, Docker sandbox, audit trail.",
   "main": "claude-native.mjs",
   "bin": {
     "cloclo": "./claude-native.mjs"
@@ -13,6 +13,8 @@
     "ROADMAP.md"
   ],
   "scripts": {
+    "build": "node build.mjs",
+    "prepublishOnly": "npm run build",
     "test": "node test-suite.mjs && node test-loop.js && node test-mcp.js",
     "test:ink": "node test-ink-smoke.mjs",
     "test:e2e": "node test-e2e-deferred.mjs"
@@ -25,6 +27,8 @@
     "anthropic",
     "openai",
     "mcp",
+    "agent-runtime",
+    "orchestrator",
     "coding-agent"
   ],
   "author": "",
@@ -37,8 +41,12 @@
     "ink-text-input": "^6.0.0",
     "mammoth": "^1.12.0",
     "pdf-lib": "^1.17.1",
+    "pptxgenjs": "^4.0.1",
     "react": "^19.2.4",
     "unpdf": "^1.4.0",
     "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "esbuild": "^0.27.4"
   }
 }

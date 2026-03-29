@@ -1,0 +1,704 @@
+{
+  "answers": {
+    "1": {
+      "id": 1,
+      "answer": "The chemical symbol for gold is Au, derived from the Latin word 'aurum'.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "What is the chemical symbol for gold?"
+    },
+    "2": {
+      "id": 2,
+      "answer": "Saturn has the most confirmed moons in our solar system, with 146 confirmed moons as of recent counts, surpassing Jupiter.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "Which planet in our solar system has the most moons currently confirmed?"
+    },
+    "3": {
+      "id": 3,
+      "answer": "The Berlin Wall fell in 1989, specifically on November 9, 1989.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "In what year did the Berlin Wall fall?"
+    },
+    "4": {
+      "id": 4,
+      "answer": "Ottawa is the capital city of Canada.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "What is the capital city of Canada?"
+    },
+    "5": {
+      "id": 5,
+      "answer": "The pancreas produces insulin. Specifically, the beta cells in the islets of Langerhans within the pancreas are responsible for insulin secretion.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "Which organ in the human body produces insulin?"
+    },
+    "6": {
+      "id": 6,
+      "answer": "Pride and Prejudice was written by Jane Austen, published in 1813.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "Who wrote the novel *Pride and Prejudice*?"
+    },
+    "7": {
+      "id": 7,
+      "answer": "The largest desert on Earth by total area is Antarctica (the Antarctic Desert), covering about 14.2 million square kilometers. The Sahara is the largest hot desert.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "What is the largest desert on Earth by total area?"
+    },
+    "8": {
+      "id": 8,
+      "answer": "The element with atomic number 8 is oxygen (O).",
+      "tier": "T1",
+      "category": "factual",
+      "task": "Which element has atomic number 8?"
+    },
+    "9": {
+      "id": 9,
+      "answer": "The Nile River flows through Cairo.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "What river flows through the city of Cairo?"
+    },
+    "10": {
+      "id": 10,
+      "answer": "Amelia Earhart was the first woman to fly solo across the Atlantic Ocean, completing the flight on May 20–21, 1932.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "Who was the first woman to fly solo across the Atlantic Ocean?"
+    },
+    "11": {
+      "id": 11,
+      "answer": "The smallest prime number is 2. It is the only even prime number.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "What is the smallest prime number?"
+    },
+    "12": {
+      "id": 12,
+      "answer": "Mount Kilimanjaro is located in Tanzania, in East Africa.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "Which country is home to Mount Kilimanjaro?"
+    },
+    "13": {
+      "id": 13,
+      "answer": "Nitrogen makes up most of Earth's atmosphere, comprising approximately 78% of it. Oxygen is the second most abundant at about 21%.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "What gas makes up most of Earth's atmosphere?"
+    },
+    "14": {
+      "id": 14,
+      "answer": "Michelangelo painted the ceiling of the Sistine Chapel between 1508 and 1512.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "Who painted the ceiling of the Sistine Chapel?"
+    },
+    "15": {
+      "id": 15,
+      "answer": "Diamond is the hardest natural substance on Earth, rating 10 on the Mohs hardness scale.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "What is the hardest natural substance on Earth?"
+    },
+    "16": {
+      "id": 16,
+      "answer": "The American Civil War was fought between the North (the Union) and the South (the Confederacy) from 1861 to 1865.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "Which war was fought between the North and South regions of the United States from 1861 to 1865?"
+    },
+    "17": {
+      "id": 17,
+      "answer": "Photosynthesis is the process by which plants convert sunlight into chemical energy, using carbon dioxide and water to produce glucose and oxygen.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "What is the name of the process by which plants convert sunlight into chemical energy?"
+    },
+    "18": {
+      "id": 18,
+      "answer": "The Indian Ocean lies between Africa and Australia.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "Which ocean lies between Africa and Australia?"
+    },
+    "19": {
+      "id": 19,
+      "answer": "Albert Einstein developed the theory of general relativity, published in 1915.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "Who developed the theory of general relativity?"
+    },
+    "20": {
+      "id": 20,
+      "answer": "Portuguese is the official language of Brazil, a legacy of Portuguese colonization.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "What is the official language of Brazil?"
+    },
+    "21": {
+      "id": 21,
+      "answer": "Blood type O negative (O-) is known as the universal donor for red blood cells, as it can be given to patients of any blood type.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "Which blood type is known as the universal donor for red blood cells?"
+    },
+    "22": {
+      "id": 22,
+      "answer": "Pompeii was the ancient Roman city buried by the eruption of Mount Vesuvius in AD 79. Herculaneum was also destroyed in the same eruption.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "What ancient city was buried by the eruption of Mount Vesuvius in AD 79?"
+    },
+    "23": {
+      "id": 23,
+      "answer": "The Sahara Desert is located in Africa, spanning across northern Africa.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "Which continent contains the Sahara Desert?"
+    },
+    "24": {
+      "id": 24,
+      "answer": "The femur (thigh bone) is the longest bone in the human body.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "What is the longest bone in the human body?"
+    },
+    "25": {
+      "id": 25,
+      "answer": "The Treaty of Versailles, signed on June 28, 1919, officially ended World War I.",
+      "tier": "T1",
+      "category": "factual",
+      "task": "Which treaty ended World War I in 1919?"
+    },
+    "26": {
+      "id": 26,
+      "answer": "2 + 2 = 4.",
+      "tier": "T1",
+      "category": "math",
+      "task": "What is 2+2?"
+    },
+    "27": {
+      "id": 27,
+      "answer": "15 × 6 = 90.",
+      "tier": "T1",
+      "category": "math",
+      "task": "What is 15×6?"
+    },
+    "28": {
+      "id": 28,
+      "answer": "144 ÷ 12 = 12.",
+      "tier": "T1",
+      "category": "math",
+      "task": "What is 144÷12?"
+    },
+    "29": {
+      "id": 29,
+      "answer": "3^4 = 3 × 3 × 3 × 3 = 81.",
+      "tier": "T1",
+      "category": "math",
+      "task": "Evaluate 3^4."
+    },
+    "30": {
+      "id": 30,
+      "answer": "25% of 80 = 0.25 × 80 = 20.",
+      "tier": "T1",
+      "category": "math",
+      "task": "What is 25% of 80?"
+    },
+    "31": {
+      "id": 31,
+      "answer": "2x + 7 = 19 → 2x = 12 → x = 6.",
+      "tier": "T1",
+      "category": "math",
+      "task": "Solve for x: 2x+7=19."
+    },
+    "32": {
+      "id": 32,
+      "answer": "x² = 49 → x = 7 (taking the positive root)",
+      "tier": "T1",
+      "category": "math",
+      "task": "Solve for \\(x\\): \\(x^2=49\\), where \\(x\\) is positive."
+    },
+    "33": {
+      "id": 33,
+      "answer": "y = 3(4) - 5 = 12 - 5 = 7.",
+      "tier": "T1",
+      "category": "math",
+      "task": "If y=3x-5, what is y when x=4?"
+    },
+    "34": {
+      "id": 34,
+      "answer": "5x - 3 = 2x + 12 → 3x = 15 → x = 5.",
+      "tier": "T1",
+      "category": "math",
+      "task": "Solve for x: 5x-3=2x+12."
+    },
+    "35": {
+      "id": 35,
+      "answer": "Area of rectangle = length × width = 9 × 4 = 36 square units.",
+      "tier": "T1",
+      "category": "math",
+      "task": "A rectangle has length 9 and width 4. What is its area?"
+    },
+    "36": {
+      "id": 36,
+      "answer": "Area of circle = πr² = π(3)² = 9π square units.",
+      "tier": "T1",
+      "category": "math",
+      "task": "A circle has radius 3. What is its area? Give your answer in terms of π."
+    },
+    "37": {
+      "id": 37,
+      "answer": "Slope = (y2 - y1) / (x2 - x1) = (13 - 5) / (6 - 2) = 8 / 4 = 2.",
+      "tier": "T1",
+      "category": "math",
+      "task": "What is the slope of the line passing through (2,5) and (6,13)?"
+    },
+    "38": {
+      "id": 38,
+      "answer": "lim(x→2) (3x + 1) = 3(2) + 1 = 7. Since 3x+1 is a polynomial, we simply substitute x = 2.",
+      "tier": "T1",
+      "category": "math",
+      "task": "Evaluate \\(\\lim_{x\\to 2}(3x+1)\\)."
+    },
+    "39": {
+      "id": 39,
+      "answer": "d/dx(x³) = 3x². At x = 2: 3(2²) = 3(4) = 12",
+      "tier": "T1",
+      "category": "math",
+      "task": "Find \\(\\frac{d}{dx}(x^3)\\) at \\(x=2\\)."
+    },
+    "40": {
+      "id": 40,
+      "answer": "∫₀² x dx = [x²/2]₀² = (4/2) - 0 = 2.",
+      "tier": "T1",
+      "category": "math",
+      "task": "Compute ∫_0^2 x dx."
+    },
+    "41": {
+      "id": 41,
+      "answer": "∫₀^π sin(x) dx = [-cos(x)]₀^π = (-cos(π)) - (-cos(0)) = -(-1) - (-1) = 1 + 1 = 2.",
+      "tier": "T1",
+      "category": "math",
+      "task": "Compute ∫_0^π sin(x) dx."
+    },
+    "42": {
+      "id": 42,
+      "answer": "f(x) = x² + 2x, so f'(x) = 2x + 2. At x=3: f'(3) = 2(3) + 2 = 8.",
+      "tier": "T1",
+      "category": "math",
+      "task": "If f(x)=x^2+2x, find f'(3)."
+    },
+    "43": {
+      "id": 43,
+      "answer": "Mean = (2 + 4 + 6 + 8 + 10) / 5 = 30 / 5 = 6",
+      "tier": "T1",
+      "category": "math",
+      "task": "Find the mean of the numbers \\(2,4,6,8,10\\)."
+    },
+    "44": {
+      "id": 44,
+      "answer": "The numbers in order are 1,3,3,7,9. The median (middle value) is 3.",
+      "tier": "T1",
+      "category": "math",
+      "task": "Find the median of the numbers 1,3,3,7,9."
+    },
+    "45": {
+      "id": 45,
+      "answer": "There is 1 favorable outcome (rolling a 5) out of 6 possible outcomes. Probability = 1/6 ≈ 0.1667.",
+      "tier": "T1",
+      "category": "math",
+      "task": "A fair six-sided die is rolled once. What is the probability of rolling a 5? Express your answer as a decimal."
+    },
+    "46": {
+      "id": 46,
+      "answer": "The word \"CAT\" has 3 distinct letters. Number of arrangements = 3! = 3 × 2 × 1 = 6",
+      "tier": "T1",
+      "category": "math",
+      "task": "In how many ways can you arrange the letters in the word \"CAT\"?"
+    },
+    "47": {
+      "id": 47,
+      "answer": "C(5,2) = 5! / (2! × 3!) = (5×4)/(2×1) = 10. There are 10 two-element subsets.",
+      "tier": "T1",
+      "category": "math",
+      "task": "How many 2-element subsets can be chosen from the set {1,2,3,4,5}?"
+    },
+    "48": {
+      "id": 48,
+      "answer": "7! = 7 × 6 × 5 × 4 × 3 × 2 × 1 = 5040.",
+      "tier": "T1",
+      "category": "math",
+      "task": "Compute 7!."
+    },
+    "49": {
+      "id": 49,
+      "answer": "∫₁^e (1/x) dx = [ln(x)]₁^e = ln(e) - ln(1) = 1 - 0 = 1.",
+      "tier": "T1",
+      "category": "math",
+      "task": "Evaluate ∫_1^e (1/x) dx."
+    },
+    "50": {
+      "id": 50,
+      "answer": "LEVEL has 5 letters: L appears 2 times, E appears 2 times, V appears 1 time. Distinct permutations = 5! / (2! × 2!) = 120 / 4 = 30.",
+      "tier": "T1",
+      "category": "math",
+      "task": "How many distinct permutations are there of the letters in \"LEVEL\"?"
+    },
+    "51": {
+      "id": 51,
+      "answer": "The time complexity of binary search on a sorted array of size n is O(log n). At each step, the search space is halved.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "What is the time complexity of binary search on a sorted array of size n?"
+    },
+    "52": {
+      "id": 52,
+      "answer": "The worst-case time complexity of inserting into a binary max-heap with n elements is O(log n), since the element may need to bubble up through the height of the heap.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "What is the worst-case time complexity of inserting an element into a binary max-heap with n elements?"
+    },
+    "53": {
+      "id": 53,
+      "answer": "O(1) average case. When the load factor is constant (i.e., the number of elements is proportional to the number of buckets), each chain has expected constant length.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "In a hash table using separate chaining, what is the average-case time complexity of lookup when the load factor is constant?"
+    },
+    "54": {
+      "id": 54,
+      "answer": "A stack guarantees O(1) worst-case time for both push and pop at one end. A deque (double-ended queue) also provides O(1) at both ends.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "Which data structure guarantees O(1) worst-case time for both push and pop operations at one end?"
+    },
+    "55": {
+      "id": 55,
+      "answer": "In-order traversal (left, root, right) of a binary search tree outputs the keys in sorted (ascending) order.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "What traversal of a binary search tree outputs the keys in sorted order?"
+    },
+    "56": {
+      "id": 56,
+      "answer": "The worst-case time complexity of QuickSort when the pivot is always the smallest element is O(n²). This occurs because each partition step only reduces the problem size by 1, leading to n partitions of decreasing size.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "What is the worst-case time complexity of QuickSort when the pivot is always the smallest element?"
+    },
+    "57": {
+      "id": 57,
+      "answer": "The Bellman-Ford algorithm correctly handles graphs with negative edge weights (as long as there are no negative cycles), unlike Dijkstra's algorithm which requires non-negative weights.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "Which shortest-path algorithm correctly handles graphs with negative edge weights but no negative cycles?"
+    },
+    "58": {
+      "id": 58,
+      "answer": "The time complexity of depth-first search on a graph with V vertices and E edges represented as an adjacency list is O(V + E).",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "For an undirected graph with V vertices and E edges represented as an adjacency list, what is the time complexity of depth-first search?"
+    },
+    "59": {
+      "id": 59,
+      "answer": "Kruskal's algorithm finds a minimum spanning tree by repeatedly adding the lightest edge that doesn't form a cycle, using a union-find data structure to detect cycles.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "Which algorithm is used to find a minimum spanning tree in a weighted connected graph by repeatedly adding the lightest edge that does not form a cycle?"
+    },
+    "60": {
+      "id": 60,
+      "answer": "T(n) = 2T(n/2) + O(n). MergeSort divides the array into two halves (2T(n/2)) and merges them in O(n) time, giving O(n log n) overall by the Master Theorem.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "What is the recurrence relation for MergeSort on an input of size n?"
+    },
+    "61": {
+      "id": 61,
+      "answer": "The property is called optimal substructure. It means that an optimal solution to the problem contains optimal solutions to its subproblems, which allows building the solution bottom-up.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "In dynamic programming, what property means an optimal solution can be built from optimal solutions to subproblems?"
+    },
+    "62": {
+      "id": 62,
+      "answer": "n(n−1)/2. A simple undirected graph with n vertices can have at most one edge between each pair of vertices, giving C(n,2) = n(n−1)/2 edges.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "What is the maximum number of edges in a simple undirected graph with n vertices?"
+    },
+    "63": {
+      "id": 63,
+      "answer": "A queue (FIFO) is typically used to implement breadth-first search. Vertices are enqueued when discovered and dequeued when processed.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "Which data structure is typically used to implement breadth-first search?"
+    },
+    "64": {
+      "id": 64,
+      "answer": "The worst-case height of a completely unbalanced binary search tree with n nodes is n-1 (essentially a linked list), giving O(n) height.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "What is the worst-case height of a binary search tree with n nodes if the tree is completely unbalanced?"
+    },
+    "65": {
+      "id": 65,
+      "answer": "Deadlock is the condition where two or more processes wait indefinitely for resources held by each other, creating a circular dependency with no process able to proceed.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "In operating systems, what is the name of the condition where two or more processes wait indefinitely for resources held by each other?"
+    },
+    "66": {
+      "id": 66,
+      "answer": "Shortest Job First (SJF), also called Shortest Job Next (SJN) or Shortest Process Next, always selects the ready process with the smallest next CPU burst time.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "Which CPU scheduling algorithm always selects the ready process with the smallest next CPU burst time?"
+    },
+    "67": {
+      "id": 67,
+      "answer": "The event is called a page fault. When it occurs, the OS must load the required page from secondary storage (disk) into main memory.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "In virtual memory, what is the term for an event when a referenced page is not currently in main memory?"
+    },
+    "68": {
+      "id": 68,
+      "answer": "The LRU (Least Recently Used) page replacement algorithm evicts the page that has not been used for the longest time in the past.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "What page replacement algorithm evicts the page that has not been used for the longest time in the past?"
+    },
+    "69": {
+      "id": 69,
+      "answer": "The fork() system call creates a new process in Unix-like systems. It creates a child process that is an almost exact copy of the parent process.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "In OS process management, what system call creates a new process in Unix-like systems?"
+    },
+    "70": {
+      "id": 70,
+      "answer": "TCP (Transmission Control Protocol) provides reliable, connection-oriented byte-stream communication with error checking, flow control, and ordered delivery.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "Which networking protocol provides reliable, connection-oriented byte-stream communication?"
+    },
+    "71": {
+      "id": 71,
+      "answer": "Port 443 is the default port number for HTTPS (HTTP Secure).",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "What is the default port number for HTTPS?"
+    },
+    "72": {
+      "id": 72,
+      "answer": "The Network layer (Layer 3) of the OSI model is responsible for routing packets between networks, using logical addressing (e.g., IP addresses).",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "In the OSI model, which layer is responsible for routing packets between networks?"
+    },
+    "73": {
+      "id": 73,
+      "answer": "A network switch (or bridge) operates primarily at the Data Link layer (Layer 2) and forwards frames based on MAC addresses.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "What device operates primarily at the Data Link layer and forwards frames based on MAC addresses?"
+    },
+    "74": {
+      "id": 74,
+      "answer": "An IPv4 address is 32 bits long, typically written as four 8-bit octets in dotted-decimal notation (e.g., 192.168.1.1).",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "In IPv4, how many bits are in an address?"
+    },
+    "75": {
+      "id": 75,
+      "answer": "UDP (User Datagram Protocol) is a connectionless transport-layer protocol that does not guarantee delivery, ordering, or error correction.",
+      "tier": "T1",
+      "category": "cs_theory",
+      "task": "Which transport-layer protocol is connectionless and does not guarantee delivery?"
+    },
+    "76": {
+      "id": 76,
+      "answer": "\"I would like a glass of water.\" in French is: \"Je voudrais un verre d'eau.\"",
+      "tier": "T1",
+      "category": "language",
+      "task": "Translate the English sentence \"I would like a glass of water.\" into French."
+    },
+    "77": {
+      "id": 77,
+      "answer": "\"We are going to the train station now.\" in Spanish is: \"Vamos a la estación de tren ahora.\"",
+      "tier": "T1",
+      "category": "language",
+      "task": "Translate the English sentence \"We are going to the train station now.\" into Spanish."
+    },
+    "78": {
+      "id": 78,
+      "answer": "図書館 (toshokan). This is the standard modern Japanese word for library.",
+      "tier": "T1",
+      "category": "language",
+      "task": "Translate the English word \"library\" into Japanese using standard modern Japanese."
+    },
+    "79": {
+      "id": 79,
+      "answer": "The past tense of the verb \"teach\" is \"taught\". It is an irregular verb.",
+      "tier": "T1",
+      "category": "language",
+      "task": "In English grammar, what is the past tense of the verb \"teach\"?"
+    },
+    "80": {
+      "id": 80,
+      "answer": "\"An honest person\" is grammatically correct. The article \"an\" is used before words that begin with a vowel sound; \"honest\" starts with a silent 'h', so it sounds like it begins with 'o'.",
+      "tier": "T1",
+      "category": "language",
+      "task": "Which article is grammatically correct: \"a honest person\" or \"an honest person\"?"
+    },
+    "81": {
+      "id": 81,
+      "answer": "\"Generous\" means willing to give more than is necessary or expected; characterized by giving or sharing freely, kindness and magnanimity.",
+      "tier": "T1",
+      "category": "language",
+      "task": "What does the English word \"generous\" mean?"
+    },
+    "82": {
+      "id": 82,
+      "answer": "\"Il fait très froid aujourd'hui.\" translates to \"It is very cold today.\"",
+      "tier": "T1",
+      "category": "language",
+      "task": "Translate the French sentence \"Il fait très froid aujourd'hui.\" into English."
+    },
+    "83": {
+      "id": 83,
+      "answer": "\"Necesito comprar un boleto para mañana.\" translates to \"I need to buy a ticket for tomorrow.\"",
+      "tier": "T1",
+      "category": "language",
+      "task": "Translate the Spanish sentence \"Necesito comprar un boleto para mañana.\" into English."
+    },
+    "84": {
+      "id": 84,
+      "answer": "\"私は毎朝コーヒーを飲みます。\" translates to \"I drink coffee every morning.\"",
+      "tier": "T1",
+      "category": "language",
+      "task": "Translate the Japanese sentence \"私は毎朝コーヒーを飲みます。\" into English."
+    },
+    "85": {
+      "id": 85,
+      "answer": "\"Voiture bleue\" (blue car). In French, adjectives typically follow the noun; \"voiture\" means car and \"bleue\" is the feminine form of blue (agreeing with the feminine noun voiture).",
+      "tier": "T1",
+      "category": "language",
+      "task": "In French, what is the correct translation of \"blue car\"?"
+    },
+    "86": {
+      "id": 86,
+      "answer": "\"Casa roja\" (red house). In Spanish, adjectives follow the noun; \"casa\" means house (feminine) and \"roja\" is the feminine form of red.",
+      "tier": "T1",
+      "category": "language",
+      "task": "In Spanish, what is the correct translation of \"red house\"?"
+    },
+    "87": {
+      "id": 87,
+      "answer": "先生 (sensei). This is the common Japanese word for teacher/instructor at a school.",
+      "tier": "T1",
+      "category": "language",
+      "task": "In Japanese, translate \"teacher\" into the common noun meaning an instructor at school."
+    },
+    "88": {
+      "id": 88,
+      "answer": "\"She doesn't like apples\" is grammatically correct. With third-person singular subjects (she/he/it), the auxiliary verb requires the -s ending: \"doesn't\" (does not).",
+      "tier": "T1",
+      "category": "language",
+      "task": "Which sentence is grammatically correct: \"She don't like apples\" or \"She doesn't like apples\"?"
+    },
+    "89": {
+      "id": 89,
+      "answer": "The plural form of \"child\" is \"children\". It is an irregular plural form.",
+      "tier": "T1",
+      "category": "language",
+      "task": "What is the plural form of \"child\"?"
+    },
+    "90": {
+      "id": 90,
+      "answer": "\"Quickly\" is an adverb. It modifies verbs, adjectives, or other adverbs, and was formed from the adjective \"quick\" with the suffix \"-ly\".",
+      "tier": "T1",
+      "category": "language",
+      "task": "What part of speech is the word \"quickly\"?"
+    },
+    "91": {
+      "id": 91,
+      "answer": "\"Ancient\" means very old, belonging to the distant past, or relating to civilizations from long ago (typically before the fall of the Western Roman Empire in 476 AD).",
+      "tier": "T1",
+      "category": "language",
+      "task": "What does the English word \"ancient\" mean?"
+    },
+    "92": {
+      "id": 92,
+      "answer": "\"Bonsoir\" is the French translation of \"Good evening\".",
+      "tier": "T1",
+      "category": "language",
+      "task": "Translate \"Good evening\" into French."
+    },
+    "93": {
+      "id": 93,
+      "answer": "\"¿Dónde está el baño?\" is the Spanish translation of \"Where is the bathroom?\"",
+      "tier": "T1",
+      "category": "language",
+      "task": "Translate \"Where is the bathroom?\" into Spanish."
+    },
+    "94": {
+      "id": 94,
+      "answer": "\"Thank you very much\" in Japanese is \"どうもありがとうございます\" (Dōmo arigatō gozaimasu). The polite short form is \"ありがとうございます\" (Arigatō gozaimasu).",
+      "tier": "T1",
+      "category": "language",
+      "task": "Translate \"Thank you very much\" into Japanese."
+    },
+    "95": {
+      "id": 95,
+      "answer": "A question mark (?) is normally used to end a direct question in English.",
+      "tier": "T1",
+      "category": "language",
+      "task": "In English grammar, which punctuation mark is normally used to end a direct question?"
+    },
+    "96": {
+      "id": 96,
+      "answer": "\"Better\" is the correct comparative form of \"good\". \"Gooder\" is not a valid English word; \"good\" has an irregular comparative form.",
+      "tier": "T1",
+      "category": "language",
+      "task": "Choose the correct comparative form of \"good\": \"gooder\" or \"better\"."
+    },
+    "97": {
+      "id": 97,
+      "answer": "\"Borrow\" means to take and use something that belongs to someone else with the intention of returning it. It is the opposite of \"lend\".",
+      "tier": "T1",
+      "category": "language",
+      "task": "What does the English verb \"borrow\" mean?"
+    },
+    "98": {
+      "id": 98,
+      "answer": "The French word \"chien\" translates to \"dog\" in English.",
+      "tier": "T1",
+      "category": "language",
+      "task": "Translate the French word \"chien\" into English."
+    },
+    "99": {
+      "id": 99,
+      "answer": "The Spanish word \"ventana\" translates to \"window\" in English.",
+      "tier": "T1",
+      "category": "language",
+      "task": "Translate the Spanish word \"ventana\" into English."
+    },
+    "100": {
+      "id": 100,
+      "answer": "The Japanese character \"水\" translates to \"water\" in English. It is pronounced \"mizu\" as a standalone word.",
+      "tier": "T1",
+      "category": "language",
+      "task": "Translate the Japanese word \"水\" into English."
+    }
+  }
+}

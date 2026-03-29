@@ -72,7 +72,11 @@ function parseArgs() {
       case "--system-prompt": cfg.systemPrompt = args[++i]; break;
       case "--append-system-prompt": cfg.appendSystemPrompt = args[++i]; break;
       case "--session-id": cfg.sessionId = args[++i]; break;
-      case "--resume": cfg.resume = args[++i] || true; break;
+      case "--resume": {
+        const next = args[i + 1];
+        if (next && !next.startsWith("--")) { cfg.resume = args[++i]; } else { cfg.resume = true; }
+        break;
+      }
       case "--continue": cfg.continueSession = true; break;
       case "--fork-session": cfg.forkSession = true; break;
       case "--no-session-persistence": cfg.noSessionPersistence = true; break;
@@ -230,7 +234,8 @@ class ClaudeBridge {
       args.push("--session-id", this.config.sessionId);
     }
     if (this.config.resume) {
-      args.push("--resume", typeof this.config.resume === "string" ? this.config.resume : "");
+      if (typeof this.config.resume === "string") args.push("--resume", this.config.resume);
+      else args.push("--resume");
     }
     if (this.config.continueSession) {
       args.push("--continue");

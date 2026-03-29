@@ -1,0 +1,1671 @@
+[
+  {
+    "id": 101,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What is printed by this code?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "javascript"
+    ]
+  },
+  {
+    "id": 102,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What is printed?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "javascript"
+    ]
+  },
+  {
+    "id": 103,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What is printed?\n\nAssume this is evaluated as a single expression in Node.js/modern console context, not as a block statement.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "javascript"
+    ]
+  },
+  {
+    "id": 104,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What is the output?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "javascript"
+    ]
+  },
+  {
+    "id": 105,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What is the output?\n\nFirst line:\nSecond line:",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "python"
+    ]
+  },
+  {
+    "id": 106,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What does this program print?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "go"
+    ]
+  },
+  {
+    "id": 107,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What does this print?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "go"
+    ]
+  },
+  {
+    "id": 108,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What is printed by this code?\n\nAssume this is executed exactly as shown in a JavaScript console, not inside an expression.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "JavaScript"
+    ]
+  },
+  {
+    "id": 109,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What is printed by this code?\n\nChoose the exact result: printed value or thrown error.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "JavaScript"
+    ]
+  },
+  {
+    "id": 110,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What is printed by this code?\n\nAssume Python 3.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "Python"
+    ]
+  },
+  {
+    "id": 111,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What is the output of this code?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "Python"
+    ]
+  },
+  {
+    "id": 112,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What is printed by this program?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "Go"
+    ]
+  },
+  {
+    "id": 113,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "Does this Rust code compile? If not, give the exact kind of issue.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "Rust"
+    ]
+  },
+  {
+    "id": 114,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What is printed by this Rust code?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "Rust"
+    ]
+  },
+  {
+    "id": 115,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What is printed by this Rust code?\n\nChoose the exact result: printed value or runtime behavior.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "Rust"
+    ]
+  },
+  {
+    "id": 116,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What is the output of this code in Node.js?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "javascript",
+      "nodejs",
+      "output"
+    ]
+  },
+  {
+    "id": 117,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "What is the output? Assume standard JavaScript coercion rules in Node.js.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "javascript",
+      "nodejs",
+      "coercion",
+      "output"
+    ]
+  },
+  {
+    "id": 118,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "Does this compile? If not, what is the reason?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "rust",
+      "compile",
+      "ownership",
+      "move-semantics"
+    ]
+  },
+  {
+    "id": 119,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "JavaScript — closure + **\n\nWhat is the output of this code?\n\n**Answer:**",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "javascript"
+    ]
+  },
+  {
+    "id": 120,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "JavaScript — floating point quirk\n\nWhat does this print?\n\n**Answer:**",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "javascript"
+    ]
+  },
+  {
+    "id": 121,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "Python — mutable default argument\n\nWhat is the output?\n\n**Answer:**",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "python"
+    ]
+  },
+  {
+    "id": 122,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "Python — list multiplication aliasing\n\nWhat is the output?\n\n**Answer:**",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "python"
+    ]
+  },
+  {
+    "id": 123,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "Go — argument evaluation\n\nWhat is the output of this Go program?\n\n**Answer:**",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "go"
+    ]
+  },
+  {
+    "id": 124,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "Rust — shadowing\n\nWhat does this Rust program print?\n\n**Answer:**",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "rust"
+    ]
+  },
+  {
+    "id": 125,
+    "tier": "T1",
+    "category": "coding_trivia",
+    "task": "Rust — move semantics\n\nDoes this Rust code compile?\n\n**Answer:** No, it does not compile because  is moved into  and cannot be used afterward.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "rust"
+    ]
+  },
+  {
+    "id": 126,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "A farmer has 17 sheep. All but 9 run away. How many sheep are left?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "logic",
+      "riddle"
+    ]
+  },
+  {
+    "id": 127,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "You are in a race and pass the person in 2nd place. What place are you in now?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "logic",
+      "riddle"
+    ]
+  },
+  {
+    "id": 128,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "A bat and a ball cost .10 total. The bat costs more than the ball. How much does the ball cost?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "math",
+      "word-problem",
+      "trick"
+    ]
+  },
+  {
+    "id": 129,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "Two fathers and two sons go fishing. They catch 3 fish, and each person gets 1 fish. How is this possible?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "logic",
+      "riddle",
+      "family-relationships"
+    ]
+  },
+  {
+    "id": 130,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "I speak without a mouth and hear without ears. I have no body, but I come alive with wind. What am I?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "riddle",
+      "wordplay"
+    ]
+  },
+  {
+    "id": 131,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "A woman has four daughters, and each daughter has one brother. How many children does the woman have?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "logic",
+      "family-relationships"
+    ]
+  },
+  {
+    "id": 132,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "What comes once in a minute, twice in a moment, and never in a thousand years?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "riddle",
+      "wordplay",
+      "letters"
+    ]
+  },
+  {
+    "id": 133,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "Three switches outside a closed room control three light bulbs inside. You may enter the room only once. How can you determine which switch controls which bulb?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "logic",
+      "puzzle",
+      "deduction"
+    ]
+  },
+  {
+    "id": 134,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "A clock shows 3:15. What is the angle between the hour hand and the minute hand?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "math",
+      "clock-angle"
+    ]
+  },
+  {
+    "id": 135,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "Five people are in a room. Anna is taller than Ben. Ben is taller than Cara. Dan is taller than Anna. Eva is shorter than Cara. Who is the tallest?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "logic",
+      "ordering",
+      "deduction"
+    ]
+  },
+  {
+    "id": 136,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "A man looks at a photograph and says, “Brothers and sisters, I have none. But that man’s father is my father’s son.” Who is in the photograph?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "logic",
+      "family-relationships",
+      "riddle"
+    ]
+  },
+  {
+    "id": 137,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "If you rearrange the letters of CIFAIPC correctly, you get the name of a place. What is it?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "wordplay",
+      "anagram",
+      "geography"
+    ]
+  },
+  {
+    "id": 138,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "There are 3 red balls and 3 blue balls in a box. You draw 2 balls without looking. What is the minimum number of draws needed to guarantee at least one matching pair?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "probability",
+      "pigeonhole-principle",
+      "logic"
+    ]
+  },
+  {
+    "id": 139,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "A train travels 60 miles in 1 hour and then 60 miles in 2 hours. What is its average speed for the whole trip?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "math",
+      "rates",
+      "word-problem"
+    ]
+  },
+  {
+    "id": 140,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "If yesterday was two days before Thursday, what day is tomorrow?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "logic",
+      "calendar",
+      "word-problem"
+    ]
+  },
+  {
+    "id": 141,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "A doctor gives you 3 pills and tells you to take one every 30 minutes. How long will the pills last?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "logic",
+      "time",
+      "trick"
+    ]
+  },
+  {
+    "id": 142,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "Four friends — Jade, Kyle, Lina, and Max — each choose a different drink: tea, coffee, juice, and water. Jade does not choose tea. Kyle does not choose coffee or water. Lina chooses neither juice nor tea. Max does not choose water. What does each person choose?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "logic-grid",
+      "deduction",
+      "assignment"
+    ]
+  },
+  {
+    "id": 143,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "A word is spelled incorrectly in every dictionary. What word is it?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "riddle",
+      "wordplay"
+    ]
+  },
+  {
+    "id": 144,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "You have a 3-liter jug and a 5-liter jug, and unlimited water. How can you measure exactly 4 liters?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "logic",
+      "water-jug",
+      "puzzle"
+    ]
+  },
+  {
+    "id": 145,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "In a family, there are two parents and two children, but only three people. How can this be?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "logic",
+      "family-relationships",
+      "riddle"
+    ]
+  },
+  {
+    "id": 146,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "Which number should come next in the sequence: 1, 1, 2, 3, 5, 8, 13, ?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "sequence",
+      "math",
+      "fibonacci"
+    ]
+  },
+  {
+    "id": 147,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "A box contains only red socks and blue socks. If you need to guarantee a matching pair in the dark, what is the fewest number of socks you must take?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "logic",
+      "pigeonhole-principle",
+      "probability"
+    ]
+  },
+  {
+    "id": 148,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "A girl has as many brothers as sisters. Each brother has half as many brothers as sisters. How many boys and girls are in the family?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "logic",
+      "algebra",
+      "family-relationships"
+    ]
+  },
+  {
+    "id": 149,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "There are 100 lockers, all closed. A person toggles every locker. A second person toggles every 2nd locker. A third toggles every 3rd locker, and so on up to the 100th person. Which lockers remain open at the end?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "math",
+      "number-theory",
+      "logic"
+    ]
+  },
+  {
+    "id": 150,
+    "tier": "T1",
+    "category": "logic_puzzles",
+    "task": "A prisoner must choose one of three rooms: Room 1 has a fire raging inside. Room 2 has assassins with loaded guns. Room 3 has lions that have not eaten for 3 years. Which room is safest?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "logic",
+      "riddle",
+      "survival"
+    ]
+  },
+  {
+    "id": 151,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In HTTP/1.1, which request header is required on all requests to origin servers so the server can distinguish virtual hosts on the same IP address?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "http"
+    ]
+  },
+  {
+    "id": 152,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "What HTTP status code means “No Content” and indicates the server successfully processed the request but is not returning a response body?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "http"
+    ]
+  },
+  {
+    "id": 153,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "Which HTTP method is defined as safe and idempotent and is primarily used to retrieve a representation of a resource?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "http"
+    ]
+  },
+  {
+    "id": 154,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "Which HTTP response header tells caches and clients where a newly created resource can be found after a successful response?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "http",
+      "rest"
+    ]
+  },
+  {
+    "id": 155,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In REST, what term refers to the server-provided links in representations that allow clients to discover available actions dynamically?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "rest"
+    ]
+  },
+  {
+    "id": 156,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In RESTful design, which HTTP method is typically used to partially update an existing resource rather than replace it entirely?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "rest",
+      "http"
+    ]
+  },
+  {
+    "id": 157,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In GraphQL, what is the single standard HTTP endpoint path conventionally used by many servers, even though the spec does not require a fixed path?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "graphql"
+    ]
+  },
+  {
+    "id": 158,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In GraphQL, what operation type is used for read-only data fetching?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "graphql"
+    ]
+  },
+  {
+    "id": 159,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In GraphQL, what is the keyword used to define reusable named fragments of field selections?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "graphql"
+    ]
+  },
+  {
+    "id": 160,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In GraphQL, what built-in meta-field can a client query to inspect the type information of the schema?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "graphql"
+    ]
+  },
+  {
+    "id": 161,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In gRPC, which underlying HTTP version is required for standard gRPC over the network?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "grpc"
+    ]
+  },
+  {
+    "id": 162,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In Protocol Buffers, what keyword is used to define a message field that may appear zero or more times?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "protobuf"
+    ]
+  },
+  {
+    "id": 163,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In a service definition, which keyword introduces an RPC method declaration inside the service block?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "grpc",
+      "protobuf"
+    ]
+  },
+  {
+    "id": 164,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In gRPC, what is the name of the streaming pattern where both client and server send multiple messages on the same call?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "grpc"
+    ]
+  },
+  {
+    "id": 165,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In the WebSocket protocol, which HTTP status code is returned by the server when it accepts the upgrade from HTTP to WebSocket?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "websocket",
+      "http"
+    ]
+  },
+  {
+    "id": 166,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In a WebSocket opening handshake, which request header must be set to to signal the desired protocol upgrade?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "websocket",
+      "http"
+    ]
+  },
+  {
+    "id": 167,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In the browser WebSocket API, which event fires when a message is received from the server?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "websocket",
+      "javascript"
+    ]
+  },
+  {
+    "id": 168,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In OAuth 2.0, which grant type is recommended for browser-based and mobile apps because it supports PKCE and does not require a client secret?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "oauth"
+    ]
+  },
+  {
+    "id": 169,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In OAuth 2.0, what does the acronym PKCE stand for?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "oauth"
+    ]
+  },
+  {
+    "id": 170,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In OAuth 2.0, which token type is typically sent in the HTTP header as ?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "oauth",
+      "http"
+    ]
+  },
+  {
+    "id": 171,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In HTTP content negotiation, which request header tells the server which media types the client can process?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "http"
+    ]
+  },
+  {
+    "id": 172,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "Which RFC-defined media type is the standard for a JSON request body?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "http",
+      "json"
+    ]
+  },
+  {
+    "id": 173,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In CORS, which response header specifies which origins are allowed to access a resource from a browser?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "cors",
+      "http"
+    ]
+  },
+  {
+    "id": 174,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In HTTP authentication, which response header does a server send with a response to indicate the authentication scheme the client must use?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "http",
+      "authentication"
+    ]
+  },
+  {
+    "id": 175,
+    "tier": "T1",
+    "category": "api_knowledge",
+    "task": "In GraphQL over HTTP, which HTTP method is most commonly used for mutations because they change server-side state?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "graphql",
+      "http"
+    ]
+  },
+  {
+    "id": 176,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In Docker, which command builds an image from the in the current directory and tags it as ?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "docker"
+    ]
+  },
+  {
+    "id": 177,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In Docker, which command lists all running containers only, excluding stopped containers?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "docker"
+    ]
+  },
+  {
+    "id": 178,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In Docker, which command starts an interactive shell in a running container named using ?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "docker"
+    ]
+  },
+  {
+    "id": 179,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In Kubernetes, which command returns all pods in the namespace?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "kubernetes"
+    ]
+  },
+  {
+    "id": 180,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In Kubernetes, which command shows the rollout status of a Deployment named in the namespace?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "kubernetes"
+    ]
+  },
+  {
+    "id": 181,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In Kubernetes, which resource type is specifically designed to ensure one pod runs on every node?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "kubernetes"
+    ]
+  },
+  {
+    "id": 182,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In Kubernetes, what is the default port number exposed by the Kubernetes API server in a standard cluster?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "kubernetes"
+    ]
+  },
+  {
+    "id": 183,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In Kubernetes, which command restarts a Deployment named without changing its image?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "kubernetes"
+    ]
+  },
+  {
+    "id": 184,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In GitHub Actions, which YAML key defines the events that trigger a workflow?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "github-actions"
+    ]
+  },
+  {
+    "id": 185,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In GitLab CI, what is the default file name used to define the pipeline configuration in the repository root?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "gitlab-ci"
+    ]
+  },
+  {
+    "id": 186,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In Jenkins, what is the name of the file commonly used to define a Pipeline as code in the repository root?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "jenkins"
+    ]
+  },
+  {
+    "id": 187,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In AWS, which managed service provides object storage for files and backups?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "aws"
+    ]
+  },
+  {
+    "id": 188,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In AWS, which service is used to run virtual machine instances?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "aws"
+    ]
+  },
+  {
+    "id": 189,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In Azure, which service provides managed Kubernetes clusters?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "azure",
+      "kubernetes"
+    ]
+  },
+  {
+    "id": 190,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In Google Cloud, which service provides managed Kubernetes clusters?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "google-cloud",
+      "kubernetes"
+    ]
+  },
+  {
+    "id": 191,
+    "tier": "T1",
+    "category": "devops",
+    "task": "On Linux, which command prints the current working directory?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "linux"
+    ]
+  },
+  {
+    "id": 192,
+    "tier": "T1",
+    "category": "devops",
+    "task": "On Linux, which command shows disk usage for mounted filesystems in human-readable format?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "linux"
+    ]
+  },
+  {
+    "id": 193,
+    "tier": "T1",
+    "category": "devops",
+    "task": "On Linux, which command changes file ownership to user and group for a file named ?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "linux"
+    ]
+  },
+  {
+    "id": 194,
+    "tier": "T1",
+    "category": "devops",
+    "task": "On Linux, which command displays the last 100 lines of ?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "linux"
+    ]
+  },
+  {
+    "id": 195,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In TCP/IP networking, which protocol uses port 22 by default?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "networking"
+    ]
+  },
+  {
+    "id": 196,
+    "tier": "T1",
+    "category": "devops",
+    "task": "Which command tests whether a TCP service is listening on port on host by attempting a connection with Netcat?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "networking",
+      "netcat"
+    ]
+  },
+  {
+    "id": 197,
+    "tier": "T1",
+    "category": "devops",
+    "task": "Which DNS record type maps a hostname to an IPv4 address?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "dns",
+      "networking"
+    ]
+  },
+  {
+    "id": 198,
+    "tier": "T1",
+    "category": "devops",
+    "task": "Which command shows the kernel routing table on Linux using the utility?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "linux",
+      "networking"
+    ]
+  },
+  {
+    "id": 199,
+    "tier": "T1",
+    "category": "devops",
+    "task": "In CIDR notation, how many IP addresses are contained in the subnet ?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "networking",
+      "cidr"
+    ]
+  },
+  {
+    "id": 200,
+    "tier": "T1",
+    "category": "devops",
+    "task": "Which HTTP status code means ?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "http"
+    ]
+  }
+]

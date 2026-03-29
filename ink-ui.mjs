@@ -8,7 +8,7 @@
 //   InputLine      — Text input with slash detection
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { render, Box, Text, useInput, useApp, useStdout } from "ink";
+import { render, Box, Text, Static, useInput, useApp, useStdout } from "ink";
 import TextInput from "ink-text-input";
 import { execSync } from "node:child_process";
 import os from "node:os";
@@ -88,14 +88,17 @@ function StatusBar({ cfg, sessionId, messageCount, totalCost, gitBranch }) {
 // ── Output Area ────────────────────────────────────────────────
 
 function OutputArea({ lines }) {
-  const { stdout } = useStdout();
-  const maxLines = (stdout?.rows || 24) - 8; // Reserve space for input + status + menu
-  const visible = lines.slice(-maxLines);
+  // Use Ink's <Static> for already-printed lines — they go to the terminal's
+  // scrollback buffer and are no longer re-rendered. This is how CC baseline
+  // handles it: completed output is scrollable, only the active line re-renders.
+  const staticLines = lines.slice(0, -1);
+  const activeLine = lines.length > 0 ? lines[lines.length - 1] : null;
 
   return React.createElement(Box, { flexDirection: "column", flexGrow: 1 },
-    ...visible.map((line, i) =>
-      React.createElement(Text, { key: i, wrap: "wrap" }, line)
-    )
+    React.createElement(Static, { items: staticLines },
+      (line, i) => React.createElement(Text, { key: i, wrap: "wrap" }, line)
+    ),
+    activeLine ? React.createElement(Text, { wrap: "wrap" }, activeLine) : null,
   );
 }
 

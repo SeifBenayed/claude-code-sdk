@@ -1,0 +1,2357 @@
+[
+  {
+    "id": 801,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Write a function that reverses a Unicode string by user-perceived characters, not UTF-16 code units. Input: must preserve grapheme clusters exactly.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "unicode",
+      "string",
+      "grapheme-clusters"
+    ]
+  },
+  {
+    "id": 802,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Write a validator that rejects visually confusable usernames after Unicode normalization. Treat , , and as collisions if they normalize to the same canonical identifier.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "unicode",
+      "validation",
+      "usernames",
+      "normalization",
+      "security"
+    ]
+  },
+  {
+    "id": 803,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Parse CSV where fields may contain embedded newlines, quotes, empty fields, and Unicode commas. Input example: .",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "csv",
+      "parsing",
+      "unicode",
+      "text-processing"
+    ]
+  },
+  {
+    "id": 804,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Implement case-insensitive string comparison for Turkish locale edge cases. Verify behavior for , , , and without assuming English casing rules.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "string",
+      "unicode",
+      "locale",
+      "turkish",
+      "comparison"
+    ]
+  },
+  {
+    "id": 805,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Write a slug generator that handles empty strings, whitespace-only strings, emoji-only strings, and combining marks. Define exact output for each invalid/degenerate input.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "slug",
+      "string",
+      "unicode",
+      "validation"
+    ]
+  },
+  {
+    "id": 806,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Implement a function that safely sums an array of numbers where the input may be , , , , , and mixed numeric strings. Specify whether invalid values are ignored or rejected.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "numbers",
+      "array",
+      "validation",
+      "parsing"
+    ]
+  },
+  {
+    "id": 807,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Write a parser for optional query parameters that distinguishes between missing, empty, and explicit null-like values. Example inputs: , , , and no at all.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "query-parameters",
+      "parsing",
+      "validation",
+      "web"
+    ]
+  },
+  {
+    "id": 808,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Implement JSON serialization for an object graph containing circular references. Instead of crashing, replace repeated references with stable path markers like .",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "json",
+      "serialization",
+      "circular-references",
+      "object-graph"
+    ]
+  },
+  {
+    "id": 809,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Deep-clone an object that may contain nested arrays, Dates, Maps, Sets, RegExps, and circular references. Preserve identity relationships within the clone.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "deep-clone",
+      "objects",
+      "circular-references",
+      "data-structures"
+    ]
+  },
+  {
+    "id": 810,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Compare two deeply nested objects for structural equality without stack overflow at depth 100,000. Inputs may include circular references and shared subtrees.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "deep-equality",
+      "objects",
+      "circular-references",
+      "performance"
+    ]
+  },
+  {
+    "id": 811,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Flatten a nested object into dot-path keys while preserving empty objects, empty arrays, and keys that already contain dots. Define an escaping strategy unambiguously.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "object",
+      "flatten",
+      "dot-notation",
+      "serialization"
+    ]
+  },
+  {
+    "id": 812,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Unflatten dot-path keys back into an object. Detect and reject conflicts such as both and appearing in the same input.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "object",
+      "unflatten",
+      "dot-notation",
+      "validation"
+    ]
+  },
+  {
+    "id": 813,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Merge two configuration objects recursively where arrays must be replaced, not concatenated. Ensure explicitly overrides nested objects instead of merging into them.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "merge",
+      "configuration",
+      "objects",
+      "recursion"
+    ]
+  },
+  {
+    "id": 814,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Implement a safe integer parser that accepts decimal strings only and rejects leading/trailing spaces, signs, decimals, exponent notation, hex, and values outside signed 64-bit range.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "integer",
+      "parsing",
+      "validation",
+      "64-bit"
+    ]
+  },
+  {
+    "id": 815,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Convert extremely large decimal strings to binary without using built-in big integer types. Input may be up to 100,000 digits and must not lose precision.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "big-integer",
+      "conversion",
+      "decimal",
+      "binary",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 816,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Compute for huge integers where , , and are each provided as decimal strings up to 10,000 digits. Do not overflow native numeric types.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "big-integer",
+      "modular-arithmetic",
+      "algorithms",
+      "number-theory"
+    ]
+  },
+  {
+    "id": 817,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Sort a list of decimal strings numerically, not lexicographically, including negatives, leading zeros, and . Define whether and are considered equal in ordering.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "sorting",
+      "numeric-strings",
+      "comparison",
+      "parsing"
+    ]
+  },
+  {
+    "id": 818,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Implement exact decimal addition for money values represented as strings. Input examples: , , and .",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "decimal",
+      "money",
+      "addition",
+      "precision"
+    ]
+  },
+  {
+    "id": 819,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Round decimal strings using bankers’ rounding to a specified number of places. Test exact halfway cases such as , , to 1 decimal place, and .",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "rounding",
+      "decimal",
+      "bankers-rounding",
+      "precision"
+    ]
+  },
+  {
+    "id": 820,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Detect floating-point comparison traps in a rules engine. A rule like must correctly handle sums such as according to a stated tolerance policy.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "floating-point",
+      "comparison",
+      "rules-engine",
+      "precision"
+    ]
+  },
+  {
+    "id": 821,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Write a function that computes the difference in whole calendar days between two timestamps across DST transitions. Example: compare local midnights on the day DST starts and ends.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "datetime",
+      "dst",
+      "calendar",
+      "date-difference"
+    ]
+  },
+  {
+    "id": 822,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Convert in to UTC. The local wall time does not exist due to DST spring-forward; define whether to reject or normalize it.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "datetime",
+      "timezone",
+      "utc",
+      "dst",
+      "conversion"
+    ]
+  },
+  {
+    "id": 823,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Convert in to UTC. The local wall time is ambiguous due to DST fall-back; require explicit selection of first or second occurrence.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "datetime",
+      "timezone",
+      "utc",
+      "dst",
+      "ambiguity"
+    ]
+  },
+  {
+    "id": 824,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Add one calendar month to dates at month-end. Test , , and , and define behavior when the target month has fewer days.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "datetime",
+      "calendar",
+      "date-arithmetic",
+      "month-end"
+    ]
+  },
+  {
+    "id": 825,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Compute a person’s age in years from birthdate and timezone-aware current timestamp. Handle leap-day birthdays and times just before and after local midnight.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "datetime",
+      "age",
+      "timezone",
+      "calendar"
+    ]
+  },
+  {
+    "id": 826,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Parse ISO 8601 timestamps with offsets, , fractional seconds, and missing timezone. Reject invalid forms like and define behavior for naive timestamps.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "iso8601",
+      "datetime",
+      "parsing",
+      "validation"
+    ]
+  },
+  {
+    "id": 827,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Sort timestamps that represent the same instant but use different offsets. Example: and must compare equal.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "datetime",
+      "sorting",
+      "timezone",
+      "comparison"
+    ]
+  },
+  {
+    "id": 828,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Implement interval overlap detection for time ranges where endpoints may be inclusive or exclusive. Include zero-length intervals and ranges spanning midnight in local time.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "intervals",
+      "datetime",
+      "overlap",
+      "comparison"
+    ]
+  },
+  {
+    "id": 829,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Write a pagination function that handles empty datasets, page size 0, negative page numbers, and totals larger than 32-bit integers. Define exact return values for invalid requests.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "pagination",
+      "validation",
+      "edge-cases",
+      "api"
+    ]
+  },
+  {
+    "id": 830,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Implement binary search over a sorted array that may contain duplicates, , , and . Return the first matching index under a clearly stated comparison policy.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "binary-search",
+      "algorithms",
+      "sorting",
+      "comparison"
+    ]
+  },
+  {
+    "id": 831,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Parse and validate IPv6 addresses including compression, IPv4-mapped forms, uppercase hex, and invalid multiple-compression cases. Normalize valid output to a canonical form.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "ipv6",
+      "networking",
+      "parsing",
+      "validation",
+      "normalization"
+    ]
+  },
+  {
+    "id": 832,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Build an LRU cache with capacity 0 and 1 as edge cases. Verify behavior when inserting the same key repeatedly and when stored values are or .",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "lru-cache",
+      "data-structures",
+      "edge-cases",
+      "cache"
+    ]
+  },
+  {
+    "id": 833,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Implement topological sort for a dependency graph that may contain self-loops, disconnected components, and cycles of length greater than 1. On cycles, return the exact cycle path.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "topological-sort",
+      "graphs",
+      "cycles",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 834,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Deduplicate a list of objects by deep content, not reference identity. Inputs may differ only by key order, numeric formatting like vs , or Unicode normalization in strings.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "deduplication",
+      "deep-equality",
+      "objects",
+      "unicode",
+      "normalization"
+    ]
+  },
+  {
+    "id": 835,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Validate email-like input for a system that allows Unicode local parts but forbids control characters, leading/trailing dots, and domains with empty labels. Treat empty input explicitly.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "email",
+      "validation",
+      "unicode",
+      "input-validation"
+    ]
+  },
+  {
+    "id": 836,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Implement a rate limiter keyed by user ID where IDs may be empty strings, Unicode variants, or extremely long strings. Define normalization and collision rules.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "rate-limiter",
+      "user-id",
+      "unicode",
+      "normalization",
+      "backend"
+    ]
+  },
+  {
+    "id": 837,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Write a serializer for nested form data to URL-encoded query strings. Handle arrays, empty strings, nulls, booleans, duplicate keys, and keys containing brackets literally.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "serialization",
+      "form-data",
+      "url-encoding",
+      "query-strings"
+    ]
+  },
+  {
+    "id": 838,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Parse arithmetic expressions with deeply nested parentheses up to depth 50,000 without recursion overflow. Reject malformed input like empty parentheses and adjacent operators.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "parser",
+      "expressions",
+      "algorithms",
+      "validation",
+      "performance"
+    ]
+  },
+  {
+    "id": 839,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Implement a stable hash of arbitrary JSON-like data where object key order does not matter, but array order does. Support circular references with deterministic reference labels.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "hashing",
+      "json",
+      "deterministic",
+      "circular-references"
+    ]
+  },
+  {
+    "id": 840,
+    "tier": "T4",
+    "category": "edge_cases",
+    "task": "Write a diff function for two JSON-like values that reports changes at precise paths. Handle additions, deletions, type changes, , , sparse arrays, and circular references.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "diff",
+      "json",
+      "paths",
+      "circular-references",
+      "comparison"
+    ]
+  },
+  {
+    "id": 841,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Python function that calls a URL/API with a 2-second timeout using requests. If the request times out, return null instead of raising. If the server responds with status 404, also return null. For any other non-200 status, raise an exception. On success, return the parsed JSON object.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "requests",
+      "http",
+      "timeout",
+      "json",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 842,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Node.js async function that reads a JSON file using fs/promises. If the file does not exist, return null. If the file exists but contains invalid JSON, throw a SyntaxError. Otherwise return the parsed object.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "nodejs",
+      "javascript",
+      "fs",
+      "json",
+      "async",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 843,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Go function that reads a text file. If the file is missing, return the default string and no error. If the path exists but refers to a directory, return an error. Otherwise return the file contents.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "go",
+      "file-io",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 844,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Java method that converts a string to an integer port number. If the input is not a valid integer, return -1. If the parsed value is outside the valid port range, also return -1. Otherwise return the parsed port.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "java",
+      "parsing",
+      "validation",
+      "networking"
+    ]
+  },
+  {
+    "id": 845,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Python function that reads an environment variable. If the variable is unset or empty, return null. Do not raise an exception for missing variables.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "environment-variables",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 846,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a TypeScript function that expects an object of a specific shape. If a required property is missing, if a field is not an array, or if any item is malformed, return null instead of throwing. Otherwise return the sum of numeric values.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "typescript",
+      "validation",
+      "data-processing",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 847,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Rust function where a struct has fields name and age. Parse JSON from a string. If JSON is invalid, return None. If name or age is missing, return None.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "rust",
+      "json",
+      "serde",
+      "parsing",
+      "validation"
+    ]
+  },
+  {
+    "id": 848,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a C# method that returns a list of strings. If the file cannot be opened because of permission denied, return an empty list. If the file does not exist, also return an empty list. For any other IO error, rethrow.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "csharp",
+      "file-io",
+      "error-handling",
+      "collections"
+    ]
+  },
+  {
+    "id": 849,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Python function that downloads a file with requests. If the HTTP response is 500 or higher, retry up to 3 times. If all attempts fail, return false. If writing the file fails because the destination directory does not exist, create the directory once and retry the write.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "requests",
+      "http",
+      "retry",
+      "file-io",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 850,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a JavaScript function that returns an array. If the input is invalid JSON, return an empty array. If the parsed value is not an array, also return an empty array.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "javascript",
+      "json",
+      "parsing",
+      "validation"
+    ]
+  },
+  {
+    "id": 851,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Kotlin function that reads the Authorization header. If the header is absent, blank, or contains only whitespace, return null. Otherwise return the trimmed value.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "kotlin",
+      "http",
+      "headers",
+      "validation"
+    ]
+  },
+  {
+    "id": 852,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Python function using a database/client library. If the connection fails with an authentication error, raise PermissionError. If it fails due to a timeout, return null. Otherwise re-raise the original exception.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "database",
+      "timeout",
+      "authentication",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 853,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a PHP function that opens a CSV file and returns all rows. If the file is missing, return an empty array. If a row has fewer than 3 columns, skip that row and continue. Do not stop processing because of one malformed row.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "php",
+      "csv",
+      "file-io",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 854,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Ruby method that parses dates in YYYY-MM-DD format. If the input is invalid or impossible, such as February 30, return nil instead of raising.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "ruby",
+      "date",
+      "parsing",
+      "validation"
+    ]
+  },
+  {
+    "id": 855,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a TypeScript async function that fetches JSON from a URL. If the network request fails or the response body is invalid JSON, return an empty array. If the response status is 204, also return an empty array.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "typescript",
+      "http",
+      "fetch",
+      "json",
+      "async",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 856,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Go function that opens a log file for appending. If the parent directory does not exist, create it and retry once. If the path points to an existing directory, return an error.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "go",
+      "file-io",
+      "logging",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 857,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Python function that reads from standard input. If the user enters non-numeric text, prompt again until a valid integer is entered. Do not crash on invalid input.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "stdin",
+      "input-validation",
+      "loops"
+    ]
+  },
+  {
+    "id": 858,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Java method that loads a properties file. If the file contains malformed Unicode escape sequences, throw a custom exception named InvalidPropertiesFormatException. If the file does not exist, return an empty Properties object.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "java",
+      "properties",
+      "file-io",
+      "unicode",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 859,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a JavaScript function that safely reads a nested property path. If any intermediate property is missing or null, return null instead of throwing.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "javascript",
+      "object-access",
+      "null-safety",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 860,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Python function that reads bytes from an uploaded file and parses JSON. If decoding as UTF-8 fails, raise UnicodeDecodeError. If JSON parsing fails, raise ValueError.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "json",
+      "utf8",
+      "file-io",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 861,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a C function that reads the first line of a file into a buffer. If the file cannot be opened, return false. If the first line is longer than the buffer, truncate safely and still return true.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "c",
+      "file-io",
+      "strings",
+      "buffer-safety",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 862,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Swift function that reads a file from disk. If the file is not found, return nil. If the path exists but is a directory, also return nil. Do not crash.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "swift",
+      "file-io",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 863,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Python function that executes a callable up to 4 times. If it raises TimeoutError, retry with exponential backoff delays. If the fourth attempt also times out, return null. Any other exception should be raised immediately.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "retry",
+      "timeout",
+      "backoff",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 864,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a TypeScript function for CSV lines in the format name,age,city. If the line does not contain exactly 3 comma-separated fields, return null. If the age is not a positive integer, return null.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "typescript",
+      "csv",
+      "parsing",
+      "validation"
+    ]
+  },
+  {
+    "id": 865,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Java method that returns a UTF-8 string from a request/response body. If the body exceeds a size limit, throw IllegalArgumentException. If UTF-8 decoding fails, throw CharacterCodingException.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "java",
+      "utf8",
+      "validation",
+      "io",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 866,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Python function that reads multiple JSON files, each containing a top-level array of objects. Skip files that do not exist. Skip files with invalid JSON. Return one merged list of all valid objects from valid files.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "json",
+      "file-io",
+      "data-processing",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 867,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Go function that decodes JSON into a Message struct. If the input is empty, return nil. If the JSON is malformed, return nil. Otherwise return the decoded message.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "go",
+      "json",
+      "parsing",
+      "structs",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 868,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a JavaScript async function that fetches JSON from a URL. If the request returns status 503, retry once. If it still fails or returns invalid JSON, return null.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "javascript",
+      "async",
+      "fetch",
+      "http",
+      "retry",
+      "json",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 869,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Python function that returns the result of division. If the denominator is zero, return null. If either argument is not numeric, raise TypeError.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "math",
+      "validation",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 870,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a C# async method that fetches text content. If the request is canceled due to timeout, return null. If the response status is 404, return null. Otherwise return the body text for successful responses.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "csharp",
+      "http",
+      "async",
+      "timeout",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 871,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Rust function that reads a UTF-8 text file into lines. If the file is missing, return an empty vector. If the file contains invalid UTF-8, also return an empty vector.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "rust",
+      "file-io",
+      "utf8",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 872,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Python function that returns a positive float. If parsing fails, or if the number is zero or negative, return null.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "parsing",
+      "validation",
+      "numeric"
+    ]
+  },
+  {
+    "id": 873,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a JavaScript function that accepts either an array of strings or null. If the input is null or not an array, return an empty array. Ignore non-string elements. Return trimmed non-empty strings only.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "javascript",
+      "arrays",
+      "validation",
+      "string-processing"
+    ]
+  },
+  {
+    "id": 874,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Java method that returns a Jackson ObjectNode. If the file does not exist, return an empty object node. If parsing fails because the file is invalid JSON, throw IOException.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "java",
+      "jackson",
+      "json",
+      "file-io",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 875,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Python async function that awaits one message from a websocket. If the receive operation raises TimeoutError, return null. If the message is not valid JSON, return null. Otherwise return the parsed object.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "async",
+      "websocket",
+      "json",
+      "timeout",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 876,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Go function that reads a query parameter and parses true or false. If the key is absent or the value is invalid, return nil.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "go",
+      "http",
+      "query-parameters",
+      "parsing",
+      "validation"
+    ]
+  },
+  {
+    "id": 877,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a TypeScript function that reads the user item from browser storage and parses it as JSON. If the key is missing, return null. If JSON parsing fails, remove the invalid user entry from storage and return null.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "typescript",
+      "browser",
+      "localstorage",
+      "json",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 878,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Python function using yaml.safe_load. If the file is missing, return null. If the YAML is invalid, raise ValueError. If the parsed YAML is not a dictionary, return null.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "python",
+      "yaml",
+      "file-io",
+      "parsing",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 879,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a Ruby method that reads a hash key. If the key is missing, return nil. If the value exists but is not an integer, also return nil.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "ruby",
+      "hash",
+      "validation",
+      "error-handling"
+    ]
+  },
+  {
+    "id": 880,
+    "tier": "T4",
+    "category": "error_recovery",
+    "task": "Write a JavaScript async function that calls an API. If the call fails with status 401, return null. If it fails with status 422, return an empty object. On success, return the parsed response.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "javascript",
+      "async",
+      "api",
+      "http",
+      "error-handling",
+      "json"
+    ]
+  },
+  {
+    "id": 881,
+    "tier": "T4",
+    "category": "security",
+    "task": "XSS identification — reflected sink in Express\nReview this Node/Express handler and identify the vulnerability, the exact tainted input, and the browser-side impact. Then write a secure version.\n<h1>Results for: </h1>\nYour answer must state whether this is reflected, stored, or DOM XSS.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "xss",
+      "reflected-xss",
+      "express",
+      "nodejs",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 882,
+    "tier": "T4",
+    "category": "security",
+    "task": "XSS remediation — unsafe\nAnalyze the following client-side code. Explain how an attacker can exploit it with a concrete payload, then rewrite it securely.\nWelcome\nYour answer must identify the vulnerable sink and replace it with a safe alternative.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "xss",
+      "dom-xss",
+      "client-side",
+      "javascript",
+      "remediation"
+    ]
+  },
+  {
+    "id": 883,
+    "tier": "T4",
+    "category": "security",
+    "task": "Stored XSS in comment rendering\nInspect this code path and identify the vulnerability. Explain how it persists and who can be affected. Then provide a secure rendering approach.\nBe explicit about why database storage does not make the input safe.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "xss",
+      "stored-xss",
+      "comments",
+      "database",
+      "secure-rendering"
+    ]
+  },
+  {
+    "id": 884,
+    "tier": "T4",
+    "category": "security",
+    "task": "Attribute-based XSS\nDetermine whether the following template is vulnerable. If yes, explain the attack vector and produce a secure version.\nAssume is attacker-controlled and inserted without escaping. Include an example payload that breaks out of the attribute context.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "xss",
+      "attribute-xss",
+      "templates",
+      "output-encoding",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 885,
+    "tier": "T4",
+    "category": "security",
+    "task": "JavaScript-context XSS\nReview this server-rendered snippet and explain why standard HTML escaping is insufficient here. Then rewrite it safely.\nYour answer must mention context-sensitive output encoding.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "xss",
+      "javascript-context",
+      "server-rendering",
+      "output-encoding",
+      "context-sensitive-encoding"
+    ]
+  },
+  {
+    "id": 886,
+    "tier": "T4",
+    "category": "security",
+    "task": "DOM XSS via URL fragment\nIdentify the vulnerability and describe the full attack flow from crafted link to code execution.\nThen provide a secure alternative preserving visible text output.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "xss",
+      "dom-xss",
+      "url-fragment",
+      "client-side",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 887,
+    "tier": "T4",
+    "category": "security",
+    "task": "SQL injection — login bypass\nAnalyze this code and explain exactly how an attacker can bypass authentication. Then rewrite it securely.\nInclude one concrete malicious input example and a parameterized-query fix.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "sql-injection",
+      "authentication",
+      "login-bypass",
+      "parameterized-queries",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 888,
+    "tier": "T4",
+    "category": "security",
+    "task": "SQL injection — integer parameter misconception\nDecide whether this code is safe. If not, show how it can be exploited and provide a secure version.\nYour answer must address the common misconception that numeric fields are automatically safe.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "sql-injection",
+      "input-validation",
+      "numeric-input",
+      "parameterized-queries",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 889,
+    "tier": "T4",
+    "category": "security",
+    "task": "SQL injection in search with\nReview this Python code and explain the vulnerability and secure remediation.\nThen produce a parameterized version that preserves substring search behavior.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "sql-injection",
+      "python",
+      "search",
+      "parameterized-queries",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 890,
+    "tier": "T4",
+    "category": "security",
+    "task": "Second-order SQL injection\nExplain the vulnerability in this two-step workflow and how exploitation occurs over time.\nYour answer must explain why initial safe insertion does not prevent later injection.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "sql-injection",
+      "second-order-sql-injection",
+      "database",
+      "secure-coding",
+      "data-flow"
+    ]
+  },
+  {
+    "id": 891,
+    "tier": "T4",
+    "category": "security",
+    "task": "Order-by SQL injection\nAssess this code and explain whether prepared statements alone can fix it.\nSELECT id, email FROM users ORDER BY\nThen write a secure version that supports sorting by or only.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "sql-injection",
+      "order-by-injection",
+      "prepared-statements",
+      "allowlist",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 892,
+    "tier": "T4",
+    "category": "security",
+    "task": "NoSQL injection in MongoDB\nIdentify the vulnerability and show how attacker-controlled JSON changes query semantics. Then provide a secure fix.\nAssume the server accepts JSON bodies and does not validate types.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "nosql-injection",
+      "mongodb",
+      "json-input",
+      "query-semantics",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 893,
+    "tier": "T4",
+    "category": "security",
+    "task": "SSRF via URL fetcher\nExplain the vulnerability, likely impact, and secure remediation.\nYour answer must mention internal network targets and cloud metadata endpoints.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "ssrf",
+      "url-fetching",
+      "network-security",
+      "cloud-metadata",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 894,
+    "tier": "T4",
+    "category": "security",
+    "task": "SSRF with naive hostname allowlist\nReview this code and explain at least two bypass possibilities. Then propose a stronger defense.\nBe specific about parsing and DNS-related pitfalls.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "ssrf",
+      "allowlist-bypass",
+      "hostname-validation",
+      "dns",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 895,
+    "tier": "T4",
+    "category": "security",
+    "task": "Blind SSRF in image downloader\nAnalyze the risk in this background job even if response bodies are never returned to the attacker.\nExplain why this can still be exploitable and list two defensive controls.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "ssrf",
+      "blind-ssrf",
+      "background-jobs",
+      "defense-in-depth",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 896,
+    "tier": "T4",
+    "category": "security",
+    "task": "Open redirect vs SSRF distinction\nGiven this code, determine whether the issue is SSRF, open redirect, both, or neither. Justify your answer.\nThen write a safe version allowing redirects only to and.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "open-redirect",
+      "ssrf",
+      "classification",
+      "redirect-validation",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 897,
+    "tier": "T4",
+    "category": "security",
+    "task": "Secure template rendering\nRewrite this vulnerable Flask code to render user content safely without losing functionality.\nYour answer must use framework-supported escaping rather than ad hoc string replacement.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "xss",
+      "flask",
+      "template-rendering",
+      "escaping",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 898,
+    "tier": "T4",
+    "category": "security",
+    "task": "Prepared statements across dynamic table names\nExplain why the following code remains unsafe even if values are parameterized.\nThen show a secure pattern for permitting only seifbenayed and.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "sql-injection",
+      "dynamic-sql",
+      "table-name-injection",
+      "allowlist",
+      "prepared-statements"
+    ]
+  },
+  {
+    "id": 899,
+    "tier": "T4",
+    "category": "security",
+    "task": "React security misconception\nDetermine whether this component is vulnerable and explain why.\nThen provide two secure alternatives: one rendering plain text, one allowing limited sanitized HTML.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "xss",
+      "react",
+      "dangerouslysetinnerhtml",
+      "sanitization",
+      "secure-coding"
+    ]
+  },
+  {
+    "id": 900,
+    "tier": "T4",
+    "category": "security",
+    "task": "CSP limits\nA page contains this code:\nThe server sets .\nExplain whether CSP fully prevents exploitation here and why. Then provide a code-level fix.",
+    "tools_required": [
+      "bash",
+      "file_write",
+      "grep"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 4,
+    "tags": [
+      "xss",
+      "csp",
+      "content-security-policy",
+      "defense-in-depth",
+      "secure-coding"
+    ]
+  }
+]

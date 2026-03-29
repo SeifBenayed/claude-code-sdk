@@ -1,0 +1,704 @@
+{
+  "answers": {
+    "501": {
+      "id": 501,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "parseQueryString",
+      "answer": "```javascript\nfunction parseQueryString(input) {\n  if (!input || typeof input !== 'string') return {};\n  const str = input.startsWith('?') ? input.slice(1) : input;\n  if (!str) return {};\n  const result = {};\n  const pairs = str.split('&');\n  for (const pair of pairs) {\n    if (!pair) continue;\n    const eqIdx = pair.indexOf('=');\n    let key, value;\n    if (eqIdx === -1) {\n      key = pair;\n      value = '';\n    } else {\n      key = pair.slice(0, eqIdx);\n      value = pair.slice(eqIdx + 1);\n    }\n    let decodedKey, decodedValue;\n    try { decodedKey = decodeURIComponent(key.replace(/\\+/g, ' ')); } catch { decodedKey = key; }\n    try { decodedValue = decodeURIComponent(value.replace(/\\+/g, ' ')); } catch { decodedValue = value; }\n    if (Object.prototype.hasOwnProperty.call(result, decodedKey)) {\n      if (!Array.isArray(result[decodedKey])) result[decodedKey] = [result[decodedKey]];\n      result[decodedKey].push(decodedValue);\n    } else {\n      result[decodedKey] = decodedValue;\n    }\n  }\n  return result;\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\n// 1. Basic key=value with leading ?\nassert(deepEq(parseQueryString('?a=1&b=two'), { a: '1', b: 'two' }), 'basic');\n// 2. Missing ?\nassert(deepEq(parseQueryString('a=1&b=two'), { a: '1', b: 'two' }), 'no question mark');\n// 3. Repeated keys become array\nassert(deepEq(parseQueryString('?a=1&a=2'), { a: ['1', '2'] }), 'repeated keys');\n// 4. Empty value\nassert(deepEq(parseQueryString('?a='), { a: '' }), 'empty value');\n// 5. Percent-encoded characters\nassert(deepEq(parseQueryString('?name=John%20Doe'), { name: 'John Doe' }), 'percent-encoded');\n// 6. Blank input\nassert(deepEq(parseQueryString(''), {}), 'blank input');\n// 7. null input\nassert(deepEq(parseQueryString(null), {}), 'null input');\n// 8. Key without =\nassert(deepEq(parseQueryString('?flag'), { flag: '' }), 'key without =');\n// 9. Malformed escape sequence (e.g. %ZZ) - should not throw, return raw\nconst r = parseQueryString('?bad=%ZZ');\nassert(r.bad === '%ZZ', 'malformed escape');\n// 10. Only ?\nassert(deepEq(parseQueryString('?'), {}), 'only ?');\n\nconsole.log('All tests passed');\n```"
+    },
+    "502": {
+      "id": 502,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "chunkArray",
+      "answer": "```javascript\nfunction chunkArray(items, size) {\n  if (!Array.isArray(items)) throw new TypeError('items must be an array');\n  if (!Number.isInteger(size) || size <= 0) throw new RangeError('size must be a positive integer');\n  const result = [];\n  for (let i = 0; i < items.length; i += size) {\n    result.push(items.slice(i, i + size));\n  }\n  return result;\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\n// 1. Normal case\nassert(deepEq(chunkArray([1,2,3,4,5], 2), [[1,2],[3,4],[5]]), 'normal');\n// 2. size = 1\nassert(deepEq(chunkArray([1,2,3], 1), [[1],[2],[3]]), 'size=1');\n// 3. size > array length\nassert(deepEq(chunkArray([1,2], 10), [[1,2]]), 'size > length');\n// 4. empty array\nassert(deepEq(chunkArray([], 3), []), 'empty array');\n// 5. size = 0 throws\ntry { chunkArray([1,2,3], 0); assert(false, 'should throw'); } catch(e) { assert(e instanceof RangeError, 'size=0 throws'); }\n// 6. negative size throws\ntry { chunkArray([1,2,3], -1); assert(false, 'should throw'); } catch(e) { assert(e instanceof RangeError, 'negative size throws'); }\n// 7. non-integer size throws\ntry { chunkArray([1,2,3], 1.5); assert(false, 'should throw'); } catch(e) { assert(e instanceof RangeError, 'float size throws'); }\n// 8. array with null and undefined\nassert(deepEq(chunkArray([null, undefined, 1], 2), [[null, undefined],[1]]), 'null/undefined');\n// 9. exact division\nassert(deepEq(chunkArray([1,2,3,4], 2), [[1,2],[3,4]]), 'exact division');\n// 10. non-array throws\ntry { chunkArray('abc', 2); assert(false, 'should throw'); } catch(e) { assert(e instanceof TypeError, 'non-array throws'); }\n\nconsole.log('All tests passed');\n```"
+    },
+    "503": {
+      "id": 503,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "deepMerge",
+      "answer": "```javascript\nfunction isPlainObject(val) {\n  return val !== null && typeof val === 'object' && !Array.isArray(val) && Object.getPrototypeOf(val) === Object.prototype;\n}\n\nfunction deepMerge(a, b) {\n  if (!isPlainObject(a) || !isPlainObject(b)) throw new TypeError('Both arguments must be plain objects');\n  const result = {};\n  const keys = new Set([...Object.keys(a), ...Object.keys(b)]);\n  for (const key of keys) {\n    const av = a[key], bv = b[key];\n    if (key in a && key in b && isPlainObject(av) && isPlainObject(bv)) {\n      result[key] = deepMerge(av, bv);\n    } else if (key in b) {\n      result[key] = Array.isArray(bv) ? [...bv] : bv;\n    } else {\n      result[key] = Array.isArray(av) ? [...av] : av;\n    }\n  }\n  return result;\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\n// 1. Basic merge\nassert(deepEq(deepMerge({a:1},{b:2}), {a:1,b:2}), 'basic merge');\n// 2. Nested objects\nassert(deepEq(deepMerge({a:{x:1}},{a:{y:2}}), {a:{x:1,y:2}}), 'nested merge');\n// 3. b overwrites primitive\nassert(deepEq(deepMerge({a:1},{a:2}), {a:2}), 'overwrite primitive');\n// 4. Arrays overwrite (not merged)\nassert(deepEq(deepMerge({a:[1,2]},{a:[3]}), {a:[3]}), 'array overwrite');\n// 5. null value in b\nassert(deepEq(deepMerge({a:1},{a:null}), {a:null}), 'null overwrite');\n// 6. Missing key in b keeps a\nassert(deepEq(deepMerge({a:1,b:2},{a:3}), {a:3,b:2}), 'missing key in b');\n// 7. Conflicting types\nassert(deepEq(deepMerge({a:{x:1}},{a:5}), {a:5}), 'conflict type');\n// 8. Empty objects\nassert(deepEq(deepMerge({},{}), {}), 'both empty');\n// 9. Deep nesting\nassert(deepEq(deepMerge({a:{b:{c:1}}},{a:{b:{d:2}}}), {a:{b:{c:1,d:2}}}), 'deep nesting');\n// 10. No mutation of inputs\nconst x = {a:{b:1}}; const y = {a:{c:2}};\ndeepMerge(x, y);\nassert(deepEq(x, {a:{b:1}}), 'no mutation of a');\nassert(deepEq(y, {a:{c:2}}), 'no mutation of b');\n// 11. Only in a\nassert(deepEq(deepMerge({z:99},{}), {z:99}), 'only in a');\n\nconsole.log('All tests passed');\n```"
+    },
+    "504": {
+      "id": 504,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "debounce",
+      "answer": "```javascript\nfunction debounce(fn, delay) {\n  if (typeof fn !== 'function') throw new TypeError('fn must be a function');\n  if (typeof delay !== 'number' || delay < 0) throw new RangeError('delay must be a non-negative number');\n  let timer = null;\n  function debounced(...args) {\n    clearTimeout(timer);\n    timer = setTimeout(() => {\n      timer = null;\n      fn.apply(this, args);\n    }, delay);\n  }\n  debounced.cancel = () => { clearTimeout(timer); timer = null; };\n  return debounced;\n}\n\n// Tests using fake timers\nlet now = 0;\nconst originalSetTimeout = setTimeout;\nconst originalClearTimeout = clearTimeout;\nlet timers = [];\nglobal.setTimeout = (fn, delay) => { const id = timers.length; timers.push({fn, time: now + delay, cancelled: false}); return id; };\nglobal.clearTimeout = (id) => { if (timers[id]) timers[id].cancelled = true; };\nconst tick = (ms) => { now += ms; for (const t of timers) { if (!t.cancelled && t.time <= now) { t.cancelled = true; t.fn(); } } };\n\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\n\n// 1. Delayed execution\ntimers = []; now = 0;\nlet called = 0;\nconst d1 = debounce(() => called++, 100);\nd1(); tick(50); assert(called === 0, 'not called before delay');\ntick(60); assert(called === 1, 'called after delay');\n\n// 2. Multiple rapid calls - only last fires\ntimers = []; now = 0; called = 0;\nconst d2 = debounce(() => called++, 100);\nd2(); tick(50); d2(); tick(50); d2(); tick(110);\nassert(called === 1, 'only one call after rapid invocations');\n\n// 3. Argument forwarding\ntimers = []; now = 0;\nlet lastArg;\nconst d3 = debounce((x) => { lastArg = x; }, 50);\nd3(42); tick(60);\nassert(lastArg === 42, 'argument forwarded');\n\n// 4. this preservation\ntimers = []; now = 0;\nlet capturedThis;\nconst obj = { fn: debounce(function() { capturedThis = this; }, 50) };\nobj.fn(); tick(60);\nassert(capturedThis === obj, 'this preserved');\n\n// 5. delay = 0\ntimers = []; now = 0; called = 0;\nconst d5 = debounce(() => called++, 0);\nd5(); tick(0);\nassert(called === 1, 'delay=0 fires immediately on tick');\n\n// 6. Non-function throws\ntry { debounce('not a fn', 100); assert(false, 'should throw'); } catch(e) { assert(e instanceof TypeError, 'non-fn throws'); }\n\nconsole.log('All tests passed');\n```"
+    },
+    "505": {
+      "id": 505,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "normalizePhoneNumber",
+      "answer": "```javascript\n// Assumptions: Normalize to E.164 format: +[country][number]\n// defaultCountry: 'US' (country code 1) if not specified\n// Strip spaces, dashes, dots, parentheses\n// Extensions not supported in E.164; strip them with warning\nfunction normalizePhoneNumber(input, defaultCountry = 'US') {\n  if (!input || typeof input !== 'string') return null;\n  let s = input.trim();\n  if (!s) return null;\n  // Remove extensions like x123, ext.123\n  s = s.replace(/\\s*(x|ext\\.?)\\s*\\d+$/i, '');\n  // Remove formatting chars\n  s = s.replace(/[\\s().\\-]/g, '');\n  // Invalid chars check\n  if (/[^0-9+]/.test(s)) return null;\n  // Already has + prefix\n  if (s.startsWith('+')) {\n    if (/^\\+\\d{7,15}$/.test(s)) return s;\n    return null;\n  }\n  // Remove leading 00\n  if (s.startsWith('00')) s = '+' + s.slice(2);\n  else if (defaultCountry === 'US') {\n    if (s.startsWith('1') && s.length === 11) s = '+' + s;\n    else if (s.length === 10) s = '+1' + s;\n    else return null;\n  } else {\n    return null;\n  }\n  if (/^\\+\\d{7,15}$/.test(s)) return s;\n  return null;\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\n\n// 1. Standard US number with formatting\nassert(normalizePhoneNumber('(800) 555-1234') === '+18005551234', 'US with parens and dashes');\n// 2. Leading country code\nassert(normalizePhoneNumber('+44 20 7946 0958') === '+442079460958', 'UK with spaces');\n// 3. Already normalized\nassert(normalizePhoneNumber('+18005551234') === '+18005551234', 'already normalized');\n// 4. Dots as separators\nassert(normalizePhoneNumber('800.555.1234') === '+18005551234', 'dots');\n// 5. With extension\nassert(normalizePhoneNumber('(800) 555-1234 ext. 42') === '+18005551234', 'extension stripped');\n// 6. Empty string\nassert(normalizePhoneNumber('') === null, 'empty string');\n// 7. null input\nassert(normalizePhoneNumber(null) === null, 'null input');\n// 8. Invalid characters\nassert(normalizePhoneNumber('800-abc-1234') === null, 'invalid chars');\n// 9. 00 prefix international\nassert(normalizePhoneNumber('00442079460958') === '+442079460958', '00 prefix');\n// 10. 11-digit US with leading 1\nassert(normalizePhoneNumber('18005551234') === '+18005551234', '11-digit US');\n\nconsole.log('All tests passed');\n```"
+    },
+    "506": {
+      "id": 506,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "isValidIPv4",
+      "answer": "```javascript\nfunction isValidIPv4(input) {\n  if (typeof input !== 'string') return false;\n  const parts = input.split('.');\n  if (parts.length !== 4) return false;\n  for (const part of parts) {\n    if (part === '') return false;\n    if (!/^\\d+$/.test(part)) return false;\n    if (part.length > 1 && part[0] === '0') return false; // no leading zeros\n    const n = Number(part);\n    if (n < 0 || n > 255) return false;\n  }\n  return true;\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\n\nassert(isValidIPv4('192.168.1.1') === true, 'valid private IP');\nassert(isValidIPv4('0.0.0.0') === true, 'all zeros');\nassert(isValidIPv4('255.255.255.255') === true, 'all 255');\nassert(isValidIPv4('256.0.0.1') === false, 'octet > 255');\nassert(isValidIPv4('192.168.1') === false, 'only 3 parts');\nassert(isValidIPv4('192.168.1.1.1') === false, '5 parts');\nassert(isValidIPv4('192.168.01.1') === false, 'leading zero');\nassert(isValidIPv4('192.168.1.') === false, 'trailing dot');\nassert(isValidIPv4('') === false, 'empty string');\nassert(isValidIPv4('abc.def.ghi.jkl') === false, 'non-numeric');\nassert(isValidIPv4('192.168.1.-1') === false, 'negative octet');\nassert(isValidIPv4(null) === false, 'null');\nassert(isValidIPv4('192.168. 1.1') === false, 'space in octet');\nassert(isValidIPv4('1.2.3.4.') === false, 'trailing dot 2');\n\nconsole.log('All tests passed');\n```"
+    },
+    "507": {
+      "id": 507,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "topKFrequent",
+      "answer": "```javascript\nfunction topKFrequent(words, k) {\n  if (!Array.isArray(words)) throw new TypeError('words must be an array');\n  if (!Number.isInteger(k) || k < 0) throw new RangeError('k must be a non-negative integer');\n  const freq = new Map();\n  for (const w of words) {\n    if (typeof w !== 'string') continue;\n    freq.set(w, (freq.get(w) || 0) + 1);\n  }\n  const entries = [...freq.entries()];\n  entries.sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));\n  return entries.slice(0, k).map(e => e[0]);\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\n// 1. Basic\nassert(deepEq(topKFrequent(['a','b','a','c','b','a'], 2), ['a','b']), 'basic top 2');\n// 2. k=1\nassert(deepEq(topKFrequent(['x','y','x','x'], 1), ['x']), 'k=1');\n// 3. Tie broken alphabetically\nassert(deepEq(topKFrequent(['b','a'], 2), ['a','b']), 'tie alphabetical');\n// 4. k=0\nassert(deepEq(topKFrequent(['a','b'], 0), []), 'k=0');\n// 5. k > unique count returns all\nassert(topKFrequent(['a','b'], 10).length === 2, 'k > unique count');\n// 6. Empty array\nassert(deepEq(topKFrequent([], 3), []), 'empty array');\n// 7. All same\nassert(deepEq(topKFrequent(['a','a','a'], 1), ['a']), 'all same');\n// 8. Single element\nassert(deepEq(topKFrequent(['z'], 1), ['z']), 'single element');\n// 9. k=2 with clear winner\nassert(deepEq(topKFrequent(['cat','dog','cat','cat','dog'], 2), ['cat','dog']), 'clear winner');\n\nconsole.log('All tests passed');\n```"
+    },
+    "508": {
+      "id": 508,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "groupAnagrams",
+      "answer": "```javascript\nfunction groupAnagrams(words) {\n  if (!Array.isArray(words)) throw new TypeError('words must be an array');\n  const map = new Map();\n  for (const word of words) {\n    if (typeof word !== 'string') throw new TypeError('all elements must be strings');\n    const key = word.toLowerCase().split('').sort().join('');\n    if (!map.has(key)) map.set(key, []);\n    map.get(key).push(word);\n  }\n  return [...map.values()];\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\n\n// Helper: sort groups for comparison\nconst normalize = (groups) => groups.map(g => [...g].sort()).sort((a,b) => a[0].localeCompare(b[0]));\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\n// 1. Basic anagram grouping\nconst r1 = normalize(groupAnagrams(['eat','tea','tan','ate','nat','bat']));\nassert(deepEq(r1, [['ate','eat','tea'],['bat'],['nat','tan']]), 'basic grouping');\n// 2. Empty array\nassert(deepEq(groupAnagrams([]), []), 'empty array');\n// 3. Single word\nassert(deepEq(groupAnagrams(['abc']), [['abc']]), 'single word');\n// 4. All anagrams\nconst r4 = groupAnagrams(['abc','bca','cab']);\nassert(r4.length === 1 && r4[0].length === 3, 'all anagrams one group');\n// 5. No anagrams\nconst r5 = groupAnagrams(['abc','def','ghi']);\nassert(r5.length === 3, 'no anagrams three groups');\n// 6. Empty string\nconst r6 = groupAnagrams(['','']);\nassert(r6.length === 1 && r6[0].length === 2, 'empty strings grouped');\n// 7. Case insensitive grouping\nconst r7 = groupAnagrams(['Eat','tea']);\nassert(r7.length === 1, 'case insensitive');\n// 8. Single letter duplicates\nconst r8 = groupAnagrams(['a','a','b']);\nassert(r8.length === 2, 'single letter duplicates');\n\nconsole.log('All tests passed');\n```"
+    },
+    "509": {
+      "id": 509,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "flattenObject",
+      "answer": "```javascript\nfunction flattenObject(obj, prefix = '', result = {}) {\n  if (obj === null || typeof obj !== 'object' || Array.isArray(obj)) {\n    if (prefix) result[prefix] = obj;\n    return result;\n  }\n  const keys = Object.keys(obj);\n  if (keys.length === 0) {\n    if (prefix) result[prefix] = {};\n    return result;\n  }\n  for (const key of keys) {\n    const newKey = prefix ? `${prefix}.${key}` : key;\n    const val = obj[key];\n    if (val !== null && typeof val === 'object' && !Array.isArray(val)) {\n      flattenObject(val, newKey, result);\n    } else {\n      result[newKey] = val;\n    }\n  }\n  return result;\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\n// 1. Basic nested\nassert(deepEq(flattenObject({a:{b:1}}), {'a.b':1}), 'basic nested');\n// 2. Deep nesting\nassert(deepEq(flattenObject({a:{b:{c:2}}}), {'a.b.c':2}), 'deep nesting');\n// 3. Mixed flat and nested\nassert(deepEq(flattenObject({a:1,b:{c:2}}), {a:1,'b.c':2}), 'mixed');\n// 4. Already flat\nassert(deepEq(flattenObject({a:1,b:2}), {a:1,b:2}), 'already flat');\n// 5. Empty object\nassert(deepEq(flattenObject({}), {}), 'empty object');\n// 6. Array values preserved\nassert(deepEq(flattenObject({a:[1,2]}), {a:[1,2]}), 'array preserved');\n// 7. Null value\nassert(deepEq(flattenObject({a:null}), {a:null}), 'null value');\n// 8. Numbers and booleans\nassert(deepEq(flattenObject({a:{b:true,c:0}}), {'a.b':true,'a.c':0}), 'bool and 0');\n\nconsole.log('All tests passed');\n```"
+    },
+    "510": {
+      "id": 510,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "unflattenObject",
+      "answer": "```javascript\nfunction unflattenObject(obj) {\n  if (obj === null || typeof obj !== 'object') throw new TypeError('Input must be a plain object');\n  const result = {};\n  for (const [key, value] of Object.entries(obj)) {\n    const parts = key.split('.');\n    let current = result;\n    for (let i = 0; i < parts.length - 1; i++) {\n      const part = parts[i];\n      if (current[part] === undefined) current[part] = {};\n      else if (typeof current[part] !== 'object' || current[part] === null) {\n        throw new Error(`Conflict at key: ${parts.slice(0, i+1).join('.')}`);\n      }\n      current = current[part];\n    }\n    current[parts[parts.length - 1]] = value;\n  }\n  return result;\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\n// 1. Basic\nassert(deepEq(unflattenObject({'a.b':1}), {a:{b:1}}), 'basic');\n// 2. Deep\nassert(deepEq(unflattenObject({'a.b.c':2}), {a:{b:{c:2}}}), 'deep');\n// 3. Multiple keys\nassert(deepEq(unflattenObject({'a.b':1,'a.c':2}), {a:{b:1,c:2}}), 'multiple');\n// 4. Already flat\nassert(deepEq(unflattenObject({a:1,b:2}), {a:1,b:2}), 'flat');\n// 5. Empty object\nassert(deepEq(unflattenObject({}), {}), 'empty');\n// 6. Mixed depth\nassert(deepEq(unflattenObject({a:1,'b.c':2}), {a:1,b:{c:2}}), 'mixed depth');\n// 7. Null value\nassert(deepEq(unflattenObject({'a.b':null}), {a:{b:null}}), 'null value');\n// 8. Conflict throws\ntry { unflattenObject({'a':1,'a.b':2}); assert(false,'should throw'); } catch(e) { assert(true,'conflict throws'); }\n\nconsole.log('All tests passed');\n```"
+    },
+    "511": {
+      "id": 511,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "parseCsvLine",
+      "answer": "```javascript\nfunction parseCsvLine(line, delimiter = ',') {\n  if (typeof line !== 'string') throw new TypeError('line must be a string');\n  const fields = [];\n  let i = 0;\n  while (i <= line.length) {\n    if (i === line.length) { fields.push(''); break; }\n    if (line[i] === '\"') {\n      // quoted field\n      let field = '';\n      i++;\n      while (i < line.length) {\n        if (line[i] === '\"') {\n          if (line[i+1] === '\"') { field += '\"'; i += 2; }\n          else { i++; break; }\n        } else {\n          field += line[i++];\n        }\n      }\n      fields.push(field);\n      // expect delimiter or end\n      if (i < line.length && line[i] === delimiter) i++;\n      else if (i < line.length) throw new Error('Malformed CSV: unexpected char after quoted field');\n    } else {\n      let field = '';\n      while (i < line.length && line[i] !== delimiter) field += line[i++];\n      fields.push(field);\n      if (i < line.length) i++; // skip delimiter\n      else break;\n    }\n  }\n  // Handle empty line\n  if (line === '') return [''];\n  return fields;\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\n// 1. Basic\nassert(deepEq(parseCsvLine('a,b,c'), ['a','b','c']), 'basic');\n// 2. Quoted field\nassert(deepEq(parseCsvLine('\"hello world\",b'), ['hello world','b']), 'quoted field');\n// 3. Quoted field with comma inside\nassert(deepEq(parseCsvLine('\"a,b\",c'), ['a,b','c']), 'comma in quotes');\n// 4. Escaped quote\nassert(deepEq(parseCsvLine('\"say \\\"\\\"hi\\\"\\\"\",b'), ['say \"hi\"','b']), 'escaped quote');\n// 5. Empty fields\nassert(deepEq(parseCsvLine(',b,'), ['','b','']), 'empty fields');\n// 6. Empty string\nassert(deepEq(parseCsvLine(''), ['']), 'empty string');\n// 7. Single field\nassert(deepEq(parseCsvLine('only'), ['only']), 'single field');\n// 8. Newline inside quotes\nassert(deepEq(parseCsvLine('\"line\\none\",b'), ['line\\none','b']), 'newline in quotes');\n\nconsole.log('All tests passed');\n```"
+    },
+    "512": {
+      "id": 512,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "toTitleCase",
+      "answer": "```javascript\n// Title case: capitalize first letter of each word, lowercase rest\n// Words: split on whitespace boundaries\n// Small words (articles, conjunctions, prepositions) stay lowercase unless first/last word\nconst SMALL_WORDS = new Set(['a','an','the','and','but','or','for','nor','on','at','to','by','in','of','up','as','is']);\n\nfunction toTitleCase(input) {\n  if (typeof input !== 'string') return '';\n  if (!input.trim()) return input;\n  const words = input.split(/(\\s+)/);\n  const result = [];\n  let wordIndex = 0;\n  const wordCount = words.filter(w => !/^\\s+$/.test(w)).length;\n  let realWordIdx = 0;\n  for (const token of words) {\n    if (/^\\s+$/.test(token)) { result.push(token); continue; }\n    const lower = token.toLowerCase();\n    const isFirst = realWordIdx === 0;\n    const isLast = realWordIdx === wordCount - 1;\n    if (!isFirst && !isLast && SMALL_WORDS.has(lower)) {\n      result.push(lower);\n    } else {\n      result.push(lower.charAt(0).toUpperCase() + lower.slice(1));\n    }\n    realWordIdx++;\n  }\n  return result.join('');\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\n\nassert(toTitleCase('hello world') === 'Hello World', 'basic');\nassert(toTitleCase('the quick brown fox') === 'The Quick Brown Fox', 'the is first');\nassert(toTitleCase('war and peace') === 'War and Peace', 'small word in middle');\nassert(toTitleCase('') === '', 'empty string');\nassert(toTitleCase('  ') === '  ', 'only spaces');\nassert(toTitleCase('HELLO WORLD') === 'Hello World', 'all caps');\nassert(toTitleCase('it') === 'It', 'single small word');\nassert(toTitleCase('a man a plan a canal panama') === 'A Man a Plan a Canal Panama', 'multiple articles');\nassert(toTitleCase('one') === 'One', 'single word');\n\nconsole.log('All tests passed');\n```"
+    },
+    "513": {
+      "id": 513,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "rotateMatrix",
+      "answer": "```javascript\nfunction rotateMatrix(matrix) {\n  if (!Array.isArray(matrix)) throw new TypeError('matrix must be an array');\n  const n = matrix.length;\n  if (n === 0) return [];\n  for (const row of matrix) {\n    if (!Array.isArray(row) || row.length !== n) throw new Error('Matrix must be square (N x N)');\n  }\n  // Transpose then reverse each row\n  const result = Array.from({length: n}, () => new Array(n));\n  for (let i = 0; i < n; i++) {\n    for (let j = 0; j < n; j++) {\n      result[j][n - 1 - i] = matrix[i][j];\n    }\n  }\n  return result;\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\n// 1. 2x2\nassert(deepEq(rotateMatrix([[1,2],[3,4]]), [[3,1],[4,2]]), '2x2');\n// 2. 3x3\nassert(deepEq(rotateMatrix([[1,2,3],[4,5,6],[7,8,9]]), [[7,4,1],[8,5,2],[9,6,3]]), '3x3');\n// 3. 1x1\nassert(deepEq(rotateMatrix([[5]]), [[5]]), '1x1');\n// 4. Empty\nassert(deepEq(rotateMatrix([]), []), 'empty');\n// 5. 4x4\nconst m4 = [[1,2,3,4],[5,6,7,8],[9,10,11,12],[13,14,15,16]];\nconst r4 = rotateMatrix(m4);\nassert(r4[0][0] === 13 && r4[0][3] === 1 && r4[3][3] === 4, '4x4 corners');\n// 6. Non-mutating\nconst orig = [[1,2],[3,4]];\nrotateMatrix(orig);\nassert(deepEq(orig, [[1,2],[3,4]]), 'non-mutating');\n// 7. Non-square throws\ntry { rotateMatrix([[1,2],[3,4],[5,6]]); assert(false,'should throw'); } catch(e) { assert(true,'non-square throws'); }\n\nconsole.log('All tests passed');\n```"
+    },
+    "514": {
+      "id": 514,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "binarySearchRange",
+      "answer": "```javascript\nfunction binarySearchRange(nums, target) {\n  if (!Array.isArray(nums)) throw new TypeError('nums must be an array');\n  function findFirst() {\n    let lo = 0, hi = nums.length - 1, idx = -1;\n    while (lo <= hi) {\n      const mid = (lo + hi) >> 1;\n      if (nums[mid] === target) { idx = mid; hi = mid - 1; }\n      else if (nums[mid] < target) lo = mid + 1;\n      else hi = mid - 1;\n    }\n    return idx;\n  }\n  function findLast() {\n    let lo = 0, hi = nums.length - 1, idx = -1;\n    while (lo <= hi) {\n      const mid = (lo + hi) >> 1;\n      if (nums[mid] === target) { idx = mid; lo = mid + 1; }\n      else if (nums[mid] < target) lo = mid + 1;\n      else hi = mid - 1;\n    }\n    return idx;\n  }\n  return [findFirst(), findLast()];\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\nassert(deepEq(binarySearchRange([1,2,2,2,3], 2), [1,3]), 'multiple occurrences');\nassert(deepEq(binarySearchRange([1,2,3,4,5], 3), [2,2]), 'single occurrence');\nassert(deepEq(binarySearchRange([1,2,3], 5), [-1,-1]), 'not found');\nassert(deepEq(binarySearchRange([], 1), [-1,-1]), 'empty array');\nassert(deepEq(binarySearchRange([1], 1), [0,0]), 'single element found');\nassert(deepEq(binarySearchRange([1], 2), [-1,-1]), 'single element not found');\nassert(deepEq(binarySearchRange([2,2,2], 2), [0,2]), 'all same');\nassert(deepEq(binarySearchRange([1,2,3], 1), [0,0]), 'first element');\nassert(deepEq(binarySearchRange([1,2,3], 3), [2,2]), 'last element');\n\nconsole.log('All tests passed');\n```"
+    },
+    "515": {
+      "id": 515,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "retryAsync",
+      "answer": "```javascript\nasync function retryAsync(task, maxAttempts, delayMs = 0) {\n  if (typeof task !== 'function') throw new TypeError('task must be a function');\n  if (!Number.isInteger(maxAttempts) || maxAttempts < 1) throw new RangeError('maxAttempts must be >= 1');\n  let lastError;\n  for (let attempt = 1; attempt <= maxAttempts; attempt++) {\n    try {\n      return await task(attempt);\n    } catch (err) {\n      lastError = err;\n      if (attempt < maxAttempts && delayMs > 0) {\n        await new Promise(resolve => setTimeout(resolve, delayMs));\n      }\n    }\n  }\n  throw lastError;\n}\n\n// Tests\nasync function runTests() {\n  const assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\n\n  // 1. Succeeds on first attempt\n  let calls = 0;\n  const r1 = await retryAsync(() => { calls++; return Promise.resolve(42); }, 3);\n  assert(r1 === 42 && calls === 1, 'succeeds first attempt');\n\n  // 2. Retries and succeeds\n  calls = 0;\n  const r2 = await retryAsync(() => {\n    calls++;\n    if (calls < 3) return Promise.reject(new Error('not yet'));\n    return Promise.resolve('ok');\n  }, 5);\n  assert(r2 === 'ok' && calls === 3, 'retries until success');\n\n  // 3. Exhausts all attempts and throws\n  calls = 0;\n  try {\n    await retryAsync(() => { calls++; return Promise.reject(new Error('always fails')); }, 3);\n    assert(false, 'should have thrown');\n  } catch(e) {\n    assert(calls === 3 && e.message === 'always fails', 'throws after max attempts');\n  }\n\n  // 4. maxAttempts = 1 no retry\n  calls = 0;\n  try {\n    await retryAsync(() => { calls++; throw new Error('fail'); }, 1);\n  } catch(e) {\n    assert(calls === 1, 'maxAttempts=1 no retry');\n  }\n\n  // 5. attempt number passed to task\n  const attempts = [];\n  try {\n    await retryAsync((n) => { attempts.push(n); return Promise.reject(new Error('x')); }, 3, 0);\n  } catch {}\n  assert(JSON.stringify(attempts) === '[1,2,3]', 'attempt numbers passed');\n\n  // 6. Non-function throws\n  try { await retryAsync('not fn', 3); assert(false,'should throw'); } catch(e) { assert(e instanceof TypeError, 'non-fn throws'); }\n\n  console.log('All tests passed');\n}\n\nrunTests().catch(console.error);\n```"
+    },
+    "516": {
+      "id": 516,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "memoize",
+      "answer": "```javascript\nfunction memoize(fn) {\n  if (typeof fn !== 'function') throw new TypeError('fn must be a function');\n  const cache = new Map();\n  function memoized(...args) {\n    const key = JSON.stringify(args);\n    if (cache.has(key)) return cache.get(key);\n    const result = fn.apply(this, args);\n    cache.set(key, result);\n    return result;\n  }\n  memoized.cache = cache;\n  memoized.clear = () => cache.clear();\n  return memoized;\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\n\n// 1. Basic caching\nlet callCount = 0;\nconst add = memoize((a, b) => { callCount++; return a + b; });\nassert(add(1, 2) === 3, 'first call');\nassert(add(1, 2) === 3, 'cached call');\nassert(callCount === 1, 'fn called only once');\n\n// 2. Different args compute separately\nassert(add(2, 3) === 5, 'different args');\nassert(callCount === 2, 'different args recomputed');\n\n// 3. Works with zero args\ncallCount = 0;\nconst noArgs = memoize(() => { callCount++; return 42; });\nnoArgs(); noArgs();\nassert(callCount === 1, 'zero args cached');\n\n// 4. Works with string args\nconst greet = memoize((name) => 'Hello ' + name);\nassert(greet('Alice') === 'Hello Alice', 'string args');\n\n// 5. Caches null return value\nlet nc = 0;\nconst returnsNull = memoize(() => { nc++; return null; });\nreturnsNull(); returnsNull();\nassert(nc === 1, 'null return cached');\n\n// 6. Clear works\nadd.clear();\ncallCount = 0;\nadd(1, 2);\nassert(callCount === 1, 'recomputed after clear');\n\n// 7. Non-function throws\ntry { memoize(42); assert(false,'should throw'); } catch(e) { assert(e instanceof TypeError, 'non-fn throws'); }\n\n// 8. Object args\nconst objFn = memoize((o) => o.x + 1);\nassert(objFn({x:5}) === 6, 'object arg');\nassert(objFn({x:5}) === 6, 'object arg cached');\n\nconsole.log('All tests passed');\n```"
+    },
+    "517": {
+      "id": 517,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "diffArrays",
+      "answer": "```javascript\nfunction diffArrays(a, b) {\n  if (!Array.isArray(a) || !Array.isArray(b)) throw new TypeError('Both arguments must be arrays');\n  const setA = new Set(a);\n  const setB = new Set(b);\n  return {\n    added: b.filter(x => !setA.has(x)),\n    removed: a.filter(x => !setB.has(x)),\n    unchanged: a.filter(x => setB.has(x))\n  };\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\n// 1. Basic diff\nconst r1 = diffArrays([1,2,3], [2,3,4]);\nassert(deepEq(r1.added, [4]) && deepEq(r1.removed, [1]) && deepEq(r1.unchanged, [2,3]), 'basic diff');\n\n// 2. No changes\nconst r2 = diffArrays([1,2], [1,2]);\nassert(deepEq(r2.added, []) && deepEq(r2.removed, []) && deepEq(r2.unchanged, [1,2]), 'no changes');\n\n// 3. All added\nconst r3 = diffArrays([], [1,2]);\nassert(deepEq(r3.added, [1,2]) && deepEq(r3.removed, []), 'all added');\n\n// 4. All removed\nconst r4 = diffArrays([1,2], []);\nassert(deepEq(r4.removed, [1,2]) && deepEq(r4.added, []), 'all removed');\n\n// 5. Both empty\nconst r5 = diffArrays([], []);\nassert(deepEq(r5, {added:[],removed:[],unchanged:[]}), 'both empty');\n\n// 6. String arrays\nconst r6 = diffArrays(['a','b'],['b','c']);\nassert(deepEq(r6.added,['c']) && deepEq(r6.removed,['a']), 'strings');\n\n// 7. Duplicates handled (set-based)\nconst r7 = diffArrays([1,1,2],[2,3]);\nassert(r7.added.includes(3) && r7.removed.includes(1), 'duplicates');\n\nconsole.log('All tests passed');\n```"
+    },
+    "518": {
+      "id": 518,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "safeJsonParse",
+      "answer": "```javascript\nfunction safeJsonParse(input, fallback = null) {\n  if (typeof input !== 'string') return fallback;\n  try {\n    return JSON.parse(input);\n  } catch {\n    return fallback;\n  }\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\n// 1. Valid object\nassert(deepEq(safeJsonParse('{\"a\":1}'), {a:1}), 'valid object');\n// 2. Valid array\nassert(deepEq(safeJsonParse('[1,2,3]'), [1,2,3]), 'valid array');\n// 3. Valid string JSON\nassert(safeJsonParse('\"hello\"') === 'hello', 'valid string json');\n// 4. Valid number\nassert(safeJsonParse('42') === 42, 'valid number');\n// 5. Invalid JSON returns fallback\nassert(safeJsonParse('{bad}') === null, 'invalid returns null fallback');\n// 6. Custom fallback\nassert(safeJsonParse('{bad}', 'default') === 'default', 'custom fallback');\n// 7. Non-string input\nassert(safeJsonParse(null, 'fb') === 'fb', 'null input');\nassert(safeJsonParse(42, 'fb') === 'fb', 'number input');\n// 8. Empty string\nassert(safeJsonParse('', 'fb') === 'fb', 'empty string');\n// 9. null JSON value\nassert(safeJsonParse('null') === null, 'valid null json');\n// 10. Boolean\nassert(safeJsonParse('true') === true, 'valid boolean');\n\nconsole.log('All tests passed');\n```"
+    },
+    "519": {
+      "id": 519,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "formatDuration",
+      "answer": "```javascript\nfunction formatDuration(seconds) {\n  if (typeof seconds !== 'number' || isNaN(seconds)) throw new TypeError('seconds must be a number');\n  if (seconds < 0) throw new RangeError('seconds must be non-negative');\n  const total = Math.floor(seconds);\n  if (total === 0) return '0s';\n  const units = [\n    [86400 * 365, 'y'],\n    [86400 * 30, 'mo'],\n    [86400, 'd'],\n    [3600, 'h'],\n    [60, 'm'],\n    [1, 's']\n  ];\n  const parts = [];\n  let remaining = total;\n  for (const [unit, label] of units) {\n    if (remaining >= unit) {\n      parts.push(`${Math.floor(remaining / unit)}${label}`);\n      remaining %= unit;\n    }\n  }\n  return parts.join(' ');\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\n\nassert(formatDuration(0) === '0s', 'zero');\nassert(formatDuration(1) === '1s', '1 second');\nassert(formatDuration(60) === '1m', '1 minute');\nassert(formatDuration(61) === '1m 1s', '1 min 1 sec');\nassert(formatDuration(3600) === '1h', '1 hour');\nassert(formatDuration(3661) === '1h 1m 1s', '1h 1m 1s');\nassert(formatDuration(86400) === '1d', '1 day');\nassert(formatDuration(90061) === '1d 1h 1m 1s', '1d 1h 1m 1s');\nassert(formatDuration(59) === '59s', '59 seconds');\ntry { formatDuration(-1); assert(false,'should throw'); } catch(e) { assert(e instanceof RangeError,'negative throws'); }\ntry { formatDuration('x'); assert(false,'should throw'); } catch(e) { assert(e instanceof TypeError,'non-number throws'); }\n\nconsole.log('All tests passed');\n```"
+    },
+    "520": {
+      "id": 520,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "slugify",
+      "answer": "```javascript\nfunction slugify(input) {\n  if (typeof input !== 'string') return '';\n  return input\n    .toLowerCase()\n    .normalize('NFD')\n    .replace(/[\\u0300-\\u036f]/g, '')  // remove diacritics\n    .replace(/[^a-z0-9\\s-]/g, '')     // remove non-alphanumeric\n    .trim()\n    .replace(/[\\s-]+/g, '-')          // spaces to hyphens, collapse\n    .replace(/^-|-$/g, '');           // strip leading/trailing hyphens\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\n\nassert(slugify('Hello World') === 'hello-world', 'basic');\nassert(slugify('  leading and trailing  ') === 'leading-and-trailing', 'trim');\nassert(slugify('Héllo Wörld') === 'hello-world', 'diacritics');\nassert(slugify('foo   bar') === 'foo-bar', 'multiple spaces');\nassert(slugify('foo---bar') === 'foo-bar', 'multiple hyphens');\nassert(slugify('!@#hello$%^') === 'hello', 'special chars');\nassert(slugify('') === '', 'empty string');\nassert(slugify(null) === '', 'null input');\nassert(slugify('123 test') === '123-test', 'leading numbers');\nassert(slugify('  ---  ') === '', 'only hyphens/spaces');\n\nconsole.log('All tests passed');\n```"
+    },
+    "521": {
+      "id": 521,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "paginate",
+      "answer": "```javascript\nfunction paginate(items, page, pageSize) {\n  if (!Array.isArray(items)) throw new TypeError('items must be an array');\n  if (!Number.isInteger(page) || page < 1) throw new RangeError('page must be a positive integer');\n  if (!Number.isInteger(pageSize) || pageSize < 1) throw new RangeError('pageSize must be a positive integer');\n  const totalItems = items.length;\n  const totalPages = Math.ceil(totalItems / pageSize) || 1;\n  const start = (page - 1) * pageSize;\n  const end = Math.min(start + pageSize, totalItems);\n  return {\n    items: items.slice(start, end),\n    page,\n    pageSize,\n    totalItems,\n    totalPages,\n    hasNext: page < totalPages,\n    hasPrev: page > 1\n  };\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\n// 1. Normal page 1\nconst r1 = paginate([1,2,3,4,5], 1, 2);\nassert(deepEq(r1.items, [1,2]) && r1.totalPages === 3 && r1.hasNext === true && r1.hasPrev === false, 'page 1');\n// 2. Last page\nconst r2 = paginate([1,2,3,4,5], 3, 2);\nassert(deepEq(r2.items, [5]) && r2.hasNext === false && r2.hasPrev === true, 'last page');\n// 3. Empty array\nconst r3 = paginate([], 1, 10);\nassert(deepEq(r3.items, []) && r3.totalPages === 1, 'empty array');\n// 4. Page > totalPages\nconst r4 = paginate([1,2,3], 5, 2);\nassert(deepEq(r4.items, []), 'page beyond range');\n// 5. pageSize = 1\nconst r5 = paginate([1,2,3], 2, 1);\nassert(deepEq(r5.items, [2]), 'pageSize=1');\n// 6. Invalid page throws\ntry { paginate([1,2,3], 0, 2); assert(false,'should throw'); } catch(e) { assert(e instanceof RangeError,'page=0 throws'); }\n// 7. Invalid pageSize throws\ntry { paginate([1,2,3], 1, 0); assert(false,'should throw'); } catch(e) { assert(e instanceof RangeError,'pageSize=0 throws'); }\n\nconsole.log('All tests passed');\n```"
+    },
+    "522": {
+      "id": 522,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "compareVersions",
+      "answer": "```javascript\nfunction compareVersions(a, b) {\n  if (typeof a !== 'string' || typeof b !== 'string') throw new TypeError('Versions must be strings');\n  const parsePart = s => s.split('.').map(p => {\n    const n = parseInt(p, 10);\n    if (isNaN(n) || n < 0) throw new Error(`Invalid version part: ${p}`);\n    return n;\n  });\n  const partsA = parsePart(a);\n  const partsB = parsePart(b);\n  const len = Math.max(partsA.length, partsB.length);\n  for (let i = 0; i < len; i++) {\n    const pa = partsA[i] ?? 0;\n    const pb = partsB[i] ?? 0;\n    if (pa < pb) return -1;\n    if (pa > pb) return 1;\n  }\n  return 0;\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\n\nassert(compareVersions('1.0.0', '1.0.0') === 0, 'equal');\nassert(compareVersions('1.0.0', '2.0.0') === -1, 'less major');\nassert(compareVersions('2.0.0', '1.0.0') === 1, 'greater major');\nassert(compareVersions('1.10.0', '1.9.0') === 1, 'minor 10 > 9');\nassert(compareVersions('1.0.1', '1.0.0') === 1, 'patch');\nassert(compareVersions('1.0', '1.0.0') === 0, 'missing part treated as 0');\nassert(compareVersions('0.0.1', '0.0.2') === -1, 'small patch');\nassert(compareVersions('10.0.0', '9.9.9') === 1, 'major 10 > 9');\ntry { compareVersions('1.a.0', '1.0.0'); assert(false,'should throw'); } catch(e) { assert(true,'invalid throws'); }\n\nconsole.log('All tests passed');\n```"
+    },
+    "523": {
+      "id": 523,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "humanFileSize",
+      "answer": "```javascript\nfunction humanFileSize(bytes) {\n  if (typeof bytes !== 'number' || isNaN(bytes)) throw new TypeError('bytes must be a number');\n  if (bytes < 0) throw new RangeError('bytes must be non-negative');\n  const units = ['B','KB','MB','GB','TB','PB'];\n  if (bytes === 0) return '0 B';\n  const i = Math.min(Math.floor(Math.log2(bytes) / 10), units.length - 1);\n  const val = bytes / Math.pow(1024, i);\n  const formatted = i === 0 ? val.toString() : val.toFixed(2).replace(/\\.?0+$/, '');\n  return `${formatted} ${units[i]}`;\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\n\nassert(humanFileSize(0) === '0 B', 'zero');\nassert(humanFileSize(1) === '1 B', '1 byte');\nassert(humanFileSize(1023) === '1023 B', '1023 bytes');\nassert(humanFileSize(1024) === '1 KB', '1 KB');\nassert(humanFileSize(1536) === '1.5 KB', '1.5 KB');\nassert(humanFileSize(1024 * 1024) === '1 MB', '1 MB');\nassert(humanFileSize(1024 * 1024 * 1.5) === '1.5 MB', '1.5 MB');\nassert(humanFileSize(1024 ** 3) === '1 GB', '1 GB');\nassert(humanFileSize(1024 ** 4) === '1 TB', '1 TB');\ntry { humanFileSize(-1); assert(false,'should throw'); } catch(e) { assert(e instanceof RangeError,'negative throws'); }\ntry { humanFileSize('x'); assert(false,'should throw'); } catch(e) { assert(e instanceof TypeError,'string throws'); }\n\nconsole.log('All tests passed');\n```"
+    },
+    "524": {
+      "id": 524,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "intersectIntervals",
+      "answer": "```javascript\nfunction intersectIntervals(intervals) {\n  if (!Array.isArray(intervals)) throw new TypeError('intervals must be an array');\n  if (intervals.length === 0) return null;\n  let [lo, hi] = intervals[0];\n  for (let i = 1; i < intervals.length; i++) {\n    const [a, b] = intervals[i];\n    lo = Math.max(lo, a);\n    hi = Math.min(hi, b);\n    if (lo > hi) return null;\n  }\n  return [lo, hi];\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\nassert(deepEq(intersectIntervals([[1,5],[2,4],[3,6]]), [3,4]), 'basic overlap');\nassert(deepEq(intersectIntervals([[1,3],[2,4]]), [2,3]), 'two intervals');\nassert(intersectIntervals([[1,2],[3,4]]) === null, 'no overlap');\nassert(deepEq(intersectIntervals([[1,10]]), [1,10]), 'single interval');\nassert(intersectIntervals([]) === null, 'empty');\nassert(deepEq(intersectIntervals([[0,5],[0,5]]), [0,5]), 'identical intervals');\nassert(deepEq(intersectIntervals([[1,5],[2,5],[3,5]]), [3,5]), 'shared endpoint');\nassert(intersectIntervals([[1,2],[2,3],[3,4]]) === null, 'touch points only');\n\nconsole.log('All tests passed');\n```"
+    },
+    "525": {
+      "id": 525,
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "mergeIntervals",
+      "answer": "```javascript\nfunction mergeIntervals(intervals) {\n  if (!Array.isArray(intervals)) throw new TypeError('intervals must be an array');\n  if (intervals.length === 0) return [];\n  const sorted = [...intervals].sort((a, b) => a[0] - b[0]);\n  const result = [sorted[0].slice()];\n  for (let i = 1; i < sorted.length; i++) {\n    const last = result[result.length - 1];\n    if (sorted[i][0] <= last[1]) {\n      last[1] = Math.max(last[1], sorted[i][1]);\n    } else {\n      result.push(sorted[i].slice());\n    }\n  }\n  return result;\n}\n\n// Tests\nconst assert = (cond, msg) => { if (!cond) throw new Error('FAIL: ' + msg); };\nconst deepEq = (a, b) => JSON.stringify(a) === JSON.stringify(b);\n\nassert(deepEq(mergeIntervals([[1,3],[2,6],[8,10],[15,18]]), [[1,6],[8,10],[15,18]]), 'basic merge');\nassert(deepEq(mergeIntervals([[1,4],[4,5]]), [[1,5]]), 'touching intervals');\nassert(deepEq(mergeIntervals([[1,4],[2,3]]), [[1,4]]), 'contained interval');\nassert(deepEq(mergeIntervals([]), []), 'empty');\nassert(deepEq(mergeIntervals([[1,2]]), [[1,2]]), 'single interval');\nassert(deepEq(mergeIntervals([[3,4],[1,2]]), [[1,2],[3,4]]), 'unsorted input');\nassert(deepEq(mergeIntervals([[1,4],[1,4]]), [[1,4]]), 'duplicate');\nassert(deepEq(mergeIntervals([[1,10],[2,3],[4,5]]), [[1,10]]), 'all contained');\n\nconsole.log('All tests passed');\n```"
+    },
+    "526": {
+      "id": 526,
+      "answer": "```javascript\nfunction wordWrap(text, maxWidth) {\n  if (!text) return [];\n  if (maxWidth <= 0) return [];\n  const words = text.split(' ');\n  const lines = [];\n  let current = '';\n  for (const word of words) {\n    if (!word) continue;\n    if (!current) {\n      current = word;\n    } else if (current.length + 1 + word.length <= maxWidth) {\n      current += ' ' + word;\n    } else {\n      lines.push(current);\n      current = word;\n    }\n  }\n  if (current) lines.push(current);\n  return lines;\n}\n\nconst assert = require('assert');\nassert.deepStrictEqual(wordWrap('hello world', 11), ['hello world']);\nassert.deepStrictEqual(wordWrap('hello world', 5), ['hello','world']);\nassert.deepStrictEqual(wordWrap('', 10), []); // empty\nassert.deepStrictEqual(wordWrap('a b c d', 3), ['a b','c d']); // tight fit\nassert.deepStrictEqual(wordWrap('hello', 3), ['hello']); // word longer than width\nassert.deepStrictEqual(wordWrap('one two three', 7), ['one two','three']);\nassert.deepStrictEqual(wordWrap('hello world', 0), []); // zero width\nassert.deepStrictEqual(wordWrap('a', 1), ['a']); // single char\nconsole.log('All wordWrap tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `wordWrap(text, maxWidth)` that wraps text into lines no longer than `maxWidth`. Then write tests for at least 8 cases."
+    },
+    "527": {
+      "id": 527,
+      "answer": "```javascript\nfunction escapeHtml(input) {\n  if (typeof input !== 'string') return '';\n  return input\n    .replace(/&/g, '&amp;')\n    .replace(/</g, '&lt;')\n    .replace(/>/g, '&gt;')\n    .replace(/\"/g, '&quot;')\n    .replace(/'/g, '&#39;');\n}\n\nconst assert = require('assert');\nassert.strictEqual(escapeHtml('&'), '&amp;');\nassert.strictEqual(escapeHtml('<'), '&lt;');\nassert.strictEqual(escapeHtml('>'), '&gt;');\nassert.strictEqual(escapeHtml('\"'), '&quot;');\nassert.strictEqual(escapeHtml(\"'\"), '&#39;');\nassert.strictEqual(escapeHtml('hello'), 'hello'); // no escape needed\nassert.strictEqual(escapeHtml(''), ''); // empty\nassert.strictEqual(escapeHtml(null), ''); // null\nassert.strictEqual(escapeHtml('<div class=\"x\">hello & world</div>'), '&lt;div class=&quot;x&quot;&gt;hello &amp; world&lt;/div&gt;');\nconsole.log('All escapeHtml tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `escapeHtml(input)` that escapes HTML-sensitive characters. Then write tests for at least 8 cases."
+    },
+    "528": {
+      "id": 528,
+      "answer": "```javascript\nfunction unescapeHtml(input) {\n  if (typeof input !== 'string') return '';\n  return input\n    .replace(/&amp;/g, '&')\n    .replace(/&lt;/g, '<')\n    .replace(/&gt;/g, '>')\n    .replace(/&quot;/g, '\"')\n    .replace(/&#39;/g, \"'\")\n    .replace(/&apos;/g, \"'\");\n}\n\nconst assert = require('assert');\nassert.strictEqual(unescapeHtml('&amp;'), '&');\nassert.strictEqual(unescapeHtml('&lt;'), '<');\nassert.strictEqual(unescapeHtml('&gt;'), '>');\nassert.strictEqual(unescapeHtml('&quot;'), '\"');\nassert.strictEqual(unescapeHtml('&#39;'), \"'\");\nassert.strictEqual(unescapeHtml('&apos;'), \"'\");\nassert.strictEqual(unescapeHtml('hello'), 'hello'); // no entities\nassert.strictEqual(unescapeHtml(''), ''); // empty\nassert.strictEqual(unescapeHtml(null), ''); // null\nassert.strictEqual(unescapeHtml('&lt;b&gt;bold&lt;/b&gt;'), '<b>bold</b>'); // mixed\nconsole.log('All unescapeHtml tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `unescapeHtml(input)` that decodes common HTML entities back into characters. Then write tests for at least 8 cases."
+    },
+    "529": {
+      "id": 529,
+      "answer": "```javascript\nfunction buildTree(items) {\n  const map = {};\n  const roots = [];\n  for (const item of items) {\n    map[item.id] = { ...item, children: [] };\n  }\n  for (const item of items) {\n    if (item.parentId === null || item.parentId === undefined) {\n      roots.push(map[item.id]);\n    } else if (map[item.parentId]) {\n      map[item.parentId].children.push(map[item.id]);\n    }\n    // orphan nodes (parentId points to non-existent): skip\n  }\n  return roots;\n}\n\nconst assert = require('assert');\n// Basic tree\nconst t1 = buildTree([{id:1,parentId:null},{id:2,parentId:1},{id:3,parentId:1}]);\nassert.strictEqual(t1.length, 1); assert.strictEqual(t1[0].children.length, 2);\n// Empty\nassert.deepStrictEqual(buildTree([]), []);\n// Multiple roots\nconst t3 = buildTree([{id:1,parentId:null},{id:2,parentId:null}]);\nassert.strictEqual(t3.length, 2);\n// Deep nesting\nconst t4 = buildTree([{id:1,parentId:null},{id:2,parentId:1},{id:3,parentId:2}]);\nassert.strictEqual(t4[0].children[0].children[0].id, 3);\n// Orphan node (parentId doesn't exist)\nconst t5 = buildTree([{id:1,parentId:null},{id:2,parentId:99}]);\nassert.strictEqual(t5.length, 1); // orphan excluded from tree\nconsole.log('All buildTree tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `buildTree(items)` that converts a flat list of `{ id, parentId }` nodes into a tree. Then write tests for at least 10 cases."
+    },
+    "530": {
+      "id": 530,
+      "answer": "```javascript\nfunction lruCache(capacity) {\n  const map = new Map();\n  return {\n    get(key) {\n      if (!map.has(key)) return -1;\n      const val = map.get(key);\n      map.delete(key); map.set(key, val); // move to end\n      return val;\n    },\n    put(key, value) {\n      if (map.has(key)) map.delete(key);\n      else if (map.size >= capacity) map.delete(map.keys().next().value); // evict LRU\n      map.set(key, value);\n    }\n  };\n}\n\nconst assert = require('assert');\nconst c = lruCache(2);\nc.put(1, 1); c.put(2, 2);\nassert.strictEqual(c.get(1), 1); // cache hit\nc.put(3, 3); // evicts 2\nassert.strictEqual(c.get(2), -1); // evicted\nassert.strictEqual(c.get(3), 3);\nc.put(4, 4); // evicts 1 (LRU was 1 after get(1), then 3 was used)\nassert.strictEqual(c.get(1), -1); // evicted\nassert.strictEqual(c.get(3), 3);\nassert.strictEqual(c.get(4), 4);\n// Capacity 1\nconst c2 = lruCache(1);\nc2.put(1, 10); assert.strictEqual(c2.get(1), 10);\nc2.put(2, 20); assert.strictEqual(c2.get(1), -1); assert.strictEqual(c2.get(2), 20);\nconsole.log('All lruCache tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `lruCache(capacity)` that returns an object with `get` and `put` methods implementing an LRU cache. Then write tests for at least 9 cases."
+    },
+    "531": {
+      "id": 531,
+      "answer": "```javascript\nfunction parseDateISO(input) {\n  if (typeof input !== 'string') return null;\n  const m = input.match(/^(\\d{4})-(\\d{2})-(\\d{2})$/);\n  if (!m) return null;\n  const year = parseInt(m[1]), month = parseInt(m[2]), day = parseInt(m[3]);\n  if (month < 1 || month > 12) return null;\n  const maxDay = new Date(year, month, 0).getDate();\n  if (day < 1 || day > maxDay) return null;\n  return { year, month, day };\n}\n\nconst assert = require('assert');\nassert.deepStrictEqual(parseDateISO('2024-01-15'), {year:2024,month:1,day:15});\nassert.strictEqual(parseDateISO('2024-13-01'), null); // invalid month\nassert.strictEqual(parseDateISO('2024-02-30'), null); // invalid day\nassert.strictEqual(parseDateISO('2024-02-29'), null); // 2024 is leap year - wait 29 is valid\nassert.deepStrictEqual(parseDateISO('2024-02-29'), {year:2024,month:2,day:29}); // leap year valid\nassert.strictEqual(parseDateISO('2023-02-29'), null); // non-leap year invalid\nassert.strictEqual(parseDateISO('not-a-date'), null); // garbage\nassert.strictEqual(parseDateISO(''), null); // empty\nassert.strictEqual(parseDateISO(null), null); // null\nassert.deepStrictEqual(parseDateISO('2000-12-31'), {year:2000,month:12,day:31});\nconsole.log('All parseDateISO tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `parseDateISO(input)` that parses dates in strict `YYYY-MM-DD` format. Then write tests for at least 8 cases including invalid months, invalid days, leap year, non-leap year, empty, and null."
+    },
+    "532": {
+      "id": 532,
+      "answer": "```javascript\nconst path = require('path');\nfunction relativePath(from, to) {\n  return path.relative(from, to);\n}\n\n// Tests (Node.js path module)\nconst assert = require('assert');\nassert.strictEqual(relativePath('/a/b/c', '/a/b/d'), '../d');\nassert.strictEqual(relativePath('/a/b', '/a/b/c/d'), 'c/d');\nassert.strictEqual(relativePath('/a/b/c', '/a/b/c'), ''); // same path\nassert.strictEqual(relativePath('/a/b/c', '/x/y'), '../../x/y');\nassert.strictEqual(relativePath('/a', '/a/b'), 'b');\nassert.strictEqual(relativePath('/a/b', '/a'), '..'); // up one level\nassert.strictEqual(relativePath('/a/b/c/d', '/a'), '../../..'); // up multiple\nassert.strictEqual(relativePath('/foo/bar', '/foo/baz'), '../baz');\nconsole.log('All relativePath tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `relativePath(from, to)` that computes the relative filesystem path from one absolute path to another. Then write tests for at least 8 cases."
+    },
+    "533": {
+      "id": 533,
+      "answer": "```javascript\nfunction sortByMultiple(items, rules) {\n  return [...items].sort((a, b) => {\n    for (const { key, dir } of rules) {\n      const aVal = a[key], bVal = b[key];\n      if (aVal < bVal) return dir === 'asc' ? -1 : 1;\n      if (aVal > bVal) return dir === 'asc' ? 1 : -1;\n    }\n    return 0;\n  });\n}\n\nconst assert = require('assert');\nconst data = [{name:'b',age:20},{name:'a',age:30},{name:'a',age:20}];\nassert.deepStrictEqual(\n  sortByMultiple(data, [{key:'name',dir:'asc'},{key:'age',dir:'asc'}]),\n  [{name:'a',age:20},{name:'a',age:30},{name:'b',age:20}]\n);\nassert.deepStrictEqual(\n  sortByMultiple(data, [{key:'age',dir:'desc'}]),\n  [{name:'a',age:30},{name:'b',age:20},{name:'a',age:20}]\n);\nassert.deepStrictEqual(sortByMultiple([], [{key:'x',dir:'asc'}]), []); // empty\nconst one = [{x:1}];\nassert.deepStrictEqual(sortByMultiple(one, [{key:'x',dir:'asc'}]), [{x:1}]); // single element\nconsole.log('All sortByMultiple tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `sortByMultiple(items, rules)` that sorts objects by multiple keys and directions. Then write tests for at least 8 cases."
+    },
+    "534": {
+      "id": 534,
+      "answer": "```javascript\nfunction parseBoolean(input) {\n  if (typeof input === 'boolean') return input;\n  if (input === null || input === undefined) return false;\n  if (typeof input === 'number') return input !== 0;\n  const s = String(input).trim().toLowerCase();\n  if (['true','yes','1','on'].includes(s)) return true;\n  if (['false','no','0','off',''].includes(s)) return false;\n  throw new Error(`Cannot parse boolean from: ${input}`);\n}\n\nconst assert = require('assert');\nassert.strictEqual(parseBoolean(true), true);\nassert.strictEqual(parseBoolean(false), false);\nassert.strictEqual(parseBoolean('true'), true);\nassert.strictEqual(parseBoolean('false'), false);\nassert.strictEqual(parseBoolean('yes'), true);\nassert.strictEqual(parseBoolean('no'), false);\nassert.strictEqual(parseBoolean('1'), true);\nassert.strictEqual(parseBoolean('0'), false);\nassert.strictEqual(parseBoolean(1), true);\nassert.strictEqual(parseBoolean(0), false);\nassert.strictEqual(parseBoolean(null), false);\nassert.strictEqual(parseBoolean(undefined), false);\nassert.throws(() => parseBoolean('maybe'), Error);\nconsole.log('All parseBoolean tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `parseBoolean(input)` that converts strings and primitives into boolean values using strict rules. Then write tests for at least 10 cases."
+    },
+    "535": {
+      "id": 535,
+      "answer": "```javascript\nfunction transposeCsv(rows) {\n  if (!rows || rows.length === 0) return [];\n  const maxCols = Math.max(...rows.map(r => r.length));\n  const result = [];\n  for (let c = 0; c < maxCols; c++) {\n    result.push(rows.map(row => row[c] !== undefined ? row[c] : ''));\n  }\n  return result;\n}\n\nconst assert = require('assert');\nassert.deepStrictEqual(\n  transposeCsv([['a','b'],['c','d']]),\n  [['a','c'],['b','d']]\n);\nassert.deepStrictEqual(transposeCsv([]), []); // empty\nassert.deepStrictEqual(transposeCsv([['a']]), [['a']]); // single cell\nassert.deepStrictEqual(\n  transposeCsv([['a','b','c']]),\n  [['a'],['b'],['c']]\n); // single row\nassert.deepStrictEqual(\n  transposeCsv([['a'],['b'],['c']]),\n  [['a','b','c']]\n); // single column\n// Jagged rows\nassert.deepStrictEqual(\n  transposeCsv([['a','b'],['c']]),\n  [['a','c'],['b','']]\n);\nconsole.log('All transposeCsv tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `transposeCsv(rows)` that accepts an array of CSV rows represented as arrays of strings and returns the transposed table. Then write tests for at least 6 cases."
+    },
+    "536": {
+      "id": 536,
+      "answer": "```javascript\nfunction minWindowSubstring(text, pattern) {\n  if (!text || !pattern) return '';\n  const need = {};\n  for (const c of pattern) need[c] = (need[c] || 0) + 1;\n  let have = 0, required = Object.keys(need).length;\n  const window = {};\n  let best = '', lo = 0;\n  for (let hi = 0; hi < text.length; hi++) {\n    const c = text[hi];\n    window[c] = (window[c] || 0) + 1;\n    if (need[c] && window[c] === need[c]) have++;\n    while (have === required) {\n      const sub = text.slice(lo, hi + 1);\n      if (!best || sub.length < best.length) best = sub;\n      const lc = text[lo];\n      window[lc]--;\n      if (need[lc] && window[lc] < need[lc]) have--;\n      lo++;\n    }\n  }\n  return best;\n}\n\nconst assert = require('assert');\nassert.strictEqual(minWindowSubstring('ADOBECODEBANC','ABC'), 'BANC');\nassert.strictEqual(minWindowSubstring('a','a'), 'a');\nassert.strictEqual(minWindowSubstring('a','b'), ''); // not found\nassert.strictEqual(minWindowSubstring('','abc'), ''); // empty text\nassert.strictEqual(minWindowSubstring('abc',''), ''); // empty pattern\nassert.strictEqual(minWindowSubstring('aa','aa'), 'aa'); // duplicate in pattern\nassert.strictEqual(minWindowSubstring('abc','abc'), 'abc'); // exact match\nconsole.log('All minWindowSubstring tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `minWindowSubstring(text, pattern)` that returns the smallest substring of `text` containing all characters from `pattern` with multiplicity. Then write tests for at least 7 cases."
+    },
+    "537": {
+      "id": 537,
+      "answer": "```javascript\nfunction detectCycle(head) {\n  let slow = head, fast = head;\n  while (fast && fast.next) {\n    slow = slow.next;\n    fast = fast.next.next;\n    if (slow === fast) return true;\n  }\n  return false;\n}\n\nfunction makeList(vals, cycleIndex = -1) {\n  if (!vals.length) return null;\n  const nodes = vals.map(v => ({ val: v, next: null }));\n  for (let i = 0; i < nodes.length - 1; i++) nodes[i].next = nodes[i+1];\n  if (cycleIndex >= 0) nodes[nodes.length - 1].next = nodes[cycleIndex];\n  return nodes[0];\n}\n\nconst assert = require('assert');\nassert.strictEqual(detectCycle(makeList([1,2,3,4], 1)), true); // cycle at index 1\nassert.strictEqual(detectCycle(makeList([1,2,3])), false); // no cycle\nassert.strictEqual(detectCycle(makeList([])), false); // empty\nassert.strictEqual(detectCycle(makeList([1])), false); // single no cycle\nassert.strictEqual(detectCycle(makeList([1,2], 0)), true); // cycle at head\nassert.strictEqual(detectCycle(makeList([1,2,3,4,5], 0)), true); // long cycle\nconsole.log('All detectCycle tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `detectCycle(head)` for a singly linked list that returns whether the list contains a cycle. Then write tests that build linked lists manually."
+    },
+    "538": {
+      "id": 538,
+      "answer": "```javascript\nfunction serializeForm(fields) {\n  if (!Array.isArray(fields)) return '';\n  return fields\n    .map(({name, value}) => `${encodeURIComponent(name)}=${encodeURIComponent(value ?? '')}`)\n    .join('&');\n}\n\nconst assert = require('assert');\nassert.strictEqual(serializeForm([{name:'a',value:'1'},{name:'b',value:'2'}]), 'a=1&b=2');\nassert.strictEqual(serializeForm([]), ''); // empty\nassert.strictEqual(serializeForm([{name:'a',value:''}]), 'a='); // empty value\nassert.strictEqual(serializeForm([{name:'a',value:null}]), 'a='); // null value\nassert.strictEqual(serializeForm([{name:'name',value:'John Doe'}]), 'name=John%20Doe'); // encoding\nassert.strictEqual(serializeForm([{name:'a&b',value:'c=d'}]), 'a%26b=c%3Dd'); // special chars in key/value\nassert.strictEqual(serializeForm([{name:'a',value:'1'},{name:'a',value:'2'}]), 'a=1&a=2'); // repeated names\nconsole.log('All serializeForm tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `serializeForm(fields)` that converts an array of `{ name, value }` pairs into a query string. Then write tests for at least 8 cases."
+    },
+    "539": {
+      "id": 539,
+      "answer": "```javascript\nfunction descriptiveStats(numbers) {\n  if (!Array.isArray(numbers) || numbers.length === 0) return null;\n  const n = numbers.length;\n  const sorted = [...numbers].sort((a,b) => a-b);\n  const sum = numbers.reduce((a,b) => a+b, 0);\n  const mean = sum / n;\n  const min = sorted[0], max = sorted[n-1];\n  const range = max - min;\n  const mid = Math.floor(n/2);\n  const median = n % 2 === 0 ? (sorted[mid-1]+sorted[mid])/2 : sorted[mid];\n  const freq = {};\n  for (const v of numbers) freq[v] = (freq[v]||0)+1;\n  const maxFreq = Math.max(...Object.values(freq));\n  const mode = Object.entries(freq).filter(([,f])=>f===maxFreq).map(([v])=>Number(v));\n  return { count: n, min, max, mean, median, mode, range };\n}\n\nconst assert = require('assert');\nassert.deepStrictEqual(descriptiveStats([1,2,3,4,5]), {count:5,min:1,max:5,mean:3,median:3,mode:[1,2,3,4,5],range:4});\nassert.deepStrictEqual(descriptiveStats([1,1,2,3]), {count:4,min:1,max:3,mean:1.75,median:1.5,mode:[1],range:2});\nassert.strictEqual(descriptiveStats([]), null); // empty\nassert.strictEqual(descriptiveStats(null), null); // null\nassert.deepStrictEqual(descriptiveStats([5]), {count:1,min:5,max:5,mean:5,median:5,mode:[5],range:0});\nconsole.log('All descriptiveStats tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `descriptiveStats(numbers)` that returns count, min, max, mean, median, mode, and range. Then write tests for at least 10 cases."
+    },
+    "540": {
+      "id": 540,
+      "answer": "```javascript\nfunction validatePassword(password) {\n  const errors = [];\n  if (typeof password !== 'string' || password.length < 10) errors.push('min length 10');\n  if (!/[A-Z]/.test(password)) errors.push('requires uppercase');\n  if (!/[a-z]/.test(password)) errors.push('requires lowercase');\n  if (!/\\d/.test(password)) errors.push('requires digit');\n  if (!/[!@#$%^&*()_+\\-=\\[\\]{};':\"\\\\|,.<>\\/?]/.test(password)) errors.push('requires special char');\n  return { valid: errors.length === 0, errors };\n}\n\nconst assert = require('assert');\nassert.deepStrictEqual(validatePassword('Abcdefg1!h').valid, true); // valid\nassert.ok(validatePassword('short1A!').errors.includes('min length 10')); // too short\nassert.ok(validatePassword('abcdefgh1!').errors.includes('requires uppercase')); // no uppercase\nassert.ok(validatePassword('ABCDEFGH1!').errors.includes('requires lowercase')); // no lowercase\nassert.ok(validatePassword('Abcdefghij!').errors.includes('requires digit')); // no digit\nassert.ok(validatePassword('Abcdefg123').errors.includes('requires special char')); // no special\nassert.deepStrictEqual(validatePassword('').valid, false); // empty\nassert.deepStrictEqual(validatePassword('Aa1!bcdefghij').valid, true); // exactly valid\nconsole.log('All validatePassword tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `validatePassword(password)` that checks a password against rules: minimum length 10, at least one uppercase letter, one lowercase, one digit, one special character. Then write tests for all rules."
+    },
+    "541": {
+      "id": 541,
+      "answer": "```javascript\nfunction nearestPalindrome(n) {\n  const num = BigInt(n);\n  const s = String(n);\n  const len = s.length;\n  const candidates = [];\n  // All 9s of len-1\n  candidates.push(BigInt('9'.repeat(len - 1) || '0'));\n  // 10...01 of len+1\n  candidates.push(BigInt('1' + '0'.repeat(len - 1) + '1'));\n  // Mirror middle variants\n  const mid = Math.ceil(len / 2);\n  const prefix = BigInt(s.slice(0, mid));\n  for (const delta of [-1n, 0n, 1n]) {\n    const p = prefix + delta;\n    let ps = String(p);\n    const full = len % 2 === 0 ? ps + ps.split('').reverse().join('') : ps + ps.slice(0,-1).split('').reverse().join('');\n    candidates.push(BigInt(full));\n  }\n  let best = null;\n  for (const c of candidates) {\n    if (c === num) continue;\n    const diff = c > num ? c - num : num - c;\n    if (best === null) { best = c; continue; }\n    const bestDiff = best > num ? best - num : num - best;\n    if (diff < bestDiff || (diff === bestDiff && c < best)) best = c;\n  }\n  return String(best);\n}\n\nconst assert = require('assert');\nassert.strictEqual(nearestPalindrome('123'), '121');\nassert.strictEqual(nearestPalindrome('1'), '0');\nassert.strictEqual(nearestPalindrome('11'), '9');\nassert.strictEqual(nearestPalindrome('100'), '99');\nassert.strictEqual(nearestPalindrome('999'), '1001');\nassert.strictEqual(nearestPalindrome('1000'), '999');\nassert.strictEqual(nearestPalindrome('121'), '131'); // skip self, nearest is 131 or 111 -> equidistant, pick smaller\nconsole.log('All nearestPalindrome tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `nearestPalindrome(n)` that returns the numerically closest palindrome to a positive integer string. Then write tests for at least 8 cases."
+    },
+    "542": {
+      "id": 542,
+      "answer": "```javascript\nfunction removeComments(code) {\n  let result = '';\n  let i = 0;\n  let inSingle = false, inDouble = false;\n  while (i < code.length) {\n    if (!inSingle && !inDouble && code[i] === '/' && code[i+1] === '/') {\n      while (i < code.length && code[i] !== '\\n') i++;\n    } else if (!inSingle && !inDouble && code[i] === '/' && code[i+1] === '*') {\n      i += 2;\n      while (i < code.length && !(code[i] === '*' && code[i+1] === '/')) i++;\n      i += 2;\n    } else {\n      if (code[i] === '\"' && !inSingle) inDouble = !inDouble;\n      else if (code[i] === \"'\" && !inDouble) inSingle = !inSingle;\n      result += code[i++];\n    }\n  }\n  return result;\n}\n\nconst assert = require('assert');\nassert.strictEqual(removeComments('a // comment'), 'a ');\nassert.strictEqual(removeComments('a /* block */ b'), 'a  b');\nassert.strictEqual(removeComments('\"// not a comment\"'), '\"// not a comment\"');\nassert.strictEqual(removeComments(\"'/* not a comment */'\"), \"'/* not a comment */'\");\nassert.strictEqual(removeComments('a\\n// line\\nb'), 'a\\nb');\nassert.strictEqual(removeComments(''), '');\nassert.strictEqual(removeComments('no comments here'), 'no comments here');\nconsole.log('All removeComments tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `removeComments(code)` that removes `//` and `/* ... */` comments from a source string while preserving content inside quoted strings. Then write tests for at least 7 cases."
+    },
+    "543": {
+      "id": 543,
+      "answer": "```javascript\nfunction evaluateRpn(tokens) {\n  const stack = [];\n  for (const token of tokens) {\n    if (['+','-','*','/'].includes(token)) {\n      const b = stack.pop(), a = stack.pop();\n      if (a === undefined || b === undefined) throw new Error('Insufficient operands');\n      if (token === '+') stack.push(a + b);\n      else if (token === '-') stack.push(a - b);\n      else if (token === '*') stack.push(a * b);\n      else {\n        if (b === 0) throw new Error('Division by zero');\n        stack.push(Math.trunc(a / b));\n      }\n    } else {\n      const n = Number(token);\n      if (isNaN(n)) throw new Error(`Invalid token: ${token}`);\n      stack.push(n);\n    }\n  }\n  if (stack.length !== 1) throw new Error('Invalid expression');\n  return stack[0];\n}\n\nconst assert = require('assert');\nassert.strictEqual(evaluateRpn(['2','1','+','3','*']), 9);\nassert.strictEqual(evaluateRpn(['4','13','5','/','+'']), 6);\nassert.strictEqual(evaluateRpn(['3']), 3); // single number\nassert.strictEqual(evaluateRpn(['5','1','-']), 4);\nassert.strictEqual(evaluateRpn(['2','3','*']), 6);\nassert.strictEqual(evaluateRpn(['7','2','/']), 3); // integer division\nassert.throws(() => evaluateRpn(['1','0','/']), /Division by zero/);\nassert.throws(() => evaluateRpn(['+','1']), /Insufficient operands/);\nassert.throws(() => evaluateRpn([]), /Invalid expression/);\nconsole.log('All evaluateRpn tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `evaluateRpn(tokens)` that evaluates an arithmetic expression in Reverse Polish Notation. Then write tests for at least 9 cases."
+    },
+    "544": {
+      "id": 544,
+      "answer": "```javascript\nfunction findPeakElement(nums) {\n  if (!nums.length) return -1;\n  let lo = 0, hi = nums.length - 1;\n  while (lo < hi) {\n    const mid = (lo + hi) >> 1;\n    if (nums[mid] > nums[mid+1]) hi = mid;\n    else lo = mid + 1;\n  }\n  return lo;\n}\n\nconst assert = require('assert');\n// Any peak index is valid\nfunction isPeak(nums, i) {\n  return (i === 0 || nums[i-1] < nums[i]) && (i === nums.length-1 || nums[i+1] < nums[i]);\n}\nassert.ok(isPeak([1,2,3,1], findPeakElement([1,2,3,1])));\nassert.ok(isPeak([1,2,1,3,5,6,4], findPeakElement([1,2,1,3,5,6,4])));\nassert.strictEqual(findPeakElement([1]), 0); // single element\nassert.ok(isPeak([1,2], findPeakElement([1,2])));\nassert.ok(isPeak([2,1], findPeakElement([2,1])));\nassert.ok(isPeak([1,3,2,4,1], findPeakElement([1,3,2,4,1])));\nassert.strictEqual(findPeakElement([]), -1); // empty\nconsole.log('All findPeakElement tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `findPeakElement(nums)` that returns the index of any peak element in an array. Then write tests for at least 8 cases."
+    },
+    "545": {
+      "id": 545,
+      "answer": "```javascript\nfunction searchRotatedArray(nums, target) {\n  let lo = 0, hi = nums.length - 1;\n  while (lo <= hi) {\n    const mid = (lo + hi) >> 1;\n    if (nums[mid] === target) return mid;\n    if (nums[lo] <= nums[mid]) {\n      if (nums[lo] <= target && target < nums[mid]) hi = mid - 1;\n      else lo = mid + 1;\n    } else {\n      if (nums[mid] < target && target <= nums[hi]) lo = mid + 1;\n      else hi = mid - 1;\n    }\n  }\n  return -1;\n}\n\nconst assert = require('assert');\nassert.strictEqual(searchRotatedArray([4,5,6,7,0,1,2], 0), 4);\nassert.strictEqual(searchRotatedArray([4,5,6,7,0,1,2], 3), -1);\nassert.strictEqual(searchRotatedArray([1], 0), -1);\nassert.strictEqual(searchRotatedArray([1], 1), 0);\nassert.strictEqual(searchRotatedArray([3,1], 1), 1);\nassert.strictEqual(searchRotatedArray([3,1], 3), 0);\nassert.strictEqual(searchRotatedArray([1,2,3,4,5], 3), 2); // not rotated\nassert.strictEqual(searchRotatedArray([], 1), -1); // empty\nconsole.log('All searchRotatedArray tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `searchRotatedArray(nums, target)` that finds `target` in a rotated sorted array and returns its index or `-1`. Then write tests for at least 8 cases."
+    },
+    "546": {
+      "id": 546,
+      "answer": "```javascript\nfunction romanToInt(input) {\n  const vals = { I:1, V:5, X:10, L:50, C:100, D:500, M:1000 };\n  let result = 0;\n  for (let i = 0; i < input.length; i++) {\n    const cur = vals[input[i]], next = vals[input[i+1]];\n    if (next && cur < next) result -= cur;\n    else result += cur;\n  }\n  return result;\n}\n\nconst assert = require('assert');\nassert.strictEqual(romanToInt('III'), 3);\nassert.strictEqual(romanToInt('IV'), 4);\nassert.strictEqual(romanToInt('IX'), 9);\nassert.strictEqual(romanToInt('LVIII'), 58);\nassert.strictEqual(romanToInt('MCMXCIV'), 1994);\nassert.strictEqual(romanToInt('I'), 1);\nassert.strictEqual(romanToInt('V'), 5);\nassert.strictEqual(romanToInt('X'), 10);\nassert.strictEqual(romanToInt('XL'), 40);\nassert.strictEqual(romanToInt('MMXXIV'), 2024);\nconsole.log('All romanToInt tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `romanToInt(input)` that converts a Roman numeral to an integer. Then write tests for at least 10 cases."
+    },
+    "547": {
+      "id": 547,
+      "answer": "```javascript\nfunction intToRoman(input) {\n  const vals = [1000,900,500,400,100,90,50,40,10,9,5,4,1];\n  const syms = ['M','CM','D','CD','C','XC','L','XL','X','IX','V','IV','I'];\n  let result = '';\n  let n = input;\n  for (let i = 0; i < vals.length; i++) {\n    while (n >= vals[i]) { result += syms[i]; n -= vals[i]; }\n  }\n  return result;\n}\n\nconst assert = require('assert');\nassert.strictEqual(intToRoman(1), 'I');\nassert.strictEqual(intToRoman(4), 'IV');\nassert.strictEqual(intToRoman(9), 'IX');\nassert.strictEqual(intToRoman(58), 'LVIII');\nassert.strictEqual(intToRoman(1994), 'MCMXCIV');\nassert.strictEqual(intToRoman(3999), 'MMMCMXCIX');\nassert.strictEqual(intToRoman(40), 'XL');\nassert.strictEqual(intToRoman(90), 'XC');\nconsole.log('All intToRoman tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `intToRoman(input)` that converts an integer to a Roman numeral. Then write tests for at least 8 cases."
+    },
+    "548": {
+      "id": 548,
+      "answer": "```javascript\nfunction knapsack01(items, capacity) {\n  const n = items.length;\n  const dp = Array(n+1).fill(null).map(() => Array(capacity+1).fill(0));\n  for (let i = 1; i <= n; i++) {\n    const { weight, value } = items[i-1];\n    for (let w = 0; w <= capacity; w++) {\n      dp[i][w] = dp[i-1][w];\n      if (weight <= w) dp[i][w] = Math.max(dp[i][w], dp[i-1][w-weight] + value);\n    }\n  }\n  return dp[n][capacity];\n}\n\nconst assert = require('assert');\nassert.strictEqual(knapsack01([{weight:1,value:1},{weight:2,value:6},{weight:3,value:10},{weight:5,value:16}], 7), 22);\nassert.strictEqual(knapsack01([], 10), 0); // empty items\nassert.strictEqual(knapsack01([{weight:5,value:10}], 4), 0); // item too heavy\nassert.strictEqual(knapsack01([{weight:5,value:10}], 5), 10); // exactly fits\nassert.strictEqual(knapsack01([{weight:1,value:1}], 0), 0); // zero capacity\nassert.strictEqual(knapsack01([{weight:2,value:3},{weight:3,value:4}], 5), 7); // both fit\nconsole.log('All knapsack01 tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `knapsack01(items, capacity)` that returns the maximum achievable value for the 0/1 knapsack problem. Then write tests for at least 8 cases."
+    },
+    "549": {
+      "id": 549,
+      "answer": "```javascript\nfunction longestCommonPrefix(words) {\n  if (!words || words.length === 0) return '';\n  let prefix = words[0];\n  for (let i = 1; i < words.length; i++) {\n    while (!words[i].startsWith(prefix)) prefix = prefix.slice(0, -1);\n    if (!prefix) return '';\n  }\n  return prefix;\n}\n\nconst assert = require('assert');\nassert.strictEqual(longestCommonPrefix(['flower','flow','flight']), 'fl');\nassert.strictEqual(longestCommonPrefix(['dog','racecar','car']), ''); // no common prefix\nassert.strictEqual(longestCommonPrefix([]), ''); // empty array\nassert.strictEqual(longestCommonPrefix(['']), ''); // single empty string\nassert.strictEqual(longestCommonPrefix(['abc']), 'abc'); // single word\nassert.strictEqual(longestCommonPrefix(['abc','abc']), 'abc'); // identical words\nassert.strictEqual(longestCommonPrefix(['a','ab','abc']), 'a');\nassert.strictEqual(longestCommonPrefix(['prefix','pre','prevent']), 'pre');\nconsole.log('All longestCommonPrefix tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `longestCommonPrefix(words)` that returns the longest shared prefix among strings. Then write tests for at least 8 cases."
+    },
+    "550": {
+      "id": 550,
+      "answer": "```javascript\nfunction balancedBrackets(input) {\n  const stack = [];\n  const pairs = { ')':'(', ']':'[', '}':'{' };\n  for (const ch of input) {\n    if ('([{'.includes(ch)) stack.push(ch);\n    else if (')]}'.includes(ch)) {\n      if (stack.pop() !== pairs[ch]) return false;\n    }\n  }\n  return stack.length === 0;\n}\n\nconst assert = require('assert');\nassert.strictEqual(balancedBrackets('()[]{}'), true);\nassert.strictEqual(balancedBrackets('([{}])'), true);\nassert.strictEqual(balancedBrackets('(]'), false);\nassert.strictEqual(balancedBrackets(''), true); // empty is balanced\nassert.strictEqual(balancedBrackets('{hello[world]}'), true); // with non-bracket chars\nassert.strictEqual(balancedBrackets('((()'), false); // unclosed\nassert.strictEqual(balancedBrackets(')))'), false); // extra close\nassert.strictEqual(balancedBrackets('([)]'), false); // interleaved\nconsole.log('All balancedBrackets tests passed');\n```",
+      "tier": "T3",
+      "category": "build_and_test",
+      "task": "Write a function `balancedBrackets(input)` that returns whether all brackets in a string are balanced for `()`, `[]`, and `{}` while ignoring non-bracket characters. Then write tests for at least 8 cases."
+    },
+    "551": {
+      "id": 551,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain how binary search works and why it requires sorted input, then write a function that returns the index of a target value in a sorted integer array or if not found."
+    },
+    "552": {
+      "id": 552,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain the difference between a stack and a queue, then write two classes implementing each data structure with push/pop and enqueue/dequeue operations."
+    },
+    "553": {
+      "id": 553,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain how hash maps achieve average-case constant-time lookup, then write a function that counts the frequency of each word in a string and returns a map of word to count."
+    },
+    "554": {
+      "id": 554,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain how recursion works and what a base case is, then write a recursive function that computes the factorial of a non-negative integer."
+    },
+    "555": {
+      "id": 555,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain memoization and how it improves recursive algorithms, then write a memoized function that returns the nth Fibonacci number."
+    },
+    "556": {
+      "id": 556,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain the two-pointer technique, then write a function that determines whether a sorted array contains two numbers whose sum equals a given target."
+    },
+    "557": {
+      "id": 557,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain sliding window algorithms, then write a function that returns the length of the longest substring of a string that contains no repeated characters."
+    },
+    "558": {
+      "id": 558,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain how depth-first search traverses a graph, then write a function that determines whether a path exists between two nodes in a directed graph."
+    },
+    "559": {
+      "id": 559,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain how breadth-first search differs from depth-first search, then write a function that returns the shortest path length between two nodes in an unweighted graph."
+    },
+    "560": {
+      "id": 560,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain topological sorting and when it is possible, then write a function that returns a valid topological ordering of a directed acyclic graph."
+    },
+    "561": {
+      "id": 561,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain how cycle detection works in graphs, then write a function that returns whether a directed graph contains a cycle."
+    },
+    "562": {
+      "id": 562,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain what a binary tree traversal is, then write a function that returns the inorder traversal of a binary tree as an array."
+    },
+    "563": {
+      "id": 563,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain the binary search tree property, then write a function that inserts a value into a binary search tree and returns the root."
+    },
+    "564": {
+      "id": 564,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain how heaps support priority queues, then write a min-heap class with insert and extractMin methods."
+    },
+    "565": {
+      "id": 565,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain merge sort and why its time complexity is O(n log n), then write a function that sorts an array of integers using merge sort."
+    },
+    "566": {
+      "id": 566,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain quicksort partitioning, then write a function that sorts an array of integers using quicksort."
+    },
+    "567": {
+      "id": 567,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain dynamic programming using subproblems and overlapping work, then write a function that computes the minimum number of coins needed to make a target amount from given coin denominations."
+    },
+    "568": {
+      "id": 568,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain the longest common subsequence problem, then write a function that returns the length of the longest common subsequence of two strings."
+    },
+    "569": {
+      "id": 569,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain edit distance and the allowed operations, then write a function that computes the Levenshtein distance between two strings."
+    },
+    "570": {
+      "id": 570,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain greedy algorithms and when they are valid, then write a function that schedules the maximum number of non-overlapping intervals from a list of start/end times."
+    },
+    "571": {
+      "id": 571,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain prefix sums, then write a function that answers multiple range-sum queries on an integer array in constant time per query after preprocessing."
+    },
+    "572": {
+      "id": 572,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain difference arrays, then write a function that applies a list of inclusive range increment operations to an array and returns the final array."
+    },
+    "573": {
+      "id": 573,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain union-find (disjoint set union), then write a class supporting find and union, and use it to count the number of connected components in an undirected graph."
+    },
+    "574": {
+      "id": 574,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain Dijkstra’s algorithm and its assumptions, then write a function that returns the shortest path distances from a source node in a graph with non-negative edge weights."
+    },
+    "575": {
+      "id": 575,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain why Bellman-Ford can handle negative edges, then write a function that computes shortest path distances from a source and detects whether a negative cycle is reachable."
+    },
+    "576": {
+      "id": 576,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain what a trie is and what problems it solves, then write a trie class supporting insert, search, and startsWith."
+    },
+    "577": {
+      "id": 577,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain backtracking, then write a function that returns all valid combinations of n pairs of balanced parentheses."
+    },
+    "578": {
+      "id": 578,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain permutation generation with backtracking, then write a function that returns all permutations of a list of distinct integers."
+    },
+    "579": {
+      "id": 579,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain how subset generation works, then write a function that returns the power set of a list of unique integers."
+    },
+    "580": {
+      "id": 580,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain the concept of stable sorting, then write a stable sort function for an array of objects by a specified numeric key."
+    },
+    "581": {
+      "id": 581,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain how regular expressions match patterns, then write a function that validates whether a string is a valid IPv4 address."
+    },
+    "582": {
+      "id": 582,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain string tokenization, then write a function that parses a CSV line into fields, correctly handling quoted commas and escaped quotes."
+    },
+    "583": {
+      "id": 583,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain URL query strings and percent-encoding, then write a function that parses a query string into a dictionary of key-value pairs."
+    },
+    "584": {
+      "id": 584,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain JSON serialization and parsing, then write a function that safely pretty-prints a JSON string with indentation or returns an error for invalid input."
+    },
+    "585": {
+      "id": 585,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain how timestamps and time zones differ, then write a function that converts a Unix timestamp in seconds into an ISO 8601 UTC string."
+    },
+    "586": {
+      "id": 586,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain the producer-consumer problem, then write thread-safe code using a blocking queue to allow one producer and one consumer to exchange integer messages."
+    },
+    "587": {
+      "id": 587,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain race conditions, then write code that safely increments a shared counter from multiple threads and returns the correct final value."
+    },
+    "588": {
+      "id": 588,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain asynchronous programming with promises or futures, then write a function that runs three asynchronous tasks in parallel and returns all results in original order."
+    },
+    "589": {
+      "id": 589,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain debounce behavior in event-driven systems, then write a debounced wrapper function that delays invoking a callback until no calls have occurred for 300 ms."
+    },
+    "590": {
+      "id": 590,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain throttle behavior and how it differs from debounce, then write a throttled wrapper function that ensures a callback runs at most once per 200 ms."
+    },
+    "591": {
+      "id": 591,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain least-recently-used caching, then write an LRUCache class with get and put operations in O(1) average time."
+    },
+    "592": {
+      "id": 592,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain how pagination works in APIs, then write a function that fetches all pages from a paginated endpoint that returns items and nextPageToken."
+    },
+    "593": {
+      "id": 593,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain REST idempotency, then write an HTTP handler for PUT /users/:id that replaces a user record with the request body."
+    },
+    "594": {
+      "id": 594,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain how JWT structure is organized into header, payload, and signature, then write a function that base64url-decodes the header and payload of a JWT without verifying the signature."
+    },
+    "595": {
+      "id": 595,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain password hashing and why salts are necessary, then write code that hashes a password with a random salt and verifies a login attempt against the stored hash."
+    },
+    "596": {
+      "id": 596,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain SQL parameterization and how it prevents injection, then write a function that queries a seifbenayed table by email using a parameterized statement."
+    },
+    "597": {
+      "id": 597,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain the difference between encryption and hashing, then write code that encrypts a plaintext string with AES and decrypts it back to the original value."
+    },
+    "598": {
+      "id": 598,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain rate limiting with a token bucket, then write a TokenBucket class that decides whether each incoming request should be allowed."
+    },
+    "599": {
+      "id": 599,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain how finite state machines model parsing, then write a function that validates whether a string is a valid decimal number with optional sign and fractional part."
+    },
+    "600": {
+      "id": 600,
+      "answer": "ERROR",
+      "tier": "T3",
+      "category": "research_and_code",
+      "task": "Explain how markdown headings are structured, then write a function that parses a markdown document string and returns a nested table of contents based on heading levels."
+    }
+  }
+}

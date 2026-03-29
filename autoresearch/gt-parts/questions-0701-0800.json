@@ -1,0 +1,1996 @@
+[
+  {
+    "id": 701,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `customers.csv` with columns `customer_id,name,email,signup_date`. Trim whitespace from all string fields, lowercase `email`, parse `signup_date` as `YYYY-MM-DD`, validate that `customer_id` is unique and every email contains exactly one `@`, then write newline-delimited JSON to `customers.jsonl`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 702,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `orders.json` containing an array of objects with `order_id`, `customer_id`, `amount`, and `currency`. Convert `amount` to a decimal with 2 places, validate that `order_id` is unique and `currency` is one of `USD`, `EUR`, or `GBP`, then output `orders.csv` sorted by `order_id`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 703,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read all `*.log` files in `input/logs/`, where each line is `timestamp|service|status_code|latency_ms`. Parse each line, keep only records with `status_code >= 500`, validate timestamps are valid ISO 8601 datetimes, then write a single Parquet file `failed_requests.parquet`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 704,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `products.xml` containing `<product>` elements with `sku`, `name`, `price`, and `in_stock`. Convert it to JSON, cast `price` to float and `in_stock` to boolean, validate that every `sku` matches `^[A-Z0-9_-]+$`, then write `products.json`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 705,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `transactions.xlsx` from sheet `Sheet1` with columns `txn_id`, `account_id`, `posted_at`, `debit`, `credit`. Transform by adding `net = credit - debit`, validate no row has both `debit > 0` and `credit > 0`, then output `transactions_with_net.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 706,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `events.jsonl`, where each line is a JSON object with `event_id`, `user_id`, `type`, and `ts`. Convert `ts` from Unix seconds to ISO 8601 UTC, validate `event_id` is unique across the file, then write Avro output to `events.avro`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 707,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Fetch paginated data from `GET https://api.example.com/v1/users?page=N` until an empty `data` array is returned. For each user, keep `id`, `full_name`, and `created_at`, rename `full_name` to `name`, validate all `id` values are unique across pages, then write `users.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 708,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `inventory.csv` and `suppliers.csv`. Join on `supplier_id`, compute `inventory_value = quantity * unit_cost`, validate every inventory row matches a supplier, then write `inventory_enriched.json`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 709,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `temperature_readings.tsv` with columns `sensor_id`, `recorded_at`, `temp_f`. Convert `temp_f` to Celsius rounded to 1 decimal place, validate `temp_f` is between `-100` and `200`, then output `temperature_readings_celsius.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 710,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `support_tickets.yaml`, where each ticket has `ticket_id`, `priority`, `opened_at`, and `tags`. Normalize `priority` to uppercase, sort `tags` alphabetically, validate `priority` is one of `LOW`, `MEDIUM`, `HIGH`, `URGENT`, then write `support_tickets.jsonl`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 711,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `payments.csv` with `payment_id`, `customer_id`, `amount`, `paid_at`. Fetch exchange rates once from `GET https://api.example.com/v1/fx/latest?base=USD`, convert all amounts from USD to EUR using the returned EUR rate, validate the API response contains a numeric `rates.EUR`, then write `payments_eur.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 712,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `employees.json` containing nested objects with `id`, `profile.name`, `profile.department`, and `salary`. Flatten the nested structure, validate `salary` is a non-negative integer, then output `employees_flat.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 713,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `visits.csv` with `visit_id`, `user_id`, `page`, `duration_seconds`. Group by `user_id` and sum `duration_seconds`, validate that no duration is negative, then write `user_visit_totals.json`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 714,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read a gzip-compressed file `clickstream.jsonl.gz`. Decompress, parse each JSON line, keep only records where `event_type = \"purchase\"`, validate `timestamp` exists on every retained record, then write `purchases.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 715,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `bank_codes_fixed_width.txt` where positions `1-4` = `bank_code`, `5-24` = `bank_name`, `25-26` = `country`. Parse into structured records, trim text fields, validate `country` is exactly 2 uppercase letters, then output `bank_codes.json`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 716,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `movies.csv` with `movie_id`, `title`, `genres`. Split `genres` on `|` into arrays, validate no movie has an empty `title`, then write `movies.jsonl`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 717,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Fetch `GET https://api.example.com/v1/weather/cities`, which returns JSON objects with `city`, `temp_k`, and `humidity`. Convert `temp_k` to Celsius, validate `humidity` is between `0` and `100`, then output `weather.xml`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 718,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `sales_2025_q1.csv`, `sales_2025_q2.csv`, `sales_2025_q3.csv`, and `sales_2025_q4.csv`. Concatenate them, validate the resulting dataset has no duplicate `sale_id`, then write `sales_2025.parquet`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 719,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `accounts.jsonl` with `account_id`, `opened_date`, `status`. Parse `opened_date` from `MM/DD/YYYY` to ISO `YYYY-MM-DD`, uppercase `status`, validate `status` is one of `ACTIVE`, `SUSPENDED`, `CLOSED`, then output `accounts.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 720,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `sensor_packets.bin`, where each record is 16 bytes: 4-byte unsigned int `device_id`, 8-byte signed int Unix milliseconds `ts`, 4-byte float `reading`, little-endian. Parse records, convert timestamps to ISO 8601 UTC, validate file length is a multiple of 16, then write `sensor_packets.json`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 721,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `articles.xml`, extract `id`, `title`, and HTML body content from each article. Strip HTML tags from body, validate `id` is present for every article, then output `articles.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 722,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `geo_points.json` with fields `id`, `latitude`, `longitude`. Validate latitude is in `[-90, 90]` and longitude is in `[-180, 180]`, then convert to GeoJSON FeatureCollection in `geo_points.geojson`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 723,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Fetch `GET https://api.example.com/v1/orders?updated_since=2025-01-01T00:00:00Z`. For each order, extract `id`, `status`, `updated_at`, validate `updated_at` is on or after `2025-01-01T00:00:00Z`, then write newline-delimited JSON to `orders_incremental.jsonl`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 724,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `emails.mbox`, parse messages, extract `Message-ID`, `From`, `Date`, and plain-text body length, validate every message has a `Message-ID`, then output `emails_summary.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 725,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `students.csv` with `student_id`, `name`, `score_math`, `score_science`. Add `average_score`, validate both scores are between `0` and `100`, then write `students_with_average.xlsx`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 726,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `iot_readings.proto.bin`, where each record is a protobuf-encoded `Reading { string device_id = 1; int64 ts = 2; double value = 3; }` delimited by varint length prefixes. Decode each record, convert `ts` from Unix milliseconds to ISO 8601 UTC, validate `device_id` is non-empty, then write `iot_readings.jsonl`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 727,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `returns.csv` and `orders.csv`. Left join returns onto orders by `order_id`, add boolean field `was_returned`, validate every return references an existing order, then output `orders_with_returns.parquet`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 728,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `webhooks.ndjson`, where each line has `event`, `payload`, and `received_at`. Expand nested `payload.user.id` into top-level `user_id`, validate `received_at` is valid ISO 8601, then write `webhooks_flat.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 729,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Fetch `GET https://api.example.com/v1/products` and `GET https://api.example.com/v1/categories`. Join products to categories using `category_id`, replace `category_id` with `category_name`, validate every product has a matching category, then write `products_enriched.yaml`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 730,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `audit.csv` with `actor`, `action`, `resource`, `occurred_at`. Create a new field `event_key = actor + \":\" + action + \":\" + resource`, validate no field used in the key is empty, then output sorted JSON by `occurred_at` ascending to `audit.json`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 731,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `meter_readings.csv` with `meter_id`, `read_date`, `reading`. For each `meter_id`, sort by `read_date` and compute day-over-day difference from the previous reading, validate readings never decrease within a meter, then write `meter_deltas.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 732,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `forum_posts.jsonl`, detect and remove duplicate posts by identical `post_id`, normalize line endings in `content` to `\\n`, validate `author_id` exists on every retained post, then write `forum_posts_deduped.jsonl`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 733,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `exchange_rates.xml` with rates relative to EUR and `invoices.csv` with amounts in EUR. Parse the XML, convert all invoice amounts to GBP using the GBP rate, validate the XML contains exactly one GBP rate, then output `invoices_gbp.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 734,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `recipes.yaml`, where each recipe has `recipe_id`, `ingredients`, and `prep_minutes`. Explode each ingredient into a separate row with `recipe_id`, validate `prep_minutes` is a positive integer, then write `recipe_ingredients.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 735,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `device_statuses.csv` with `device_id`, `status`, `last_seen`. Keep only the latest row per `device_id` by `last_seen`, validate `last_seen` parses as ISO 8601, then output `latest_device_status.json`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 736,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Fetch `GET https://api.example.com/v1/shipments?page=N` with cursor-based pagination using response field `next_cursor`. Continue until `next_cursor` is null. Flatten each shipment to `shipment_id`, `carrier`, `eta`, validate `shipment_id` is unique across all pages, then write `shipments.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 737,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `library_books.csv` with `isbn`, `title`, `published_year`. Normalize `isbn` by removing hyphens, validate normalized ISBN length is either 10 or 13 digits, then output `library_books.json`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 738,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `app_metrics.json` containing an array of `{service, cpu, memory_mb}`. Bucket `cpu` into `low` (`<40`), `medium` (`40-79.999`), `high` (`>=80`), validate `memory_mb` is a non-negative number, then write `app_metrics.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 739,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `images_manifest.csv` with `image_id`, `url`, and `label`. Fetch each image URL with an HTTP GET and record the response status code and byte size, validate every URL starts with `https://`, then write `images_fetch_report.jsonl`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 740,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `claims.csv` with `claim_id`, `member_id`, `submitted_at`, `amount`. Parse `submitted_at`, add `submission_month` as `YYYY-MM`, validate `amount >= 0`, then write `claims_partitioned/` as one CSV file per `submission_month`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 741,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `music_tracks.xml`, extract `track_id`, `artist`, `duration_seconds`. Convert `duration_seconds` to `duration_minutes` rounded to 2 decimals, validate duration is greater than 0, then write `music_tracks.jsonl`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 742,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `dns_records.zone`, parse `A` records only into `name`, `ttl`, `ip`, validate each `ip` is a valid IPv4 address, then output `dns_a_records.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 743,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Fetch `GET https://api.example.com/v1/customers` and write only customers created in the last 30 days relative to `2025-03-01T00:00:00Z`. Normalize phone numbers by removing spaces and dashes, validate the resulting phone number contains only digits and optional leading `+`, then output `recent_customers.json`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 744,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `retail.ndjson`, where each record has `store_id`, `sku`, `units`, `unit_price`. Compute `revenue = units * unit_price`, validate `units` is an integer and `unit_price >= 0`, then write aggregated total revenue per `store_id` to `store_revenue.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 745,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `clinical_trials.csv` with `trial_id`, `phase`, `start_date`, `end_date`. Parse dates, compute `duration_days`, validate `end_date >= start_date`, then write `clinical_trials.json`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 746,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `chat_export.txt`, where messages are delimited by blank lines and each message begins with `[YYYY-MM-DD HH:MM:SS] username:`. Parse messages, extract timestamp, username, and message text, validate every block matches the expected header pattern, then output `chat_export.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 747,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `energy_usage.xlsx` with sheets `January`, `February`, and `March`, all sharing columns `site_id`, `date`, `kwh`. Stack all sheets, validate `kwh >= 0`, then write `energy_usage_q1.jsonl`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 748,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `vendors.json`, then for each vendor call `GET https://api.example.com/v1/risk/{vendor_id}`. Merge the returned `risk_score` into each vendor record, validate `risk_score` is an integer from 1 to 100, then write `vendors_with_risk.csv`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 749,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `markdown_posts/` containing `*.md` files with YAML front matter fields `title`, `author`, and `date`. Parse front matter and body separately, compute `word_count` from the Markdown body after removing formatting markers, validate required front matter fields are present, then write `posts_index.json`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 750,
+    "tier": "T3",
+    "category": "pipeline",
+    "task": "Read `orders.csv`, convert it to JSON, then fetch tax rates from `GET https://api.example.com/v1/tax?country={country}` for each distinct country in the data. Add `tax_rate` and `tax_amount = amount * tax_rate`, validate every API response contains a numeric rate between `0` and `1`, then write the final result as `orders_taxed.xml`.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "pipeline"
+    ]
+  },
+  {
+    "id": 751,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain binary search, then implement it in Python as a function that returns the index of a target in a sorted integer list or if not found.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "binary-search",
+      "python",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 752,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain merge sort, then implement it in JavaScript as a function that sorts an array of numbers in ascending order without using built-in sort utilities.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "merge-sort",
+      "javascript",
+      "algorithms",
+      "sorting"
+    ]
+  },
+  {
+    "id": 753,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain quicksort, then implement it in Java with an in-place version that sorts an array using the last element as the pivot.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "quicksort",
+      "java",
+      "algorithms",
+      "sorting"
+    ]
+  },
+  {
+    "id": 754,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain depth-first search (DFS), then implement it in C++ to traverse a directed graph represented as an adjacency list and return the visitation order from a given start node.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "dfs",
+      "c++",
+      "graphs",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 755,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain breadth-first search (BFS), then implement it in Go to find the shortest path length in an unweighted grid from a start cell to a target cell.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "bfs",
+      "go",
+      "graphs",
+      "grids",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 756,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain Dijkstra’s algorithm, then implement it in Python to compute the shortest distances from a source node to all other nodes in a weighted graph with nonnegative edge weights.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "dijkstra",
+      "python",
+      "graphs",
+      "shortest-path",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 757,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the A* search algorithm, then implement it in JavaScript for pathfinding on a 2D grid using Manhattan distance as the heuristic.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "a-star",
+      "javascript",
+      "pathfinding",
+      "grids",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 758,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain dynamic programming, then implement the classic coin change problem in Python to return the minimum number of coins needed for a target amount.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "dynamic-programming",
+      "python",
+      "coin-change",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 759,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain memoization, then implement Fibonacci in Ruby with top-down memoization and demonstrate it for.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "memoization",
+      "ruby",
+      "fibonacci",
+      "dynamic-programming"
+    ]
+  },
+  {
+    "id": 760,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain tabulation, then implement the 0/1 knapsack problem in C# to return the maximum achievable value for a given capacity.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "tabulation",
+      "c-sharp",
+      "knapsack",
+      "dynamic-programming"
+    ]
+  },
+  {
+    "id": 761,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the sliding window technique, then implement it in JavaScript to find the length of the longest substring without repeating characters.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "sliding-window",
+      "javascript",
+      "strings",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 762,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the two-pointer technique, then implement it in Python to determine whether a sorted array contains two numbers whose sum equals a target.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "two-pointers",
+      "python",
+      "arrays",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 763,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain prefix sums, then implement them in Java to answer multiple range-sum queries over an integer array in O(1) per query after preprocessing.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "prefix-sums",
+      "java",
+      "arrays",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 764,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain a difference array, then implement it in C++ to apply multiple range increment operations efficiently and output the final array.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "difference-array",
+      "c++",
+      "arrays",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 765,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain backtracking, then implement a Python solver for the N-Queens problem that returns all valid board configurations for.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "backtracking",
+      "python",
+      "n-queens",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 766,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain branch and bound, then implement a simplified Java solution for the Traveling Salesman Problem on 4 cities using cost matrix pruning.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "branch-and-bound",
+      "java",
+      "tsp",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 767,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain recursion, then implement a TypeScript function to generate all permutations of a list of distinct integers.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "recursion",
+      "typescript",
+      "permutations",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 768,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain divide and conquer, then implement Python code to find the maximum subarray sum using the divide-and-conquer approach.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "divide-and-conquer",
+      "python",
+      "maximum-subarray",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 769,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain greedy algorithms, then implement a C++ solution to the activity selection problem that chooses the maximum number of non-overlapping intervals.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "greedy",
+      "c++",
+      "activity-selection",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 770,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the union-find (disjoint set) data structure, then implement it in JavaScript with path compression and union by rank.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "union-find",
+      "disjoint-set",
+      "javascript",
+      "data-structures"
+    ]
+  },
+  {
+    "id": 771,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain Kruskal’s algorithm, then implement it in Python to compute the minimum spanning tree of an undirected weighted graph.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "kruskal",
+      "python",
+      "graphs",
+      "mst",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 772,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain Prim’s algorithm, then implement it in Go to compute the total weight of a minimum spanning tree using a priority queue.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "prim",
+      "go",
+      "graphs",
+      "mst",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 773,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain topological sorting, then implement Kahn’s algorithm in Java to return a valid ordering of tasks with dependencies or detect a cycle.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "topological-sort",
+      "kahn-algorithm",
+      "java",
+      "graphs",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 774,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain cycle detection in graphs, then implement it in Python to detect a cycle in a directed graph using DFS coloring.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "cycle-detection",
+      "python",
+      "graphs",
+      "dfs",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 775,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain trie data structures, then implement a trie in C# supporting , , and for lowercase English words.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "trie",
+      "c-sharp",
+      "data-structures",
+      "strings"
+    ]
+  },
+  {
+    "id": 776,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain hash tables, then implement a simple separate-chaining hash map in JavaScript supporting string keys and integer values.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "hash-table",
+      "javascript",
+      "data-structures"
+    ]
+  },
+  {
+    "id": 777,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain binary search trees, then implement one in Python with , , and in-order traversal methods.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "binary-search-tree",
+      "python",
+      "data-structures",
+      "trees"
+    ]
+  },
+  {
+    "id": 778,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain AVL trees, then implement insertion with rotations in Java and print the tree in-order after a sequence of inserts.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "avl-tree",
+      "java",
+      "data-structures",
+      "trees"
+    ]
+  },
+  {
+    "id": 779,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain heaps, then implement a min-heap in C++ with , , and operations.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "heap",
+      "min-heap",
+      "c++",
+      "data-structures"
+    ]
+  },
+  {
+    "id": 780,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the monotonic stack pattern, then implement it in Python to solve the “next greater element” problem for an integer array.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "monotonic-stack",
+      "python",
+      "arrays",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 781,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the monotonic queue pattern, then implement it in JavaScript to compute the maximum value in every sliding window of size .",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "monotonic-queue",
+      "javascript",
+      "sliding-window",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 782,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain linked lists, then implement reversal of a singly linked list in Go, both iteratively and recursively.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "linked-list",
+      "go",
+      "data-structures"
+    ]
+  },
+  {
+    "id": 783,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain Floyd’s cycle detection algorithm, then implement it in Python to detect whether a singly linked list contains a cycle.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "floyd-cycle-detection",
+      "python",
+      "linked-list",
+      "algorithms"
+    ]
+  },
+  {
+    "id": 784,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain LRU cache design, then implement an LRU cache in Java with O(1) and using a hash map plus doubly linked list.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "lru-cache",
+      "java",
+      "data-structures",
+      "design"
+    ]
+  },
+  {
+    "id": 785,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain producer-consumer concurrency, then implement it in Python using threads and a bounded queue with one producer and one consumer.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "producer-consumer",
+      "python",
+      "concurrency",
+      "threads"
+    ]
+  },
+  {
+    "id": 786,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the mutex lock pattern, then implement a thread-safe counter in C++ using and multiple worker threads.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "mutex",
+      "c++",
+      "concurrency",
+      "threads"
+    ]
+  },
+  {
+    "id": 787,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the semaphore pattern, then implement it in Java to limit access to a resource pool with 3 concurrent permits.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "semaphore",
+      "java",
+      "concurrency"
+    ]
+  },
+  {
+    "id": 788,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the observer pattern, then implement it in Python with a weather station subject and two subscriber displays.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "observer-pattern",
+      "python",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 789,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the strategy pattern, then implement it in JavaScript with interchangeable payment strategies for credit card, PayPal, and bank transfer.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "strategy-pattern",
+      "javascript",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 790,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the factory method pattern, then implement it in Java to create different notification senders for email, SMS, and push notifications.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "factory-method",
+      "java",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 791,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the singleton pattern, then implement a thread-safe singleton logger in C#.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "singleton-pattern",
+      "c-sharp",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 792,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the decorator pattern, then implement it in Python to wrap a text component with bold and italic formatting behaviors.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "decorator-pattern",
+      "python",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 793,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the adapter pattern, then implement it in TypeScript to adapt a legacy XML service to a JSON-based interface.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "adapter-pattern",
+      "typescript",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 794,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the command pattern, then implement it in JavaScript with commands for turning a light on and off, including undo support.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "command-pattern",
+      "javascript",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 795,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the state pattern, then implement it in Java for a vending machine with , , and states.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "state-pattern",
+      "java",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 796,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the template method pattern, then implement it in C# for a data parser with CSV and JSON subclasses.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "template-method",
+      "c-sharp",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 797,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain the repository pattern, then implement it in Python with an in-memory supporting add, get-by-id, and list-all.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "repository-pattern",
+      "python",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 798,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain middleware chaining, then implement it in Node.js to process an HTTP-like request through logging, authentication, and handler middleware.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "middleware",
+      "nodejs",
+      "backend",
+      "design-patterns"
+    ]
+  },
+  {
+    "id": 799,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain rate limiting with the token bucket algorithm, then implement it in Go to allow or reject requests based on refill rate and bucket capacity.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "rate-limiting",
+      "token-bucket",
+      "go",
+      "algorithms",
+      "backend"
+    ]
+  },
+  {
+    "id": 800,
+    "tier": "T3",
+    "category": "explain_and_implement",
+    "task": "Explain consistent hashing, then implement it in Python to map string keys to nodes on a hash ring with virtual nodes.",
+    "tools_required": [
+      "bash",
+      "file_write"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 3,
+    "tags": [
+      "consistent-hashing",
+      "python",
+      "distributed-systems",
+      "algorithms"
+    ]
+  }
+]

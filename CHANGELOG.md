@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.1 (2026-03-27)
+
+- Skills: manifest, list, info, remove, update, export, verify, search, publish
+- Marketplace: self-hosted registry on Cloud Run, /marketplace UI
+- Tools: management (list, info, enable, disable, test), custom tools (TOOL.json), AI backends (provider, ollama, openai-compatible, transformers)
+- Browser: CDP-native tool pack with 19 actions, DOM indexing, loop detection
+- Fix: bridge --resume no longer eats next flag
+- Fix: version now reads from package.json (single source of truth)
+- Fix: npm test runs bridge + MCP tests
+
 ## 1.0.0 (2026-03-26)
 
 Initial public release.

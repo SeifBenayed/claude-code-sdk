@@ -1,0 +1,1720 @@
+[
+  {
+    "id": 1,
+    "tier": "T1",
+    "category": "factual",
+    "task": "What is the chemical symbol for gold?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "general-knowledge"
+    ]
+  },
+  {
+    "id": 2,
+    "tier": "T1",
+    "category": "factual",
+    "task": "Which planet in our solar system has the most moons currently confirmed?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "astronomy"
+    ]
+  },
+  {
+    "id": 3,
+    "tier": "T1",
+    "category": "factual",
+    "task": "In what year did the Berlin Wall fall?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "history"
+    ]
+  },
+  {
+    "id": 4,
+    "tier": "T1",
+    "category": "factual",
+    "task": "What is the capital city of Canada?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "geography"
+    ]
+  },
+  {
+    "id": 5,
+    "tier": "T1",
+    "category": "factual",
+    "task": "Which organ in the human body produces insulin?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "biology"
+    ]
+  },
+  {
+    "id": 6,
+    "tier": "T1",
+    "category": "factual",
+    "task": "Who wrote the novel *Pride and Prejudice*?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "literature"
+    ]
+  },
+  {
+    "id": 7,
+    "tier": "T1",
+    "category": "factual",
+    "task": "What is the largest desert on Earth by total area?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "geography"
+    ]
+  },
+  {
+    "id": 8,
+    "tier": "T1",
+    "category": "factual",
+    "task": "Which element has atomic number 8?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "chemistry"
+    ]
+  },
+  {
+    "id": 9,
+    "tier": "T1",
+    "category": "factual",
+    "task": "What river flows through the city of Cairo?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "geography"
+    ]
+  },
+  {
+    "id": 10,
+    "tier": "T1",
+    "category": "factual",
+    "task": "Who was the first woman to fly solo across the Atlantic Ocean?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "history"
+    ]
+  },
+  {
+    "id": 11,
+    "tier": "T1",
+    "category": "factual",
+    "task": "What is the smallest prime number?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "mathematics"
+    ]
+  },
+  {
+    "id": 12,
+    "tier": "T1",
+    "category": "factual",
+    "task": "Which country is home to Mount Kilimanjaro?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "geography"
+    ]
+  },
+  {
+    "id": 13,
+    "tier": "T1",
+    "category": "factual",
+    "task": "What gas makes up most of Earth’s atmosphere?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "science"
+    ]
+  },
+  {
+    "id": 14,
+    "tier": "T1",
+    "category": "factual",
+    "task": "Who painted the ceiling of the Sistine Chapel?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "art"
+    ]
+  },
+  {
+    "id": 15,
+    "tier": "T1",
+    "category": "factual",
+    "task": "What is the hardest natural substance on Earth?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "science"
+    ]
+  },
+  {
+    "id": 16,
+    "tier": "T1",
+    "category": "factual",
+    "task": "Which war was fought between the North and South regions of the United States from 1861 to 1865?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "history"
+    ]
+  },
+  {
+    "id": 17,
+    "tier": "T1",
+    "category": "factual",
+    "task": "What is the name of the process by which plants convert sunlight into chemical energy?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "biology"
+    ]
+  },
+  {
+    "id": 18,
+    "tier": "T1",
+    "category": "factual",
+    "task": "Which ocean lies between Africa and Australia?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "geography"
+    ]
+  },
+  {
+    "id": 19,
+    "tier": "T1",
+    "category": "factual",
+    "task": "Who developed the theory of general relativity?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "physics"
+    ]
+  },
+  {
+    "id": 20,
+    "tier": "T1",
+    "category": "factual",
+    "task": "What is the official language of Brazil?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "language"
+    ]
+  },
+  {
+    "id": 21,
+    "tier": "T1",
+    "category": "factual",
+    "task": "Which blood type is known as the universal donor for red blood cells?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "biology"
+    ]
+  },
+  {
+    "id": 22,
+    "tier": "T1",
+    "category": "factual",
+    "task": "What ancient city was buried by the eruption of Mount Vesuvius in AD 79?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "history"
+    ]
+  },
+  {
+    "id": 23,
+    "tier": "T1",
+    "category": "factual",
+    "task": "Which continent contains the Sahara Desert?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "geography"
+    ]
+  },
+  {
+    "id": 24,
+    "tier": "T1",
+    "category": "factual",
+    "task": "What is the longest bone in the human body?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "biology"
+    ]
+  },
+  {
+    "id": 25,
+    "tier": "T1",
+    "category": "factual",
+    "task": "Which treaty ended World War I in 1919?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "history"
+    ]
+  },
+  {
+    "id": 26,
+    "tier": "T1",
+    "category": "math",
+    "task": "What is \\(2+2\\)?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "math"
+    ]
+  },
+  {
+    "id": 27,
+    "tier": "T1",
+    "category": "math",
+    "task": "What is \\(15\\times 6\\)?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "math"
+    ]
+  },
+  {
+    "id": 28,
+    "tier": "T1",
+    "category": "math",
+    "task": "What is \\(144 \\div 12\\)?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "math"
+    ]
+  },
+  {
+    "id": 29,
+    "tier": "T1",
+    "category": "math",
+    "task": "Evaluate \\(3^4\\).",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "math"
+    ]
+  },
+  {
+    "id": 30,
+    "tier": "T1",
+    "category": "math",
+    "task": "What is \\(25\\%\\) of 80?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "math"
+    ]
+  },
+  {
+    "id": 31,
+    "tier": "T1",
+    "category": "math",
+    "task": "Solve for \\(x\\): \\(2x+7=19\\).",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "algebra"
+    ]
+  },
+  {
+    "id": 32,
+    "tier": "T1",
+    "category": "math",
+    "task": "Solve for \\(x\\): \\(x^2=49\\), where \\(x\\) is positive.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "algebra"
+    ]
+  },
+  {
+    "id": 33,
+    "tier": "T1",
+    "category": "math",
+    "task": "If \\(y=3x-5\\), what is \\(y\\) when \\(x=4\\)?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "algebra"
+    ]
+  },
+  {
+    "id": 34,
+    "tier": "T1",
+    "category": "math",
+    "task": "Solve for \\(x\\): \\(5x-3=2x+12\\).",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "algebra"
+    ]
+  },
+  {
+    "id": 35,
+    "tier": "T1",
+    "category": "math",
+    "task": "A rectangle has length 9 and width 4. What is its area?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "geometry"
+    ]
+  },
+  {
+    "id": 36,
+    "tier": "T1",
+    "category": "math",
+    "task": "A circle has radius 3. What is its area? Give your answer in terms of \\(\\pi\\).",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "geometry"
+    ]
+  },
+  {
+    "id": 37,
+    "tier": "T1",
+    "category": "math",
+    "task": "What is the slope of the line passing through \\((2,5)\\) and \\((6,13)\\)?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "geometry",
+      "algebra"
+    ]
+  },
+  {
+    "id": 38,
+    "tier": "T1",
+    "category": "math",
+    "task": "Evaluate \\(\\lim_{x\\to 2}(3x+1)\\).",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "calculus"
+    ]
+  },
+  {
+    "id": 39,
+    "tier": "T1",
+    "category": "math",
+    "task": "Find \\(\\frac{d}{dx}(x^3)\\) at \\(x=2\\).",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "calculus"
+    ]
+  },
+  {
+    "id": 40,
+    "tier": "T1",
+    "category": "math",
+    "task": "Compute \\(\\int_0^2 x\\,dx\\).",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "calculus"
+    ]
+  },
+  {
+    "id": 41,
+    "tier": "T1",
+    "category": "math",
+    "task": "Compute \\(\\int_0^\\pi \\sin x\\,dx\\).",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "calculus"
+    ]
+  },
+  {
+    "id": 42,
+    "tier": "T1",
+    "category": "math",
+    "task": "If \\(f(x)=x^2+2x\\), find \\(f'(3)\\).",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "calculus"
+    ]
+  },
+  {
+    "id": 43,
+    "tier": "T1",
+    "category": "math",
+    "task": "Find the mean of the numbers \\(2,4,6,8,10\\).",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "statistics"
+    ]
+  },
+  {
+    "id": 44,
+    "tier": "T1",
+    "category": "math",
+    "task": "Find the median of the numbers \\(1,3,3,7,9\\).",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "statistics"
+    ]
+  },
+  {
+    "id": 45,
+    "tier": "T1",
+    "category": "math",
+    "task": "A fair six-sided die is rolled once. What is the probability of rolling a 5? Express your answer as a decimal.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "probability"
+    ]
+  },
+  {
+    "id": 46,
+    "tier": "T1",
+    "category": "math",
+    "task": "In how many ways can you arrange the letters in the word “CAT”?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "combinatorics"
+    ]
+  },
+  {
+    "id": 47,
+    "tier": "T1",
+    "category": "math",
+    "task": "How many 2-element subsets can be chosen from the set \\(\\{1,2,3,4,5\\}\\)?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "combinatorics"
+    ]
+  },
+  {
+    "id": 48,
+    "tier": "T1",
+    "category": "math",
+    "task": "Compute \\(7!\\).",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "combinatorics"
+    ]
+  },
+  {
+    "id": 49,
+    "tier": "T1",
+    "category": "math",
+    "task": "Evaluate \\(\\int_1^e \\frac{1}{x}\\,dx\\).",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "calculus"
+    ]
+  },
+  {
+    "id": 50,
+    "tier": "T1",
+    "category": "math",
+    "task": "How many distinct permutations are there of the letters in “LEVEL”?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "combinatorics"
+    ]
+  },
+  {
+    "id": 51,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "What is the time complexity of binary search on a sorted array of size n?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "algorithms",
+      "time-complexity",
+      "binary-search"
+    ]
+  },
+  {
+    "id": 52,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "What is the worst-case time complexity of inserting an element into a binary max-heap with n elements?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "data-structures",
+      "heap",
+      "time-complexity"
+    ]
+  },
+  {
+    "id": 53,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "In a hash table using separate chaining, what is the average-case time complexity of lookup when the load factor is constant?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "data-structures",
+      "hash-table",
+      "time-complexity"
+    ]
+  },
+  {
+    "id": 54,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "Which data structure guarantees O(1) worst-case time for both push and pop operations at one end?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "data-structures",
+      "stack",
+      "deque"
+    ]
+  },
+  {
+    "id": 55,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "What traversal of a binary search tree outputs the keys in sorted order?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "data-structures",
+      "binary-search-tree",
+      "tree-traversal"
+    ]
+  },
+  {
+    "id": 56,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "What is the worst-case time complexity of QuickSort when the pivot is always the smallest element?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "algorithms",
+      "sorting",
+      "quicksort",
+      "time-complexity"
+    ]
+  },
+  {
+    "id": 57,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "Which shortest-path algorithm correctly handles graphs with negative edge weights but no negative cycles?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "algorithms",
+      "graphs",
+      "shortest-path",
+      "bellman-ford"
+    ]
+  },
+  {
+    "id": 58,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "For an undirected graph with V vertices and E edges represented as an adjacency list, what is the time complexity of depth-first search?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "algorithms",
+      "graphs",
+      "depth-first-search",
+      "time-complexity"
+    ]
+  },
+  {
+    "id": 59,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "Which algorithm is used to find a minimum spanning tree in a weighted connected graph by repeatedly adding the lightest edge that does not form a cycle?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "algorithms",
+      "graphs",
+      "minimum-spanning-tree",
+      "kruskal"
+    ]
+  },
+  {
+    "id": 60,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "What is the recurrence relation for MergeSort on an input of size n?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "algorithms",
+      "sorting",
+      "mergesort",
+      "recurrence-relations"
+    ]
+  },
+  {
+    "id": 61,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "In dynamic programming, what property means an optimal solution can be built from optimal solutions to subproblems?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "algorithms",
+      "dynamic-programming",
+      "optimal-substructure"
+    ]
+  },
+  {
+    "id": 62,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "What is the maximum number of edges in a simple undirected graph with n vertices?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "graphs",
+      "combinatorics",
+      "graph-theory"
+    ]
+  },
+  {
+    "id": 63,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "Which data structure is typically used to implement breadth-first search?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "algorithms",
+      "graphs",
+      "breadth-first-search",
+      "queue"
+    ]
+  },
+  {
+    "id": 64,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "What is the worst-case height of a binary search tree with n nodes if the tree is completely unbalanced?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "data-structures",
+      "binary-search-tree",
+      "tree-height",
+      "worst-case"
+    ]
+  },
+  {
+    "id": 65,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "In operating systems, what is the name of the condition where two or more processes wait indefinitely for resources held by each other?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "operating-systems",
+      "deadlock",
+      "process-management"
+    ]
+  },
+  {
+    "id": 66,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "Which CPU scheduling algorithm always selects the ready process with the smallest next CPU burst time?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "operating-systems",
+      "cpu-scheduling",
+      "shortest-job-first"
+    ]
+  },
+  {
+    "id": 67,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "In virtual memory, what is the term for an event when a referenced page is not currently in main memory?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "operating-systems",
+      "virtual-memory",
+      "page-fault"
+    ]
+  },
+  {
+    "id": 68,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "What page replacement algorithm evicts the page that has not been used for the longest time in the past?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "operating-systems",
+      "virtual-memory",
+      "page-replacement",
+      "lru"
+    ]
+  },
+  {
+    "id": 69,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "In OS process management, what system call creates a new process in Unix-like systems?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "operating-systems",
+      "process-management",
+      "unix",
+      "fork"
+    ]
+  },
+  {
+    "id": 70,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "Which networking protocol provides reliable, connection-oriented byte-stream communication?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "networking",
+      "transport-layer",
+      "tcp"
+    ]
+  },
+  {
+    "id": 71,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "What is the default port number for HTTPS?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "networking",
+      "https",
+      "ports"
+    ]
+  },
+  {
+    "id": 72,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "In the OSI model, which layer is responsible for routing packets between networks?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "networking",
+      "osi-model",
+      "network-layer",
+      "routing"
+    ]
+  },
+  {
+    "id": 73,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "What device operates primarily at the Data Link layer and forwards frames based on MAC addresses?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "networking",
+      "data-link-layer",
+      "switch",
+      "mac-address"
+    ]
+  },
+  {
+    "id": 74,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "In IPv4, how many bits are in an address?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "networking",
+      "ipv4",
+      "addressing"
+    ]
+  },
+  {
+    "id": 75,
+    "tier": "T1",
+    "category": "cs_theory",
+    "task": "Which transport-layer protocol is connectionless and does not guarantee delivery?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "networking",
+      "transport-layer",
+      "udp"
+    ]
+  },
+  {
+    "id": 76,
+    "tier": "T1",
+    "category": "language",
+    "task": "Translate the English sentence “I would like a glass of water.” into French.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "translation",
+      "french",
+      "english"
+    ]
+  },
+  {
+    "id": 77,
+    "tier": "T1",
+    "category": "language",
+    "task": "Translate the English sentence “We are going to the train station now.” into Spanish.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "translation",
+      "spanish",
+      "english"
+    ]
+  },
+  {
+    "id": 78,
+    "tier": "T1",
+    "category": "language",
+    "task": "Translate the English word “library” into Japanese using standard modern Japanese.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "translation",
+      "japanese",
+      "english",
+      "vocabulary"
+    ]
+  },
+  {
+    "id": 79,
+    "tier": "T1",
+    "category": "language",
+    "task": "In English grammar, what is the past tense of the verb “teach”?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "grammar",
+      "english",
+      "verb-tense"
+    ]
+  },
+  {
+    "id": 80,
+    "tier": "T1",
+    "category": "language",
+    "task": "Which article is grammatically correct: “a honest person” or “an honest person”?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "grammar",
+      "english",
+      "articles"
+    ]
+  },
+  {
+    "id": 81,
+    "tier": "T1",
+    "category": "language",
+    "task": "What does the English word “generous” mean?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "vocabulary",
+      "english",
+      "definition"
+    ]
+  },
+  {
+    "id": 82,
+    "tier": "T1",
+    "category": "language",
+    "task": "Translate the French sentence “Il fait très froid aujourd’hui.” into English.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "translation",
+      "french",
+      "english"
+    ]
+  },
+  {
+    "id": 83,
+    "tier": "T1",
+    "category": "language",
+    "task": "Translate the Spanish sentence “Necesito comprar un boleto para mañana.” into English.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "translation",
+      "spanish",
+      "english"
+    ]
+  },
+  {
+    "id": 84,
+    "tier": "T1",
+    "category": "language",
+    "task": "Translate the Japanese sentence “私は毎朝コーヒーを飲みます。” into English.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "translation",
+      "japanese",
+      "english"
+    ]
+  },
+  {
+    "id": 85,
+    "tier": "T1",
+    "category": "language",
+    "task": "In French, what is the correct translation of “blue car”?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "translation",
+      "french",
+      "english"
+    ]
+  },
+  {
+    "id": 86,
+    "tier": "T1",
+    "category": "language",
+    "task": "In Spanish, what is the correct translation of “red house”?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "translation",
+      "spanish",
+      "english"
+    ]
+  },
+  {
+    "id": 87,
+    "tier": "T1",
+    "category": "language",
+    "task": "In Japanese, translate “teacher” into the common noun meaning an instructor at school.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "translation",
+      "japanese",
+      "english",
+      "vocabulary"
+    ]
+  },
+  {
+    "id": 88,
+    "tier": "T1",
+    "category": "language",
+    "task": "Which sentence is grammatically correct: “She don’t like apples” or “She doesn’t like apples”?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "grammar",
+      "english",
+      "sentence-correction"
+    ]
+  },
+  {
+    "id": 89,
+    "tier": "T1",
+    "category": "language",
+    "task": "What is the plural form of “child”?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "grammar",
+      "english",
+      "plural"
+    ]
+  },
+  {
+    "id": 90,
+    "tier": "T1",
+    "category": "language",
+    "task": "What part of speech is the word “quickly”?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "grammar",
+      "english",
+      "parts-of-speech"
+    ]
+  },
+  {
+    "id": 91,
+    "tier": "T1",
+    "category": "language",
+    "task": "What does the English word “ancient” mean?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "vocabulary",
+      "english",
+      "definition"
+    ]
+  },
+  {
+    "id": 92,
+    "tier": "T1",
+    "category": "language",
+    "task": "Translate “Good evening” into French.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "translation",
+      "french",
+      "english"
+    ]
+  },
+  {
+    "id": 93,
+    "tier": "T1",
+    "category": "language",
+    "task": "Translate “Where is the bathroom?” into Spanish.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "translation",
+      "spanish",
+      "english"
+    ]
+  },
+  {
+    "id": 94,
+    "tier": "T1",
+    "category": "language",
+    "task": "Translate “Thank you very much” into Japanese.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "translation",
+      "japanese",
+      "english"
+    ]
+  },
+  {
+    "id": 95,
+    "tier": "T1",
+    "category": "language",
+    "task": "In English grammar, which punctuation mark is normally used to end a direct question?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "grammar",
+      "english",
+      "punctuation"
+    ]
+  },
+  {
+    "id": 96,
+    "tier": "T1",
+    "category": "language",
+    "task": "Choose the correct comparative form of “good”: “gooder” or “better”.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "grammar",
+      "english",
+      "comparative"
+    ]
+  },
+  {
+    "id": 97,
+    "tier": "T1",
+    "category": "language",
+    "task": "What does the English verb “borrow” mean?",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "vocabulary",
+      "english",
+      "definition",
+      "verb"
+    ]
+  },
+  {
+    "id": 98,
+    "tier": "T1",
+    "category": "language",
+    "task": "Translate the French word “chien” into English.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "translation",
+      "french",
+      "english",
+      "vocabulary"
+    ]
+  },
+  {
+    "id": 99,
+    "tier": "T1",
+    "category": "language",
+    "task": "Translate the Spanish word “ventana” into English.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "translation",
+      "spanish",
+      "english",
+      "vocabulary"
+    ]
+  },
+  {
+    "id": 100,
+    "tier": "T1",
+    "category": "language",
+    "task": "Translate the Japanese word “水” into English.",
+    "tools_required": [],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 1,
+    "tags": [
+      "translation",
+      "japanese",
+      "english",
+      "vocabulary"
+    ]
+  }
+]

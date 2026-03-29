@@ -1,0 +1,704 @@
+{
+  "answers": {
+    "401": {
+      "id": 401,
+      "answer": "Convert a JSON array to CSV with columns in a specified order, using empty fields for missing values. Python solution:\n\n```python\nimport json, csv, sys\n\ndata = json.load(sys.stdin)  # or json.loads(json_string)\ncolumns = ['col1', 'col2', 'col3']  # replace with actual column names\n\nwriter = csv.DictWriter(sys.stdout, fieldnames=columns, extrasaction='ignore')\nwriter.writeheader()\nfor row in data:\n    # Fill missing fields with empty string\n    writer.writerow({col: row.get(col, '') for col in columns})\n```\n\nOr with jq + awk:\n```bash\njq -r '(.[0] | keys_unsorted) as $keys | $keys, (.[] | [.[$keys[]]] | @csv)' input.json\n```\nFor a fixed column order with empty fallback:\n```bash\njq -r '[\"col1\",\"col2\",\"col3\"], (.[] | [(.col1//\"\"), (.col2//\"\"), (.col3//)]) | @csv' input.json\n```",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Convert the JSON array below to CSV with columns in this exact order. Use an empty field for missing values."
+    },
+    "402": {
+      "id": 402,
+      "answer": "Convert nested JSON to CSV with one row per item, flattening nested fields. Python solution:\n\n```python\nimport json, csv, sys\n\ndata = json.load(sys.stdin)\ncolumns = ['id', 'name', 'address.city', 'address.zip']  # example nested columns\n\ndef get_nested(obj, path):\n    keys = path.split('.')\n    val = obj\n    for k in keys:\n        if isinstance(val, dict):\n            val = val.get(k, '')\n        else:\n            return ''\n    return val if val is not None else ''\n\nwriter = csv.writer(sys.stdout)\nwriter.writerow(columns)\nfor row in data:\n    writer.writerow([get_nested(row, col) for col in columns])\n```\n\nWith jq:\n```bash\njq -r '[\"id\",\"name\",\"city\",\"zip\"], (.[] | [.id, .name, .address.city, .address.zip]) | @csv' input.json\n```",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Convert the nested JSON below to CSV with specified columns. Output one row per item."
+    },
+    "403": {
+      "id": 403,
+      "answer": "Convert a JSON object of metrics to a two-column CSV (key,value) preserving key order. Python solution:\n\n```python\nimport json, csv, sys\n\ndata = json.load(sys.stdin)  # assumes object like {\"cpu\": 45.2, \"memory\": 78.1, ...}\n\nwriter = csv.writer(sys.stdout)\nwriter.writerow(['metric', 'value'])\nfor key, value in data.items():  # Python 3.7+ preserves insertion order\n    writer.writerow([key, value])\n```\n\nWith jq:\n```bash\njq -r '\"metric,value\", (to_entries[] | [.key, .value] | @csv)' input.json\n```",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Convert this JSON object of metrics into a two-column CSV with header. Preserve the key order shown."
+    },
+    "404": {
+      "id": 404,
+      "answer": "Parse log lines and extract fields (e.g., timestamp, level, message) into CSV. Python solution:\n\n```python\nimport re, csv, sys\n\n# Example log format: 2024-01-15 10:23:45 ERROR Something went wrong\npattern = re.compile(r'(\\S+ \\S+)\\s+(\\w+)\\s+(.*)')\n\nwriter = csv.writer(sys.stdout)\nwriter.writerow(['timestamp', 'level', 'message'])\nfor line in sys.stdin:\n    line = line.rstrip()\n    m = pattern.match(line)\n    if m:\n        writer.writerow([m.group(1), m.group(2), m.group(3)])\n```\n\nAdapt the regex pattern to the actual log format. The key idea is to use named capture groups for each field and write them in the CSV column order specified.",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Parse log lines and extract timestamp, level, and message into CSV with header."
+    },
+    "405": {
+      "id": 405,
+      "answer": "Parse Apache Combined Log Format and output CSV. Apache log format:\n`127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] \"GET /apache_pb.gif HTTP/1.0\" 200 2326`\n\nPython solution:\n```python\nimport re, csv, sys\n\npattern = re.compile(\n    r'(\\S+) \\S+ (\\S+) \\[([^\\]]+)\\] \"(\\S+) (\\S+) \\S+\" (\\d+) (\\S+)'\n)\n\nwriter = csv.writer(sys.stdout)\nwriter.writerow(['ip', 'user', 'timestamp', 'method', 'path', 'status', 'bytes'])\nfor line in sys.stdin:\n    m = pattern.match(line.strip())\n    if m:\n        writer.writerow(m.groups())\n```\n\nThis extracts: remote host (ip), remote user, timestamp, HTTP method, request path, status code, and response size.",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Parse Apache-style access logs and output CSV with specified header."
+    },
+    "406": {
+      "id": 406,
+      "answer": "Filter JSON array by a field value and output specific columns as CSV. Python solution:\n\n```python\nimport json, csv, sys\n\ndata = json.load(sys.stdin)\n# Example: filter where status == 'active', output columns id, name, email\nfiltered = [r for r in data if r.get('status') == 'active']\n\ncolumns = ['id', 'name', 'email']  # replace with actual columns\nwriter = csv.DictWriter(sys.stdout, fieldnames=columns, extrasaction='ignore')\nwriter.writeheader()\nfor row in filtered:\n    writer.writerow({col: row.get(col, '') for col in columns})\n```\n\nWith jq:\n```bash\njq -r '[\"id\",\"name\",\"email\"], (.[] | select(.status == \"active\") | [.id, .name, .email]) | @csv' input.json\n```",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "From the JSON array, extract only records where a field matches a value and output CSV with specified columns."
+    },
+    "407": {
+      "id": 407,
+      "answer": "Reformat dates in a CSV from one format to another (e.g., MM/DD/YYYY to YYYY-MM-DD). Python solution:\n\n```python\nimport csv, sys\nfrom datetime import datetime\n\nreader = csv.DictReader(sys.stdin)\nfieldnames = reader.fieldnames\nwriter = csv.DictWriter(sys.stdout, fieldnames=fieldnames)\nwriter.writeheader()\n\nfor row in reader:\n    # Convert date column from MM/DD/YYYY to YYYY-MM-DD\n    row['date'] = datetime.strptime(row['date'], '%m/%d/%Y').strftime('%Y-%m-%d')\n    writer.writerow(row)\n```\n\nAdjust field name and format strings to match actual input. The key is `datetime.strptime()` to parse and `.strftime()` to reformat.",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Reformat the dates in the CSV from one format to another. Keep all other fields unchanged."
+    },
+    "408": {
+      "id": 408,
+      "answer": "Reformat ISO 8601 UTC timestamps in a JSON array to a different format without the trailing 'Z'. Python solution:\n\n```python\nimport json, sys\nfrom datetime import datetime, timezone\n\ndata = json.load(sys.stdin)\n\nfor item in data:\n    # Parse ISO 8601: \"2024-01-15T10:23:45Z\" -> \"2024-01-15 10:23:45\"\n    ts = item['timestamp']  # replace 'timestamp' with actual field name\n    dt = datetime.fromisoformat(ts.replace('Z', '+00:00'))\n    item['timestamp'] = dt.strftime('%Y-%m-%d %H:%M:%S')  # target format\n\nprint(json.dumps(data, indent=2))\n```\n\nFor a simple string replacement approach:\n```bash\njq '.[].timestamp |= (gsub(\"Z$\";\"\") | split(\"T\") | join(\" \"))' input.json\n```",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Reformat timestamps in the JSON array from ISO 8601 UTC to a target format without the trailing Z."
+    },
+    "409": {
+      "id": 409,
+      "answer": "Sort a JSON array by price descending, then by name ascending for ties. Python solution:\n\n```python\nimport json, sys\n\ndata = json.load(sys.stdin)\n\nsorted_data = sorted(data, key=lambda x: (-x['price'], x['name']))\n\nprint(json.dumps(sorted_data, indent=2))\n```\n\nWith jq:\n```bash\njq 'sort_by([-.price, .name])' input.json\n```\n\nNote: jq's `sort_by` sorts ascending only, so for descending price use Python or a two-pass approach. The Python `-x['price']` negates the price to achieve descending sort while `x['name']` gives ascending alphabetical secondary sort.",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Sort the JSON array by price descending. If two prices are equal, sort by name ascending."
+    },
+    "410": {
+      "id": 410,
+      "answer": "Filter a CSV to include only rows meeting two conditions, preserving original column order. Python solution:\n\n```python\nimport csv, sys\n\nreader = csv.DictReader(sys.stdin)\nwriter = csv.DictWriter(sys.stdout, fieldnames=reader.fieldnames)\nwriter.writeheader()\n\nfor row in reader:\n    # Example: score > 50 AND status == 'active'\n    if float(row['score']) > 50 and row['status'] == 'active':\n        writer.writerow(row)\n```\n\nAdapt the condition to match the actual filter criteria specified in the task. The `DictWriter` with `fieldnames=reader.fieldnames` ensures original column order is preserved.",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Filter the CSV to include only rows meeting two conditions. Preserve the original column order."
+    },
+    "411": {
+      "id": 411,
+      "answer": "Extract specific fields from a JSON array and output as CSV with a specified header. Python solution:\n\n```python\nimport json, csv, sys\n\ndata = json.load(sys.stdin)\n\n# Example: extract id, name, email, created_at\ncolumns = ['id', 'name', 'email', 'created_at']  # adjust to actual fields\n\nwriter = csv.writer(sys.stdout)\nwriter.writerow(columns)\nfor item in data:\n    writer.writerow([item.get(col, '') for col in columns])\n```\n\nWith jq:\n```bash\njq -r '[\"id\",\"name\",\"email\",\"created_at\"], (.[] | [.id, .name, .email, .created_at]) | @csv' input.json\n```\n\nThe key is using `.get(col, '')` in Python or `//\"\"` in jq to handle missing fields gracefully.",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "From the JSON, extract specific fields into CSV with a specified header."
+    },
+    "412": {
+      "id": 412,
+      "answer": "Parse pipe-delimited records and convert to CSV with a specified header. Python solution:\n\n```python\nimport csv, sys\n\ncolumns = ['id', 'name', 'value', 'date']  # replace with actual header\n\nwriter = csv.writer(sys.stdout)\nwriter.writerow(columns)\n\nfor line in sys.stdin:\n    line = line.rstrip('\\n')\n    if line:  # skip empty lines\n        fields = line.split('|')\n        writer.writerow(fields)\n```\n\nAlternatively with Python's csv module using a custom delimiter:\n```python\nimport csv, sys\n\nreader = csv.reader(sys.stdin, delimiter='|')\nwriter = csv.writer(sys.stdout)\n\nfor i, row in enumerate(reader):\n    if i == 0:\n        writer.writerow(['id', 'name', 'value', 'date'])  # new header\n    else:\n        writer.writerow(row)\n```",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Parse the pipe-delimited records and convert them to CSV with a specified header."
+    },
+    "413": {
+      "id": 413,
+      "answer": "Compute a derived field from a JSON array and output as CSV. Python solution:\n\n```python\nimport json, csv, sys\n\ndata = json.load(sys.stdin)\n\n# Example: compute 'total' = quantity * price\ncolumns = ['id', 'name', 'quantity', 'price', 'total']\n\nwriter = csv.writer(sys.stdout)\nwriter.writerow(columns)\nfor item in data:\n    total = item['quantity'] * item['price']  # adapt formula as needed\n    writer.writerow([item.get('id',''), item.get('name',''),\n                     item.get('quantity',''), item.get('price',''), total])\n```\n\nWith jq:\n```bash\njq -r '[\"id\",\"name\",\"quantity\",\"price\",\"total\"],\n       (.[] | [.id, .name, .quantity, .price, (.quantity * .price)]) | @csv' input.json\n```",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "From the JSON array, compute a new derived field for each record and output CSV with the specified columns."
+    },
+    "414": {
+      "id": 414,
+      "answer": "Parse log lines, keep only ERROR entries, and output as a JSON array. Python solution:\n\n```python\nimport re, json, sys\n\n# Example log: 2024-01-15T10:23:45 ERROR [auth] Login failed for user=bob\npattern = re.compile(r'(\\S+)\\s+ERROR\\s+\\[(\\w+)\\]\\s+(.*)')\n\nresults = []\nfor line in sys.stdin:\n    m = pattern.match(line.strip())\n    if m:\n        results.append({\n            'timestamp': m.group(1),\n            'module': m.group(2),\n            'message': m.group(3)\n        })\n\nprint(json.dumps(results, indent=2))\n```\n\nAdapt the regex and field names to match the actual log format. The pattern must match the level indicator 'ERROR' and capture the required fields.",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Parse the log lines, keep only ERROR entries, and output JSON array objects with specified fields."
+    },
+    "415": {
+      "id": 415,
+      "answer": "Convert CSV to JSON array, interpreting a boolean column and a numeric column with correct types. Python solution:\n\n```python\nimport csv, json, sys\n\nreader = csv.DictReader(sys.stdin)\nresults = []\n\nfor row in reader:\n    obj = dict(row)\n    # Convert 'active' to boolean (adjust field name as needed)\n    obj['active'] = obj['active'].strip().lower() in ('true', '1', 'yes')\n    # Convert 'score' to number\n    obj['score'] = float(obj['score']) if '.' in obj['score'] else int(obj['score'])\n    results.append(obj)\n\nprint(json.dumps(results, indent=2))\n```\n\nKey points: use `str.lower() in ('true','1','yes')` for boolean conversion; use `int()` or `float()` for numeric conversion; all other fields remain as strings.",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Convert the CSV to JSON array objects. Interpret a boolean column as boolean and a numeric column as a number."
+    },
+    "416": {
+      "id": 416,
+      "answer": "Keep only the latest record per user_id based on a timestamp field, output sorted by user_id ascending. Python solution:\n\n```python\nimport json, sys\n\ndata = json.load(sys.stdin)\n\nlatest = {}\nfor record in data:\n    uid = record['user_id']  # adjust field name\n    ts = record['timestamp']  # adjust field name\n    if uid not in latest or ts > latest[uid]['timestamp']:\n        latest[uid] = record\n\nresult = sorted(latest.values(), key=lambda x: x['user_id'])\nprint(json.dumps(result, indent=2))\n```\n\nWith jq:\n```bash\njq 'group_by(.user_id) | map(sort_by(.timestamp) | last) | sort_by(.user_id)' input.json\n```\n\nISO 8601 timestamps compare correctly as strings, so string comparison is safe for deduplication.",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "From the JSON array, keep only the latest record for each user based on the timestamp field. Output as JSON sorted by user_id ascending."
+    },
+    "417": {
+      "id": 417,
+      "answer": "Transform JSON array to CSV, flattening an array field into a semicolon-separated string. Python solution:\n\n```python\nimport json, csv, sys\n\ndata = json.load(sys.stdin)\n\n# Example: flatten 'tags' array into semicolon-separated 'tags' column\n# Other columns: id, name\ncolumns = ['id', 'name', 'tags']  # adjust as needed\n\nwriter = csv.writer(sys.stdout)\nwriter.writerow(columns)\nfor item in data:\n    tags_str = ';'.join(str(t) for t in item.get('tags', []))\n    writer.writerow([item.get('id',''), item.get('name',''), tags_str])\n```\n\nWith jq:\n```bash\njq -r '[\"id\",\"name\",\"tags\"],\n       (.[] | [.id, .name, (.tags | join(\";\"))]) | @csv' input.json\n```",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Transform the JSON array into CSV, flattening the array field into a semicolon-separated string in a single column."
+    },
+    "418": {
+      "id": 418,
+      "answer": "Parse event logs, count occurrences per event_type, output CSV sorted by count descending then event_type ascending. Python solution:\n\n```python\nimport re, csv, sys\nfrom collections import Counter\n\ncounts = Counter()\nfor line in sys.stdin:\n    # Example: extract event_type from log line\n    m = re.search(r'event_type=(\\w+)', line)  # adapt regex to actual format\n    if m:\n        counts[m.group(1)] += 1\n\nwriter = csv.writer(sys.stdout)\nwriter.writerow(['event_type', 'count'])\nfor event_type, count in sorted(counts.items(), key=lambda x: (-x[1], x[0])):\n    writer.writerow([event_type, count])\n```\n\nSorting key `(-count, event_type)` gives descending count first, then ascending alphabetical for ties.",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Parse event logs, count how many times each event_type appears. Output CSV sorted by count descending, then event_type ascending."
+    },
+    "419": {
+      "id": 419,
+      "answer": "Filter JSON array by a condition, sort descending, output specific fields as CSV. Python solution:\n\n```python\nimport json, csv, sys\n\ndata = json.load(sys.stdin)\n\n# Example: filter where score > 80, sort by score descending, output id and name\nfiltered = [r for r in data if r.get('score', 0) > 80]\nsorted_data = sorted(filtered, key=lambda x: x['score'], reverse=True)\n\nwriter = csv.writer(sys.stdout)\nwriter.writerow(['id', 'name'])  # adjust columns\nfor row in sorted_data:\n    writer.writerow([row.get('id',''), row.get('name','')])\n```\n\nWith jq:\n```bash\njq -r '[\"id\",\"name\"],\n       ([.[] | select(.score > 80)] | sort_by(-.score)[] | [.id, .name]) | @csv' input.json\n```",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Filter the JSON array by a condition, sort by a field descending, and output specific fields as CSV."
+    },
+    "420": {
+      "id": 420,
+      "answer": "Convert JSON with nested arrays (e.g., team members) to normalized CSV with one row per team member. Python solution:\n\n```python\nimport json, csv, sys\n\ndata = json.load(sys.stdin)\n\n# Example structure: [{\"team\": \"alpha\", \"members\": [{\"name\": \"Alice\", \"role\": \"lead\"}, ...]}, ...]\ncolumns = ['team', 'member_name', 'role']  # adjust column names\n\nwriter = csv.writer(sys.stdout)\nwriter.writerow(columns)\n\nfor team in data:\n    team_name = team.get('team', '')\n    for member in team.get('members', []):\n        writer.writerow([team_name, member.get('name',''), member.get('role','')])\n```\n\nWith jq:\n```bash\njq -r '[\"team\",\"member_name\",\"role\"],\n       (.[] | .team as $t | .members[] | [$t, .name, .role]) | @csv' input.json\n```",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Convert the JSON into a normalized CSV with specified columns. Output one row per team member."
+    },
+    "421": {
+      "id": 421,
+      "answer": "Parse mixed-format dates and standardize to ISO 8601 (YYYY-MM-DD), output JSON with original and standardized fields. Python solution:\n\n```python\nimport json, sys\nfrom datetime import datetime\n\n# Common formats to try\nFORMATS = ['%m/%d/%Y', '%d-%b-%Y', '%B %d, %Y', '%Y-%m-%d', '%d/%m/%Y']\n\ndef parse_date(s):\n    for fmt in FORMATS:\n        try:\n            return datetime.strptime(s.strip(), fmt).strftime('%Y-%m-%d')\n        except ValueError:\n            continue\n    return None  # or raise an error\n\nlines = [line.strip() for line in sys.stdin if line.strip()]\nresults = []\nfor raw in lines:\n    standardized = parse_date(raw)\n    results.append({'original': raw, 'date': standardized})\n\nprint(json.dumps(results, indent=2))\n```\n\nKey: try multiple `strptime` formats and output the first successful parse. The output field name should match the task specification.",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Parse the mixed-format dates and standardize them to YYYY-MM-DD. Output JSON array with original and standardized date fields."
+    },
+    "422": {
+      "id": 422,
+      "answer": "Remove duplicate rows from a CSV based on a key column, keeping only the first occurrence. Python solution:\n\n```python\nimport csv, sys\n\nreader = csv.DictReader(sys.stdin)\nwriter = csv.DictWriter(sys.stdout, fieldnames=reader.fieldnames)\nwriter.writeheader()\n\nseen = set()\nfor row in reader:\n    key = row['id']  # replace 'id' with the actual dedup column name\n    if key not in seen:\n        seen.add(key)\n        writer.writerow(row)\n```\n\nWith awk (for a simpler key-column approach):\n```bash\nawk -F, 'NR==1 || !seen[$1]++' input.csv\n```\n(Replace `$1` with the appropriate column index.)\n\nThe `seen` set tracks observed keys; only the first occurrence is written.",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "From the CSV, remove duplicate rows based on a key column, keeping only the first occurrence. Output the deduplicated CSV otherwise unchanged."
+    },
+    "423": {
+      "id": 423,
+      "answer": "Parse JSON Lines (JSONL) input and convert it to CSV with a specified header. Python solution:\n\n```python\nimport json, csv, sys\n\ncolumns = ['id', 'event', 'timestamp', 'user']  # adjust to actual fields\n\nwriter = csv.writer(sys.stdout)\nwriter.writerow(columns)\n\nfor line in sys.stdin:\n    line = line.strip()\n    if line:\n        obj = json.loads(line)\n        writer.writerow([obj.get(col, '') for col in columns])\n```\n\nWith jq:\n```bash\njq -rs '[\"id\",\"event\",\"timestamp\",\"user\"],\n        (.[] | [.id, .event, .timestamp, .user]) | @csv' input.jsonl\n```\n(Use `-s` to slurp all lines into an array, then process.)\n\nNote: JSONL has one JSON object per line, no surrounding array brackets.",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Parse the JSON Lines input and convert it to CSV with a specified header."
+    },
+    "424": {
+      "id": 424,
+      "answer": "Compute sum of an amount column grouped by a category column, output CSV sorted by category ascending. Python solution:\n\n```python\nimport csv, sys\nfrom collections import defaultdict\n\ntotals = defaultdict(float)\n\nreader = csv.DictReader(sys.stdin)\nfor row in reader:\n    category = row['category']  # adjust column names\n    amount = float(row['amount'])\n    totals[category] += amount\n\nwriter = csv.writer(sys.stdout)\nwriter.writerow(['category', 'total_amount'])\nfor category in sorted(totals.keys()):\n    writer.writerow([category, round(totals[category], 2)])\n```\n\nWith Python pandas (if available):\n```python\nimport pandas as pd, sys\ndf = pd.read_csv(sys.stdin)\nresult = df.groupby('category')['amount'].sum().reset_index().sort_values('category')\nresult.to_csv(sys.stdout, index=False)\n```",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "From the transaction CSV, compute the sum of the amount column grouped by category. Output CSV sorted by category ascending."
+    },
+    "425": {
+      "id": 425,
+      "answer": "Parse records, trim whitespace from all fields, convert an email/name field to lowercase, output CSV. Python solution:\n\n```python\nimport csv, sys\n\nreader = csv.DictReader(sys.stdin)\nwriter = csv.DictWriter(sys.stdout, fieldnames=reader.fieldnames)\nwriter.writeheader()\n\nfor row in reader:\n    cleaned = {k: v.strip() for k, v in row.items()}\n    cleaned['email'] = cleaned['email'].lower()  # replace 'email' with actual field\n    writer.writerow(cleaned)\n```\n\nFor parsing records with arbitrary delimiters:\n```python\nimport sys, csv\n\nlines = [line.rstrip('\\n') for line in sys.stdin]\ncolumns = ['id', 'name', 'email']  # adjust\nwriter = csv.writer(sys.stdout)\nwriter.writerow(columns)\nfor line in lines[1:]:  # skip header if present\n    fields = [f.strip() for f in line.split(',')]\n    fields[2] = fields[2].lower()  # lowercase email column index\n    writer.writerow(fields)\n```",
+      "tier": "T2",
+      "category": "data_transform",
+      "task": "Parse the records, trim surrounding whitespace from all fields, convert an email/name field to lowercase, and output CSV with specified header."
+    },
+    "426": {
+      "id": 426,
+      "answer": "Create and switch to a new branch named <branch-name> from the current branch:\n\n```bash\ngit checkout -b <branch-name>\n```\n\nOr using the newer `git switch` syntax (Git 2.23+):\n```bash\ngit switch -c <branch-name>\n```\n\nBoth commands create a new branch from the current HEAD and immediately check it out (switch to it).",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Create and switch to a new branch named <branch-name> from the current branch."
+    },
+    "427": {
+      "id": 427,
+      "answer": "List all local branches and show which is currently checked out:\n\n```bash\ngit branch\n```\n\nThe currently checked-out branch is indicated with an asterisk (*) prefix and typically highlighted in green. Example output:\n```\n  feature/login\n* main\n  bugfix/typo\n```\n\nTo get more detail including last commit:\n```bash\ngit branch -v\n```",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "List all local branches and show which branch is currently checked out."
+    },
+    "428": {
+      "id": 428,
+      "answer": "Create a new branch named <new-branch> from <source-branch> without first switching to <source-branch>:\n\n```bash\ngit branch <new-branch> <source-branch>\n```\n\nExample:\n```bash\ngit branch feature/payment main\n```\n\nThis creates `feature/payment` pointing to the same commit as `main`, but you remain on your current branch. You can also use a commit SHA or tag instead of a branch name as the source.",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Create a new branch named <new-branch> from <source-branch> without first switching to <source-branch>."
+    },
+    "429": {
+      "id": 429,
+      "answer": "Rename the current branch to <new-name>:\n\n```bash\ngit branch -m <new-name>\n```\n\nTo rename a branch you are NOT currently on:\n```bash\ngit branch -m <old-name> <new-name>\n```\n\nIf the branch has an upstream tracking reference, you'll also need to update the remote:\n```bash\ngit push origin --delete <old-name>\ngit push origin -u <new-name>\n```",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Rename the current branch to <new-name>."
+    },
+    "430": {
+      "id": 430,
+      "answer": "Delete the local branch <branch-name>, assuming it has already been fully merged:\n\n```bash\ngit branch -d <branch-name>\n```\n\nThe `-d` (lowercase) flag is the safe delete — it only succeeds if the branch has been fully merged into its upstream or HEAD. If git refuses because it cannot verify the merge, use `-D` (force delete) instead.",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Delete the local branch <branch-name>, assuming it has already been fully merged."
+    },
+    "431": {
+      "id": 431,
+      "answer": "Force-delete the local branch <branch-name> even if it has unmerged commits:\n\n```bash\ngit branch -D <branch-name>\n```\n\nThe `-D` flag is shorthand for `--delete --force`. It deletes the branch regardless of its merge status. Use with caution — any commits unique to that branch will become unreachable (though they remain in the reflog for a period).",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Force-delete the local branch <branch-name> even if it has unmerged commits."
+    },
+    "432": {
+      "id": 432,
+      "answer": "Show all local and remote-tracking branches:\n\n```bash\ngit branch -a\n```\n\nRemote-tracking branches are shown with the `remotes/` prefix (e.g., `remotes/origin/main`). Example output:\n```\n* main\n  feature/auth\n  remotes/origin/HEAD -> origin/main\n  remotes/origin/main\n  remotes/origin/feature/auth\n```\n\nTo show only remote-tracking branches:\n```bash\ngit branch -r\n```",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Show all local and remote-tracking branches."
+    },
+    "433": {
+      "id": 433,
+      "answer": "Merge branch <feature-branch> into the currently checked out branch using a non-fast-forward merge commit:\n\n```bash\ngit merge --no-ff <feature-branch>\n```\n\nThe `--no-ff` flag forces creation of a merge commit even when the merge could be resolved as a fast-forward. This preserves the history of the feature branch as a distinct development line, which is useful for code review and changelog purposes.",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Merge branch <feature-branch> into the currently checked out branch using a non-fast-forward merge commit."
+    },
+    "434": {
+      "id": 434,
+      "answer": "Abort an in-progress merge that has conflicts and return to the pre-merge state:\n\n```bash\ngit merge --abort\n```\n\nThis command restores the working tree and index to the state before the merge began. It is safe to run at any point during a conflicted merge before you have committed the resolution.",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Abort an in-progress merge that has conflicts."
+    },
+    "435": {
+      "id": 435,
+      "answer": "Rebase the current branch onto <base-branch>:\n\n```bash\ngit rebase <base-branch>\n```\n\nExample:\n```bash\ngit rebase main\n```\n\nThis replays commits from the current branch on top of <base-branch>. If conflicts arise, git pauses and you must resolve them, then run `git rebase --continue`. To cancel: `git rebase --abort`.",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Rebase the current branch onto <base-branch>."
+    },
+    "436": {
+      "id": 436,
+      "answer": "Interactively rebase the last 4 commits on the current branch:\n\n```bash\ngit rebase -i HEAD~4\n```\n\nThis opens an editor showing the last 4 commits, each prefixed with `pick`. You can change `pick` to:\n- `reword` — edit commit message\n- `edit` — pause to amend the commit\n- `squash` / `s` — combine with previous commit (keeps both messages)\n- `fixup` / `f` — combine with previous commit (discards this message)\n- `drop` / `d` — remove the commit\n\nSave and close the editor to begin the rebase.",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Interactively rebase the last 4 commits on the current branch."
+    },
+    "437": {
+      "id": 437,
+      "answer": "Continue a rebase after resolving conflicts:\n\n1. Resolve the conflicts in the affected file(s)\n2. Stage the resolved files:\n   ```bash\n   git add <resolved-file>\n   ```\n3. Continue the rebase:\n   ```bash\n   git rebase --continue\n   ```\n\ngit will apply the next commit and either finish or pause again if there are more conflicts. Do NOT run `git commit` manually during a rebase — `git rebase --continue` handles creating the commit.",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Continue a rebase after resolving conflicts."
+    },
+    "438": {
+      "id": 438,
+      "answer": "Abort an in-progress rebase and return to the pre-rebase state:\n\n```bash\ngit rebase --abort\n```\n\nThis cancels the rebase at any point (even mid-conflict) and restores the branch to its original state before the rebase was started. Your working tree is reset to the state it was in before `git rebase` was invoked.",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Abort an in-progress rebase and return to the pre-rebase state."
+    },
+    "439": {
+      "id": 439,
+      "answer": "Cherry-pick a specific commit <commit-hash> onto the current branch:\n\n```bash\ngit cherry-pick <commit-hash>\n```\n\nThis creates a new commit on the current branch with the same changes as <commit-hash>. The new commit will have a different SHA (it's a copy, not a move). If conflicts occur, resolve them, stage the files, then run `git cherry-pick --continue`.",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Cherry-pick commit <commit-hash> onto the current branch."
+    },
+    "440": {
+      "id": 440,
+      "answer": "Cherry-pick a range of commits from <start-hash> through <end-hash> onto the current branch:\n\n```bash\ngit cherry-pick <start-hash>^..<end-hash>\n```\n\nThe `^` after start-hash means \"include the start commit itself\" (without `^`, the range is exclusive of the start). Example:\n```bash\ngit cherry-pick abc1234^..def5678\n```\n\nThis applies all commits in the range [abc1234, def5678] inclusive, in order, as new commits on the current branch.",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Cherry-pick a range of commits from <start-hash> through <end-hash> onto the current branch."
+    },
+    "441": {
+      "id": 441,
+      "answer": "Show the commit history as a one-line graph including branch decorations:\n\n```bash\ngit log --oneline --graph --decorate\n```\n\nTo see all branches (not just the current one):\n```bash\ngit log --oneline --graph --decorate --all\n```\n\nExample output:\n```\n* a1b2c3d (HEAD -> main, origin/main) Add login feature\n| * d4e5f6g (feature/auth) WIP auth module\n|/\n* 7h8i9j0 Initial commit\n```\n\n`--oneline` condenses each commit to one line; `--graph` draws ASCII art branch graph; `--decorate` shows branch/tag names.",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Show the commit history for the current branch as a one-line graph including branch decorations."
+    },
+    "442": {
+      "id": 442,
+      "answer": "Show commits that are on <branch-A> but not on <branch-B>:\n\n```bash\ngit log <branch-B>..<branch-A>\n```\n\nThe `..` notation means \"commits reachable from <branch-A> that are NOT reachable from <branch-B>\". Example:\n```bash\ngit log main..feature/login\n```\n\nFor a more compact view:\n```bash\ngit log --oneline main..feature/login\n```\n\nAlternatively, to see what would be merged:\n```bash\ngit log <branch-B>..HEAD  # if already on branch-A\n```",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Show the commits that are on <branch-A> but not on <branch-B>."
+    },
+    "443": {
+      "id": 443,
+      "answer": "Find which commit last modified the file <filename>:\n\n```bash\ngit log -1 -- <filename>\n```\n\nThe `-1` flag shows only the most recent commit that touched the file. The `--` separator ensures git treats the argument as a file path.\n\nFor more detail including the diff:\n```bash\ngit log -1 -p -- <filename>\n```\n\nTo see the full history of a file:\n```bash\ngit log --follow -- <filename>\n```\n(`--follow` tracks renames)",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Find which commit last modified the file <filename>."
+    },
+    "444": {
+      "id": 444,
+      "answer": "Show the changes introduced by a specific commit <commit-hash>:\n\n```bash\ngit show <commit-hash>\n```\n\nThis displays the commit metadata (author, date, message) followed by the diff of all changes introduced by that commit. For just the diff without metadata:\n```bash\ngit show <commit-hash> --no-patch  # metadata only\ngit diff <commit-hash>^..<commit-hash>  # diff only\n```\n\nFor a stat summary:\n```bash\ngit show --stat <commit-hash>\n```",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Show the changes introduced by commit <commit-hash>."
+    },
+    "445": {
+      "id": 445,
+      "answer": "Compare file-level differences between branches <branch-A> and <branch-B>:\n\n```bash\ngit diff --name-only <branch-A> <branch-B>\n```\n\nThis shows only the names of files that differ between the two branches. For a summary with change type (added/modified/deleted):\n```bash\ngit diff --name-status <branch-A> <branch-B>\n```\n\nFor the full diff content:\n```bash\ngit diff <branch-A> <branch-B>\n```\n\nTo compare with the merge base (what diverged since branching):\n```bash\ngit diff <branch-A>...<branch-B>  # triple dot\n```",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Compare the file-level differences between branches <branch-A> and <branch-B>."
+    },
+    "446": {
+      "id": 446,
+      "answer": "Resolve a merge conflict by accepting the 'ours' (current branch) version of <filename>:\n\n```bash\ngit checkout --ours -- <filename>\n```\n\nThis overwrites <filename> with the version from the current branch (HEAD), discarding the incoming changes. After running this command, stage the file to mark it resolved:\n```bash\ngit add <filename>\n```",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Start resolving a conflict by checking out the 'ours' version of <filename>."
+    },
+    "447": {
+      "id": 447,
+      "answer": "Resolve a merge conflict by accepting the 'theirs' (incoming branch) version of <filename>:\n\n```bash\ngit checkout --theirs -- <filename>\n```\n\nThis overwrites <filename> with the version from the branch being merged in, discarding the current branch's changes. After running this command, stage the file:\n```bash\ngit add <filename>\n```",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Resolve a conflict by checking out the 'theirs' (incoming) version of <filename>."
+    },
+    "448": {
+      "id": 448,
+      "answer": "After manually resolving merge conflicts, mark the files as resolved by staging them:\n\n```bash\ngit add <file1> <file2>\n```\n\nOr to stage all resolved files at once:\n```bash\ngit add .\n```\n\nThis marks the conflicts as resolved. Then complete the merge:\n```bash\ngit commit\n```\n\ngit will pre-populate the commit message with merge information. You can also use `git merge --continue` instead of `git commit` after staging the files.",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "After manually resolving all merge conflicts, mark the conflicted files as resolved."
+    },
+    "449": {
+      "id": 449,
+      "answer": "Show files currently in a conflicted state during a merge or rebase:\n\n```bash\ngit diff --name-only --diff-filter=U\n```\n\nThe `--diff-filter=U` shows only Unmerged (conflicted) files. Alternatively:\n```bash\ngit status\n```\n\n`git status` will show conflicted files under \"both modified\", \"added by us\", \"deleted by them\", etc. For a concise list:\n```bash\ngit status --short | grep '^UU\\|^AA\\|^DD'\n```\n\nOr using the low-level command:\n```bash\ngit ls-files --unmerged\n```",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Show a list of files that are currently in a conflicted state during a merge or rebase."
+    },
+    "450": {
+      "id": 450,
+      "answer": "Continue a cherry-pick after resolving conflicts:\n\n1. Resolve the conflicts in the affected files\n2. Stage the resolved files:\n   ```bash\n   git add <resolved-file>\n   ```\n3. Continue the cherry-pick:\n   ```bash\n   git cherry-pick --continue\n   ```\n\nThis commits the cherry-picked change with the conflict resolution applied. To abort the cherry-pick instead:\n```bash\ngit cherry-pick --abort\n```",
+      "tier": "T2",
+      "category": "git_ops",
+      "task": "Continue a cherry-pick after resolving conflicts."
+    },
+    "451": {
+      "id": 451,
+      "answer": "Bug: JavaScript off-by-one loop bound — the loop uses `<= arr.length` instead of `< arr.length`, causing it to access `arr[arr.length]` which is `undefined`. Adding `undefined` to a number produces `NaN`, so the sum becomes `NaN`.\n\nBuggy code example:\n```javascript\nfunction sum(arr) {\n  let total = 0;\n  for (let i = 0; i <= arr.length; i++) {  // BUG: should be <\n    total += arr[i];\n  }\n  return total;\n}\n```\n\nFix: change `<=` to `<`:\n```javascript\nfunction sum(arr) {\n  let total = 0;\n  for (let i = 0; i < arr.length; i++) {  // FIXED\n    total += arr[i];\n  }\n  return total;\n}\n```\n\nAlternatively use `arr.reduce((a, b) => a + b, 0)` to avoid manual indexing entirely.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "JavaScript — off-by-one loop bound: Identify why this returns NaN for normal numeric arrays and fix the loop so it only sums valid elements."
+    },
+    "452": {
+      "id": 452,
+      "answer": "Bug: Python mutable default argument — using a list `[]` as a default parameter value means the list is created once at function definition time and shared across all calls. Each call that uses the default appends to the same list.\n\nBuggy code:\n```python\ndef add_item(item, items=[]):  # BUG: mutable default\n    items.append(item)\n    return items\n```\n\nFix: use `None` as the default and create a new list inside the function:\n```python\ndef add_item(item, items=None):  # FIXED\n    if items is None:\n        items = []\n    items.append(item)\n    return items\n```\n\nNow each call without an explicit `items` argument gets a fresh empty list, while callers can still pass their own list explicitly.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "Python — mutable default argument: Identify why repeated calls keep accumulating old values and fix the function so each call gets a fresh list unless one is explicitly provided."
+    },
+    "453": {
+      "id": 453,
+      "answer": "Bug: JavaScript assignment `=` instead of comparison `==` or `===` in a conditional. The assignment always succeeds and the assigned value (truthy/falsy) determines the branch, not the intended comparison.\n\nBuggy code example:\n```javascript\nfunction isAdmin(user) {\n  if (user.role = 'admin') {  // BUG: assigns 'admin' to user.role, always truthy\n    return true;\n  }\n  return false;\n}\n```\n\nFix: use strict equality `===`:\n```javascript\nfunction isAdmin(user) {\n  if (user.role === 'admin') {  // FIXED\n    return true;\n  }\n  return false;\n}\n```\n\nPrevention: use a linter (ESLint `no-cond-assign` rule) or place the constant on the left side ('Yoda condition'): `'admin' === user.role` — a typo `=` would be a syntax error there.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "JavaScript — assignment instead of comparison: Identify why this always returns true and fix the conditional."
+    },
+    "454": {
+      "id": 454,
+      "answer": "Bug: Python wrong dictionary key access — using `dict[key]` raises a `KeyError` when the key is missing. Should use `dict.get(key)` or handle the exception.\n\nBuggy code:\n```python\ndef get_value(d, key):\n    print(d[key])  # BUG: raises KeyError if key missing\n```\n\nFix option 1 — use `.get()` with a default:\n```python\ndef get_value(d, key):\n    print(d.get(key, 'Key not found'))  # FIXED\n```\n\nFix option 2 — use try/except:\n```python\ndef get_value(d, key):\n    try:\n        print(d[key])\n    except KeyError:\n        print(f'Key {key!r} not found')  # FIXED\n```\n\nUse `.get()` for simple defaults; use try/except for more complex error handling logic.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "Python — wrong dictionary key access: Identify why this raises a KeyError and fix it so missing keys are handled by printing a default message."
+    },
+    "455": {
+      "id": 455,
+      "answer": "Bug: JavaScript callback missing `return` in `.map()` — without a `return` statement, the arrow function returns `undefined`, so the mapped array is all `undefined`.\n\nBuggy code:\n```javascript\nconst doubled = [1, 2, 3].map(function(x) {\n  x * 2;  // BUG: no return statement\n});\n// doubled === [undefined, undefined, undefined]\n```\n\nFix: add the `return` keyword (or use an arrow function with implicit return):\n```javascript\n// Fix 1: explicit return\nconst doubled = [1, 2, 3].map(function(x) {\n  return x * 2;  // FIXED\n});\n\n// Fix 2: arrow function with implicit return\nconst doubled = [1, 2, 3].map(x => x * 2);  // FIXED\n```",
+      "tier": "T2",
+      "category": "debug",
+      "task": "JavaScript — callback missing return: Identify why .map() produces an array of undefined and fix the callback."
+    },
+    "456": {
+      "id": 456,
+      "answer": "Bug: Python string/int concatenation — Python does not implicitly convert integers to strings. Using `+` between a `str` and an `int` raises `TypeError: can only concatenate str (not \"int\") to str`.\n\nBuggy code:\n```python\nage = 25\nprint('Age: ' + age)  # BUG: TypeError\n```\n\nFix option 1 — cast with `str()`:\n```python\nprint('Age: ' + str(age))  # FIXED\n```\n\nFix option 2 — use f-string (preferred):\n```python\nprint(f'Age: {age}')  # FIXED\n```\n\nFix option 3 — use `.format()`:\n```python\nprint('Age: {}'.format(age))  # FIXED\n```",
+      "tier": "T2",
+      "category": "debug",
+      "task": "Python — string/int concatenation: Identify why this raises a TypeError and fix the string construction."
+    },
+    "457": {
+      "id": 457,
+      "answer": "Bug: JavaScript wrong property name — accessing a property that doesn't exist on an object returns `undefined` rather than raising an error. Common cause is a typo in the property name.\n\nBuggy code example:\n```javascript\nconst user = { firstName: 'Alice', lastName: 'Smith' };\nconsole.log(user.firstname);  // BUG: wrong case, prints undefined\n```\n\nFix: use the correct property name (JavaScript is case-sensitive):\n```javascript\nconsole.log(user.firstName);  // FIXED: prints 'Alice'\n```\n\nTo debug property name issues, use `console.log(Object.keys(user))` to list available keys, or `user?.firstname ?? 'not found'` to safely handle missing properties.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "JavaScript — wrong property name: Identify why this prints undefined and fix the property access."
+    },
+    "458": {
+      "id": 458,
+      "answer": "Bug: Python using `is` instead of `==` for value comparison — `is` checks identity (same object in memory), not equality. For integers outside the CPython small-int cache range (-5 to 256), `is` may return `False` even for equal values.\n\nBuggy code:\n```python\nx = 1000\ny = 1000\nif x is y:  # BUG: unreliable for large integers and most objects\n    print('equal')\n```\n\nFix: use `==` for value comparison:\n```python\nif x == y:  # FIXED: compares values\n    print('equal')\n```\n\nRule: use `is` only for identity checks (`is None`, `is True`, `is False`). Use `==` for value equality of all other objects.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "Python — using 'is' instead of '==' for value comparison: Identify why this comparison is unreliable and fix it."
+    },
+    "459": {
+      "id": 459,
+      "answer": "Bug: JavaScript forgetting to `await` a Promise — without `await`, the function receives the Promise object itself, not the resolved value. Calling methods on the Promise object that don't exist throws a TypeError at runtime.\n\nBuggy code:\n```javascript\nasync function getUser(id) {\n  const user = fetchUser(id);  // BUG: missing await, user is a Promise\n  console.log(user.name);      // TypeError: cannot read property 'name' of Promise\n}\n```\n\nFix: add `await`:\n```javascript\nasync function getUser(id) {\n  const user = await fetchUser(id);  // FIXED\n  console.log(user.name);\n}\n```\n\nAlternatively use `.then()` chaining: `fetchUser(id).then(user => console.log(user.name))`.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "JavaScript — forgetting to await a promise: Identify why this throws at runtime and fix so it logs the resolved value."
+    },
+    "460": {
+      "id": 460,
+      "answer": "Bug: Python file opened in wrong mode — opening a file in read mode `'r'` and trying to write raises `io.UnsupportedOperation: not writable`.\n\nBuggy code:\n```python\nwith open('output.txt', 'r') as f:  # BUG: 'r' is read-only\n    f.write('hello')  # raises UnsupportedOperation\n```\n\nFix: use write mode `'w'` (overwrites) or append mode `'a'` (appends):\n```python\nwith open('output.txt', 'w') as f:  # FIXED: write mode\n    f.write('hello')\n```\n\nFile mode reference:\n- `'r'` — read (default)\n- `'w'` — write (truncates file)\n- `'a'` — append\n- `'r+'` — read and write\n- `'wb'` / `'rb'` — binary modes",
+      "tier": "T2",
+      "category": "debug",
+      "task": "Python — file opened in wrong mode: Identify why this fails and fix the file mode so the string can be written."
+    },
+    "461": {
+      "id": 461,
+      "answer": "Bug: JavaScript misspelled variable name — referencing a variable name with a typo causes a `ReferenceError: <variable> is not defined` because the mistyped name was never declared.\n\nBuggy code:\n```javascript\nfunction double(x) {\n  const result = x * 2;\n  return ressult;  // BUG: typo, 'ressult' is not defined\n}\n```\n\nFix: correct the variable name:\n```javascript\nfunction double(x) {\n  const result = x * 2;\n  return result;  // FIXED\n}\n```\n\nPrevention: use `'use strict'` mode (which prevents accidental globals) and a linter. In non-strict mode, assigning to an undeclared variable creates an accidental global instead of throwing.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "JavaScript — accidental global due to misspelled variable: Identify why this throws a ReferenceError and fix the returned variable name."
+    },
+    "462": {
+      "id": 462,
+      "answer": "Bug: Python incorrect list index — accessing `list[len(list)]` raises `IndexError: list index out of range` because valid indices are 0 through len-1.\n\nBuggy code:\n```python\nmy_list = [10, 20, 30]\nprint(my_list[len(my_list)])  # BUG: index 3 is out of range (valid: 0-2)\n```\n\nFix option 1 — use `-1` for the last element:\n```python\nprint(my_list[-1])  # FIXED: prints 30\n```\n\nFix option 2 — use `len - 1`:\n```python\nprint(my_list[len(my_list) - 1])  # FIXED: prints 30\n```\n\nPython negative indices: `-1` is the last element, `-2` second-to-last, etc.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "Python — incorrect list index: Identify why this raises an IndexError and fix it to print the last element."
+    },
+    "463": {
+      "id": 463,
+      "answer": "Bug: JavaScript `.map()` with a logic error — the mapping function computes the wrong expression or uses wrong variable, so the output array contains incorrect values.\n\nBuggy code example:\n```javascript\nconst nums = [1, 2, 3];\nconst squares = nums.map(n => n + n);  // BUG: adds instead of multiplies\n// squares === [2, 4, 6] instead of [1, 4, 9]\n```\n\nFix: use the correct operation:\n```javascript\nconst squares = nums.map(n => n * n);  // FIXED: [1, 4, 9]\n```\n\nAnother common variant — using wrong index variable:\n```javascript\n// BUG:\nconst result = nums.map((n, i) => i * i);  // squares indices, not values\n// FIXED:\nconst result = nums.map(n => n * n);  // squares values\n```",
+      "tier": "T2",
+      "category": "debug",
+      "task": "JavaScript — .map() with bug: Identify why the output is wrong and fix the mapping logic."
+    },
+    "464": {
+      "id": 464,
+      "answer": "Bug: Python indentation causes early return — the `return` statement is indented inside the loop body, causing the function to return after examining only the first element.\n\nBuggy code:\n```python\ndef contains(lst, target):\n    for item in lst:\n        if item == target:\n            return True\n        return False  # BUG: indented inside loop, returns after first iteration\n```\n\nFix: dedent `return False` to be outside the loop:\n```python\ndef contains(lst, target):\n    for item in lst:\n        if item == target:\n            return True\n    return False  # FIXED: only reached after full iteration\n```\n\nThis is a common Python pitfall because indentation is significant. The `return False` should only execute after the entire loop completes without finding the target.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "Python — indentation causes early return: Identify why this returns too early and fix the indentation so it checks the full list."
+    },
+    "465": {
+      "id": 465,
+      "answer": "Bug: JavaScript using `for...in` on an array — `for...in` iterates over enumerable property keys (as strings: '0', '1', '2'), not values. It can also iterate over inherited prototype properties if any are enumerable.\n\nBuggy code:\n```javascript\nconst nums = [10, 20, 30];\nlet sum = 0;\nfor (const i in nums) {  // BUG: i is '0', '1', '2' (string keys)\n  sum += i;  // string concatenation: '0' + '1' + '2' = '012' or similar\n}\n```\n\nFix: use `for...of` to iterate over values:\n```javascript\nlet sum = 0;\nfor (const n of nums) {  // FIXED: n is 10, 20, 30\n  sum += n;\n}\n// sum === 60\n```\n\nAlternatively: `nums.reduce((a, b) => a + b, 0)` or `for (let i = 0; i < nums.length; i++)`.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "JavaScript — using for...in on an array: Identify why this produces the wrong result and fix the loop to sum array values."
+    },
+    "466": {
+      "id": 466,
+      "answer": "Bug: Python shadowing the built-in `list` — assigning a variable named `list` overwrites the built-in, making it impossible to call `list()` later in the same scope.\n\nBuggy code:\n```python\nlist = [1, 2, 3]     # BUG: shadows built-in 'list'\nresult = list('abc') # TypeError: 'list' object is not callable\n```\n\nFix: rename the variable to avoid shadowing the built-in:\n```python\nmy_list = [1, 2, 3]     # FIXED: different name\nresult = list('abc')    # works: ['a', 'b', 'c']\n```\n\nOther commonly shadowed built-ins to avoid: `id`, `type`, `input`, `print`, `str`, `int`, `dict`, `set`, `map`, `filter`, `zip`, `sum`, `max`, `min`, `len`.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "Python — shadowing built-in 'list': Identify why this crashes and fix the variable naming."
+    },
+    "467": {
+      "id": 467,
+      "answer": "Bug: JavaScript wrong logical operator — using `||` (OR) instead of `&&` (AND), or vice versa, makes the condition always true or always false for certain inputs.\n\nBuggy code example:\n```javascript\nfunction isValidAge(age) {\n  if (age >= 0 || age <= 120) {  // BUG: always true for any number\n    return true;\n  }\n  return false;\n}\n```\n\nFix: use `&&` (AND) to require both conditions:\n```javascript\nfunction isValidAge(age) {\n  if (age >= 0 && age <= 120) {  // FIXED: both must be true\n    return true;\n  }\n  return false;\n}\n```\n\nMnemonic: use `&&` when ALL conditions must be met; use `||` when ANY condition suffices.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "JavaScript — wrong logical operator: Identify why this always returns true and fix the logic."
+    },
+    "468": {
+      "id": 468,
+      "answer": "Bug: Python modifying a string by index — strings are immutable in Python. Attempting to assign to a character position (`s[0] = 'H'`) raises `TypeError: 'str' object does not support item assignment`.\n\nBuggy code:\n```python\ns = 'hello'\ns[0] = 'H'  # BUG: TypeError, strings are immutable\nprint(s)\n```\n\nFix: construct a new string using slicing or `str.replace()`:\n```python\n# Fix 1: slicing\ns = 'hello'\ns = 'H' + s[1:]  # FIXED: 'Hello'\nprint(s)\n\n# Fix 2: replace\ns = 'hello'.replace('h', 'H', 1)  # FIXED: 'Hello'\n\n# Fix 3: use a list for mutable character manipulation\nchars = list('hello')\nchars[0] = 'H'\ns = ''.join(chars)  # FIXED: 'Hello'\n```",
+      "tier": "T2",
+      "category": "debug",
+      "task": "Python — modifying a string by index: Identify why this raises an error and fix it so the output is the modified string."
+    },
+    "469": {
+      "id": 469,
+      "answer": "Bug: JavaScript missing `return` in an `else` or final branch — a function that conditionally returns a value but lacks a `return` in one branch returns `undefined` for that case.\n\nBuggy code:\n```javascript\nfunction classify(n) {\n  if (n > 0) {\n    return 'positive';\n  } else if (n < 0) {\n    return 'negative';\n  }\n  // BUG: missing return for n === 0, implicitly returns undefined\n}\n```\n\nFix: add the missing return:\n```javascript\nfunction classify(n) {\n  if (n > 0) {\n    return 'positive';\n  } else if (n < 0) {\n    return 'negative';\n  }\n  return 'zero';  // FIXED\n}\n```",
+      "tier": "T2",
+      "category": "debug",
+      "task": "JavaScript — missing return in else branch: Identify why a function returns undefined and fix it."
+    },
+    "470": {
+      "id": 470,
+      "answer": "Bug: Python wrong exception type caught — catching a different exception class than what is actually raised means the handler never executes, and the original exception propagates uncaught.\n\nBuggy code:\n```python\ntry:\n    result = int('not a number')\nexcept TypeError:  # BUG: int() raises ValueError, not TypeError\n    print('conversion failed')\n```\n\nFix: catch the correct exception type:\n```python\ntry:\n    result = int('not a number')\nexcept ValueError:  # FIXED: int() raises ValueError for invalid literals\n    print('conversion failed')\n```\n\nTo catch multiple types:\n```python\nexcept (ValueError, TypeError):  # catches both\n    print('conversion failed')\n```\n\nUse `except Exception as e: print(type(e))` to diagnose which exception type is actually raised.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "Python — wrong exception type caught: Identify why the exception is not handled and fix the except clause."
+    },
+    "471": {
+      "id": 471,
+      "answer": "Bug: JavaScript using `slice` instead of `splice` for array mutation — `Array.prototype.slice()` returns a new array without modifying the original, while `splice()` mutates the array in place.\n\nBuggy code:\n```javascript\nconst arr = [1, 2, 3, 4, 5];\narr.slice(2, 1);  // BUG: returns new array, does not modify arr\nconsole.log(arr); // still [1, 2, 3, 4, 5]\n```\n\nFix: use `splice(startIndex, deleteCount)` to mutate in place:\n```javascript\nconst arr = [1, 2, 3, 4, 5];\narr.splice(2, 1);  // FIXED: removes 1 element at index 2\nconsole.log(arr); // [1, 2, 4, 5]\n```\n\nMemory aid: `splice` modifies (has an 'p' for 'place'); `slice` returns a copy.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "JavaScript — array mutation with slice instead of splice: Identify why the array is unchanged and fix the code to remove an element."
+    },
+    "472": {
+      "id": 472,
+      "answer": "Bug: Python using `/` (true division) instead of `//` (integer division) for index calculation — `/` returns a float in Python 3, which cannot be used as an array/list index, raising `TypeError: list indices must be integers or slices, not float`.\n\nBuggy code:\n```python\nmy_list = [10, 20, 30, 40]\nmid = len(my_list) / 2  # BUG: returns 2.0 (float)\nprint(my_list[mid])     # TypeError: indices must be integers\n```\n\nFix: use `//` for integer (floor) division:\n```python\nmid = len(my_list) // 2  # FIXED: returns 2 (int)\nprint(my_list[mid])      # prints 30\n```\n\nAlternatively use `int(len(my_list) / 2)` for explicit conversion.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "Python — using / instead of // for integer indexing: Identify why this raises a TypeError and fix the index calculation."
+    },
+    "473": {
+      "id": 473,
+      "answer": "Bug: JavaScript comparing floating-point values with strict equality — due to IEEE 754 floating-point representation, arithmetic operations can produce values like `0.1 + 0.2 === 0.30000000000000004`, which is not `=== 0.3`.\n\nBuggy code:\n```javascript\nif (0.1 + 0.2 === 0.3) {  // BUG: false due to floating-point precision\n  console.log('equal');\n}\n```\n\nFix: use tolerance-based (epsilon) comparison:\n```javascript\nconst EPSILON = Number.EPSILON;  // or a suitable small value like 1e-9\nif (Math.abs((0.1 + 0.2) - 0.3) < EPSILON) {  // FIXED\n  console.log('equal');\n}\n```\n\nFor general use:\n```javascript\nfunction approxEqual(a, b, tolerance = Number.EPSILON * 100) {\n  return Math.abs(a - b) < tolerance;\n}\n```",
+      "tier": "T2",
+      "category": "debug",
+      "task": "JavaScript — comparing floating-point values directly: Identify why the condition fails and fix it using a tolerance-based comparison."
+    },
+    "474": {
+      "id": 474,
+      "answer": "Bug: Python forgetting parentheses when calling a method — referencing a method without `()` yields the bound method object, not its return value. Printing the method object produces something like `<built-in method upper of str object at 0x...>`.\n\nBuggy code:\n```python\nname = 'alice'\nprint(name.upper)  # BUG: prints <built-in method upper ...>, missing ()\n```\n\nFix: add parentheses to call the method:\n```python\nprint(name.upper())  # FIXED: prints 'ALICE'\n```\n\nThis same bug applies to any method or callable: `list.sort` vs `list.sort()`, `datetime.now` vs `datetime.now()`, etc. Type hints and IDEs can help catch this if the expression is assigned to a typed variable.",
+      "tier": "T2",
+      "category": "debug",
+      "task": "Python — forgetting parentheses when calling a method: Identify why this prints the method object and fix the call."
+    },
+    "475": {
+      "id": 475,
+      "answer": "Bug: JavaScript wrong array method for existence check — using `Array.prototype.indexOf()` returns the index (0 for the first element), and checking `if (arr.indexOf(x))` treats index `0` as falsy, incorrectly reporting the first element as not found.\n\nBuggy code:\n```javascript\nconst arr = ['apple', 'banana', 'cherry'];\nif (arr.indexOf('apple')) {  // BUG: indexOf returns 0, which is falsy\n  console.log('found');\n} else {\n  console.log('not found');  // incorrectly reached for first element\n}\n```\n\nFix: use `Array.prototype.includes()` which returns a boolean:\n```javascript\nif (arr.includes('apple')) {  // FIXED: returns true\n  console.log('found');\n}\n```\n\nOr compare `indexOf` result to `-1`:\n```javascript\nif (arr.indexOf('apple') !== -1) {  // also correct\n  console.log('found');\n}\n```",
+      "tier": "T2",
+      "category": "debug",
+      "task": "JavaScript — wrong array method for existence check: Identify why indexOf is buggy for the first element and fix the existence check."
+    },
+    "476": {
+      "id": 476,
+      "answer": "A client sends `GET` with header `If-None-Match: \"abc123\"` to an API, and the resource's current ETag also matches `\"abc123\"`. The most appropriate success status code is **304 Not Modified**. The server should return the `ETag` header (and optionally `Cache-Control`, `Expires`, `Vary`). No response body is sent. This tells the client its cached copy is still valid.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "A client sends GET with If-None-Match header to an API. The resource exists and the ETag matches. What is the most appropriate success status code?"
+    },
+    "477": {
+      "id": 477,
+      "answer": "When an API endpoint successfully creates a new resource (e.g., a new order with ID 42), it should return:\n- **Status code: 201 Created**\n- **`Location` header**: set to the URL of the newly created resource, e.g., `Location: /orders/42`\n\nThe response body typically contains a representation of the created resource. The `Location` header tells the client where to find the new resource.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "An API endpoint creates a new order. What status code should the server return, and what should the Location header be set to?"
+    },
+    "478": {
+      "id": 478,
+      "answer": "For a `PUT` request that successfully updates an existing resource:\n- Return **200 OK** if the response body contains a representation of the updated resource.\n- Return **204 No Content** if the update succeeded but no body is returned.\n\nCondition for 200: use it when the client benefits from seeing the updated resource (e.g., server-modified timestamps or generated fields). Condition for 204: use it when the update is straightforward and no body is necessary. Both are valid; the choice depends on whether you return a body.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "A client sends PUT with a complete replacement document. The resource exists and is updated. Should the API return 200 or 204?"
+    },
+    "479": {
+      "id": 479,
+      "answer": "When a `DELETE` request successfully removes a resource and the server returns **no response body**, the most appropriate status code is **204 No Content**.\n\nAlternatives:\n- **200 OK**: if the server returns a body (e.g., confirmation message or the deleted resource)\n- **202 Accepted**: if the deletion is queued/asynchronous and hasn't completed yet\n\nFor a synchronous delete with no body, 204 is the standard choice.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "A client sends DELETE to remove a session that exists. What is the most appropriate status code if the server returns no response body?"
+    },
+    "480": {
+      "id": 480,
+      "answer": "An unauthenticated client calling an endpoint that requires a bearer token should receive **401 Unauthorized** (not 403 Forbidden).\n\n- **401** means: identity is unknown — authentication is required.\n- **403** means: identity is known but lacks permission.\n\nThe response should include the header:\n```\nWWW-Authenticate: Bearer realm=\"api\"\n```\n\nThe `WWW-Authenticate` response header describes the authentication scheme the server requires, prompting the client to authenticate.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "An unauthenticated client calls a bearer-token-protected endpoint. Should the server return 401 or 403? Name the response header commonly included."
+    },
+    "481": {
+      "id": 481,
+      "answer": "An authenticated user with a valid token who lacks the required role/permission should receive **403 Forbidden** (not 401).\n\n- **401 Unauthorized**: the client is not authenticated (no valid identity established)\n- **403 Forbidden**: the client IS authenticated, but their role/permissions do not allow the action\n\nReturning 403 correctly signals that re-authenticating will not help — the user needs different permissions.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "An authenticated user with a valid token calls an endpoint but lacks permission. Should the API return 401 or 403?"
+    },
+    "482": {
+      "id": 482,
+      "answer": "When a client submits a `POST` request with syntactically valid JSON, but the data fails business/semantic validation (e.g., an invalid email format, a value out of range, a required field fails a regex), the most appropriate status code is **422 Unprocessable Entity** (also written as 422 Unprocessable Content in RFC 9110).\n\nAlternatively, **400 Bad Request** is widely used and acceptable. The distinction: 400 is for malformed/syntactically invalid requests; 422 is specifically for semantically invalid requests that the server understands but cannot process.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "A client sends a POST with valid JSON but the email field fails validation. What status code is most appropriate?"
+    },
+    "483": {
+      "id": 483,
+      "answer": "When a client sends malformed JSON that the server cannot parse (e.g., syntax error in the JSON body), the appropriate status code is **400 Bad Request**.\n\n- **400 Bad Request**: the request is malformed or syntactically invalid — the server cannot understand it. Malformed JSON falls here.\n- **422 Unprocessable Entity**: reserved for when the request is syntactically valid (parseable) but semantically invalid (fails business logic).\n\nReturn 400 with an error description in the response body explaining the parse failure.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "A client sends malformed JSON in a request body. Should the API return 400 or 422?"
+    },
+    "484": {
+      "id": 484,
+      "answer": "When an API supports only certain methods on an endpoint (e.g., `GET` and `POST`) but a client sends an unsupported method (e.g., `DELETE`), the server should return:\n- **Status code: 405 Method Not Allowed**\n- Response header: **`Allow: GET, POST`** (listing the permitted methods)\n\nThe `Allow` header is required by the HTTP spec (RFC 9110) when returning 405. It tells the client which methods are valid for that endpoint.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "An API supports only GET and POST on an endpoint but a client sends DELETE. What status code should be returned, and which response header lists permitted methods?"
+    },
+    "485": {
+      "id": 485,
+      "answer": "When a client requests a resource with `Accept: text/xml` but the API can only produce `application/json`, the most appropriate status code is **406 Not Acceptable**.\n\nThis indicates content negotiation failure — the server cannot produce a response matching any of the media types in the client's `Accept` header. The server may include a body describing available content types, and should include `Content-Type: application/json` if it returns a JSON error body.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "A client requests with Accept: text/xml but the API can only produce JSON. What status code is most appropriate?"
+    },
+    "486": {
+      "id": 486,
+      "answer": "When a client sends a `POST` request with `Content-Type: text/plain` but the endpoint only accepts `application/json`, the server should return:\n**415 Unsupported Media Type**\n\nThis tells the client that the format of the request body is not supported. The server may include an `Accept-Post` or informational body listing the supported content types (e.g., `application/json`).",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "A client sends a POST with Content-Type: text/plain but the endpoint only accepts application/json. What status code should the server return?"
+    },
+    "487": {
+      "id": 487,
+      "answer": "When a rate-limited API receives too many requests from one API key in a short window, it should return:\n- **Status code: 429 Too Many Requests**\n- Retry header: **`Retry-After`** — indicates how long the client should wait before retrying, expressed as a number of seconds (e.g., `Retry-After: 60`) or an HTTP-date.\n\nAdditional common rate-limit headers (non-standard but widely used):\n- `X-RateLimit-Limit`: total allowed requests\n- `X-RateLimit-Remaining`: requests remaining in window\n- `X-RateLimit-Reset`: Unix timestamp when the window resets",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "A rate-limited API receives too many requests. What status code should it return, and which response header can indicate when the client may retry?"
+    },
+    "488": {
+      "id": 488,
+      "answer": "An API that is temporarily offline for maintenance and wants clients to retry after 10 minutes should return:\n- **Status code: 503 Service Unavailable**\n- Header: **`Retry-After: 600`** (600 seconds = 10 minutes)\n\nThe `Retry-After` header value can be a number of seconds (`600`) or an HTTP-date (`Retry-After: Sun, 29 Mar 2026 01:00:00 GMT`). This tells clients and reverse proxies how long to wait before retrying.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "An API is temporarily offline for maintenance and wants clients to retry after 10 minutes. What status code and header should it return?"
+    },
+    "489": {
+      "id": 489,
+      "answer": "When a client sends `GET` with `If-None-Match: \"abc\"` and the current ETag of the resource is also `\"abc\"` (ETags match), the server should return:\n**304 Not Modified**\n\nThis indicates the resource has not changed since the client's cached version. No response body is sent. The client should use its cached copy. The response may include headers like `ETag`, `Cache-Control`, and `Vary` but must not include a body.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "A client sends GET with If-None-Match header matching the current ETag. What status code should the server return?"
+    },
+    "490": {
+      "id": 490,
+      "answer": "When a client sends a `Range` request header (e.g., `Range: bytes=0-1023`) and the server can fulfill the partial content request, the server should return:\n- **Status code: 206 Partial Content**\n- Header: **`Content-Range`** — describes the returned byte segment, e.g., `Content-Range: bytes 0-1023/50000` (range returned / total size)\n\nIf the requested range is not satisfiable (e.g., start > file size), return **416 Range Not Satisfiable**. The `Accept-Ranges: bytes` header in normal responses signals that the server supports byte-range requests.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "A client downloads a large file using a Range request header. The server supports byte ranges and can fulfill the request. What status code and header should be returned?"
+    },
+    "491": {
+      "id": 491,
+      "answer": "For a CORS preflight `OPTIONS` request with `Origin` and `Access-Control-Request-Method` headers, the server must include these two response headers to allow the actual cross-origin request:\n\n1. **`Access-Control-Allow-Origin`**: specifies which origins are allowed (e.g., `Access-Control-Allow-Origin: https://example.com` or `*` for any origin)\n\n2. **`Access-Control-Allow-Methods`**: lists the HTTP methods permitted for the cross-origin request (e.g., `Access-Control-Allow-Methods: GET, POST, PUT`)\n\nAdditional commonly required headers:\n- `Access-Control-Allow-Headers`: if the request includes custom headers\n- `Access-Control-Max-Age`: how long the preflight result can be cached",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "A browser sends a CORS preflight request with Origin and Access-Control-Request-Method. Name two response headers the server should include to allow the cross-origin request."
+    },
+    "492": {
+      "id": 492,
+      "answer": "Send a JSON POST request to an API endpoint using curl:\n\n```bash\ncurl -X POST https://api.example.com/endpoint \\\n  -H 'Content-Type: application/json' \\\n  -H 'Authorization: Bearer <token>' \\\n  -d '{\"key\": \"value\", \"name\": \"test\"}'\n```\n\nKey flags:\n- `-X POST` — specify HTTP method (optional if using `-d`, which defaults to POST)\n- `-H 'Content-Type: application/json'` — tell the server the body is JSON\n- `-d '{...}'` — request body (use single quotes to avoid shell escaping issues)\n- For complex JSON, use `--data @payload.json` to read from a file",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "Write a curl command to send a JSON POST request to an API with a body and Content-Type header."
+    },
+    "493": {
+      "id": 493,
+      "answer": "Send a GET request to an API using a Bearer token for authentication:\n\n```bash\ncurl -H 'Authorization: Bearer <token>' https://api.example.com/resource\n```\n\nFull example with a concrete token:\n```bash\ncurl -H 'Authorization: Bearer eyJhbGciOiJIUzI1NiJ9.abc123' \\\n  https://api.example.com/users/me\n```\n\nThe `Authorization` header follows the format `Bearer <token>` as defined in RFC 6750. The `-H` flag adds a custom header to the request.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "Write a curl command to call an API endpoint using a bearer token."
+    },
+    "494": {
+      "id": 494,
+      "answer": "Send a custom request header with curl using the `-H` flag:\n\n```bash\ncurl -H 'X-Custom-Header: value' https://api.example.com/endpoint\n```\n\nFor multiple headers:\n```bash\ncurl -H 'X-Request-ID: abc123' \\\n     -H 'X-Client-Version: 2.0' \\\n     https://api.example.com/endpoint\n```\n\nHeader format is `'HeaderName: HeaderValue'`. Use single quotes to prevent shell interpretation of special characters.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "Write a curl command to send a custom header in a GET request."
+    },
+    "495": {
+      "id": 495,
+      "answer": "To make curl follow HTTP redirects (3xx responses), add the `-L` flag (or `--location`):\n\n```bash\ncurl -L https://example.com/redirect-me\n```\n\nBy default, curl does NOT follow redirects. The `-L` flag instructs curl to follow `Location` headers in 3xx responses. You can limit the number of redirects followed with `--max-redirs N` (default is 30).",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "A curl request must follow HTTP redirects. Which flag should be added?"
+    },
+    "496": {
+      "id": 496,
+      "answer": "A REST endpoint named `GET /getUser?id=123` violates REST resource-oriented design. Rewrite it as:\n\n```\nGET /users/123\n```\n\nConventions applied:\n- **Use nouns, not verbs**: `/users` instead of `/getUser` (the HTTP method `GET` already expresses the action)\n- **Use path parameters for resource identity**: `/users/{id}` instead of query parameters for identification\n- **Use plural nouns**: `/users` (collections) and `/users/123` (specific resource)\n\nSimilarly: `POST /createOrder` → `POST /orders`; `DELETE /deleteItem?id=5` → `DELETE /items/5`.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "A REST API endpoint uses a verb-based name. Rewrite it into a more conventional resource-oriented path and method."
+    },
+    "497": {
+      "id": 497,
+      "answer": "Common conventions for pagination metadata in API responses:\n\n1. **Total count header**: `X-Total-Count` is widely used (e.g., `X-Total-Count: 1250`). Some APIs use `Total-Count` or include it in the response body under a `meta` or `pagination` key.\n\n2. **Navigation links**: The standard `Link` header (RFC 8288) is the common way to expose next/prev page links:\n   ```\n   Link: <https://api.example.com/items?page=3>; rel=\"next\",\n         <https://api.example.com/items?page=1>; rel=\"prev\"\n   ```\n   `rel` values include `next`, `prev`, `first`, `last`. GitHub's API is a well-known adopter of this pattern.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "An API uses response headers for pagination metadata. Name a commonly used header for total item count and how navigation links are commonly exposed."
+    },
+    "498": {
+      "id": 498,
+      "answer": "To make a `POST` request safely retryable without creating duplicate resources (idempotent retry), use the **`Idempotency-Key`** header:\n\n```\nIdempotency-Key: 550e8400-e29b-41d4-a716-446655440000\n```\n\nThe client generates a unique key (typically a UUID) per logical request. If the same key is received again (a retry), the server returns the original response without re-processing. This is the pattern used by Stripe, Adyen, and other payment APIs. The key is stored server-side with the response until it expires.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "A client submits a POST and, due to a network timeout, retries the same request. What header is commonly used to make the operation safely retryable without creating duplicates?"
+    },
+    "499": {
+      "id": 499,
+      "answer": "When an endpoint returns different representations based on request headers like `Accept` and `Accept-Language`, the response should include the **`Vary`** header to inform caches which request headers affect the representation:\n\n```\nVary: Accept, Accept-Language\n```\n\nThe `Vary` header tells caches (CDNs, proxies, browsers) that the cached response is only valid for requests with matching values for the listed headers. Without `Vary`, a cache might serve a JSON response to a client expecting XML, or an English response to a French-language client.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "An endpoint returns different representations based on Accept and Accept-Language. Which response header should be included so caches know which request headers affect the representation?"
+    },
+    "500": {
+      "id": 500,
+      "answer": "A `Cache-Control` response header value like `Cache-Control: max-age=3600, must-revalidate, no-store` contains directives that each control caching behavior:\n\n- **`max-age=3600`**: the response can be cached and considered fresh for 3600 seconds (1 hour) from the time it was generated. After this TTL expires, the cached response is stale.\n\n- **`must-revalidate`**: once the response is stale (max-age expired), the cache MUST revalidate with the origin server before serving it. It cannot serve a stale response, even in case of server unreachability.\n\n- **`no-store`**: the response must NOT be stored in any cache (memory or disk). This overrides `max-age` — the combination `max-age + no-store` is contradictory; `no-store` takes precedence.\n\nNote: `no-cache` (different from `no-store`) means the cached response can be stored but must be revalidated before serving. `no-store` means do not cache at all.",
+      "tier": "T2",
+      "category": "web_fetch",
+      "task": "A server returns a Cache-Control header. Briefly state what max-age, must-revalidate, and no-store each mean."
+    }
+  }
+}

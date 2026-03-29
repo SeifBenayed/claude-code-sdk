@@ -1,0 +1,1968 @@
+[
+  {
+    "id": 201,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Reverse a string",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "id": 202,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Check if a string is a palindrome",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "id": 203,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Find the maximum number in an array",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array"
+    ]
+  },
+  {
+    "id": 204,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Sum all numbers in an array",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array"
+    ]
+  },
+  {
+    "id": 205,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Count vowels in a string",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "id": 206,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Remove duplicates from an array",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array"
+    ]
+  },
+  {
+    "id": 207,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "FizzBuzz",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "math"
+    ]
+  },
+  {
+    "id": 208,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Factorial",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "math"
+    ]
+  },
+  {
+    "id": 209,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Find the missing number",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "math"
+    ]
+  },
+  {
+    "id": 210,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Capitalize the first letter of each word",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "id": 211,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Merge two sorted arrays",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "sorting"
+    ]
+  },
+  {
+    "id": 212,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Find the first non-repeating character",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "string",
+      "hashmap"
+    ]
+  },
+  {
+    "id": 213,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Check if two strings are anagrams",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "string",
+      "hashmap"
+    ]
+  },
+  {
+    "id": 214,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Flatten a one-level nested array",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array"
+    ]
+  },
+  {
+    "id": 215,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Find the intersection of two arrays",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "set"
+    ]
+  },
+  {
+    "id": 216,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Chunk an array",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array"
+    ]
+  },
+  {
+    "id": 217,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Rotate an array to the right",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array"
+    ]
+  },
+  {
+    "id": 218,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Count word frequencies",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "string",
+      "hashmap"
+    ]
+  },
+  {
+    "id": 219,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Find two numbers that sum to a target",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "hashmap"
+    ]
+  },
+  {
+    "id": 220,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Group strings by length",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "hashmap"
+    ]
+  },
+  {
+    "id": 221,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Validate balanced parentheses",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "stack",
+      "string"
+    ]
+  },
+  {
+    "id": 222,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Binary search",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "binary-search"
+    ]
+  },
+  {
+    "id": 223,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Deeply flatten an array",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "recursion"
+    ]
+  },
+  {
+    "id": 224,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Generate all permutations of a string",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "string",
+      "backtracking"
+    ]
+  },
+  {
+    "id": 225,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Find the longest common prefix",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "string"
+    ]
+  },
+  {
+    "id": 226,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Convert a Roman numeral to an integer",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "string",
+      "math"
+    ]
+  },
+  {
+    "id": 227,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Evaluate a postfix expression",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "stack"
+    ]
+  },
+  {
+    "id": 228,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Find the longest substring without repeating characters",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "string",
+      "sliding-window"
+    ]
+  },
+  {
+    "id": 229,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Find the majority element",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array"
+    ]
+  },
+  {
+    "id": 230,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Merge overlapping intervals",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "intervals",
+      "sorting"
+    ]
+  },
+  {
+    "id": 231,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Implement debounce",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "function"
+    ]
+  },
+  {
+    "id": 232,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Implement throttle",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "function"
+    ]
+  },
+  {
+    "id": 233,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Clone an object deeply",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "object",
+      "recursion"
+    ]
+  },
+  {
+    "id": 234,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Build a simple event emitter",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "design"
+    ]
+  },
+  {
+    "id": 235,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Top K frequent elements",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "hashmap",
+      "heap"
+    ]
+  },
+  {
+    "id": 236,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Detect a cycle in a linked list",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "linked-list",
+      "two-pointers"
+    ]
+  },
+  {
+    "id": 237,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Implement memoization",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "javascript",
+      "function",
+      "caching"
+    ]
+  },
+  {
+    "id": 238,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Serialize and deserialize a binary tree",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "tree",
+      "serialization"
+    ]
+  },
+  {
+    "id": 239,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Implement a min stack",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "stack",
+      "design"
+    ]
+  },
+  {
+    "id": 240,
+    "tier": "T2",
+    "category": "code_js",
+    "task": "Implement an LRU cache",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "design",
+      "hashmap",
+      "linked-list"
+    ]
+  },
+  {
+    "id": 241,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "FizzBuzz — Write a function that returns a list of strings for numbers from to inclusive. For multiples of 3 use , for multiples of 5 use , and for multiples of both use . Otherwise use the number as a string.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "strings",
+      "math",
+      "fizzbuzz"
+    ]
+  },
+  {
+    "id": 242,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Palindrome Check — Write a function that returns if reads the same forward and backward, and otherwise. Treat uppercase and lowercase letters as different. Do not ignore spaces or punctuation.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "strings",
+      "two-pointers",
+      "palindrome"
+    ]
+  },
+  {
+    "id": 243,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Factorial — Write a function that returns . Assume .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "math",
+      "recursion",
+      "iteration"
+    ]
+  },
+  {
+    "id": 244,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Count Vowels — Write a function that counts how many characters in are vowels: , in either lowercase or uppercase.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "strings",
+      "counting"
+    ]
+  },
+  {
+    "id": 245,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Two Sum Indices — Write a function that returns the indices of two distinct elements whose sum is . Return the pair with the smaller first index if multiple answers exist. Return if no such pair exists.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "hash-map",
+      "two-sum"
+    ]
+  },
+  {
+    "id": 246,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Remove Duplicates While Preserving Order — Write a function that returns a new list containing the first occurrence of each value in , preserving original order.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "hash-set",
+      "order-preserving"
+    ]
+  },
+  {
+    "id": 247,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Merge Two Sorted Lists — Write a function that merges two lists sorted in nondecreasing order into one sorted list.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "two-pointers",
+      "merge"
+    ]
+  },
+  {
+    "id": 248,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Binary Search — Write a function that returns the index of in a sorted list , or if is not present. If appears multiple times, return the leftmost index.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "binary-search"
+    ]
+  },
+  {
+    "id": 249,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Valid Parentheses — Write a function that returns if every opening bracket is closed in the correct order. The string contains only the characters .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "stack",
+      "strings",
+      "parentheses"
+    ]
+  },
+  {
+    "id": 250,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Character Frequency Map — Write a function that returns a dictionary mapping each character in to its number of occurrences.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "strings",
+      "hash-map",
+      "counting"
+    ]
+  },
+  {
+    "id": 251,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Rotate Array Right — Write a function that returns a new list formed by rotating to the right by positions. If is larger than the list length, wrap around. If is empty, return an empty list.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "rotation"
+    ]
+  },
+  {
+    "id": 252,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Intersection of Two Lists — Write a function that returns the distinct values present in both lists, sorted in ascending order.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "set",
+      "sorting"
+    ]
+  },
+  {
+    "id": 253,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Longest Common Prefix — Write a function that returns the longest prefix shared by all strings in . Return if is empty or no common prefix exists.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "strings",
+      "prefix"
+    ]
+  },
+  {
+    "id": 254,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Roman Numeral to Integer — Write a function that converts a valid Roman numeral to its integer value. Support the standard symbols .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "strings",
+      "parsing",
+      "math"
+    ]
+  },
+  {
+    "id": 255,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Run-Length Encoding — Write a function that compresses a string by replacing each maximal run of the same character with the character followed by the run length. Return the encoded string.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "strings",
+      "compression",
+      "run-length-encoding"
+    ]
+  },
+  {
+    "id": 256,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Pascal Row — Write a function that returns the th row of Pascal’s triangle using 0-based indexing. Row 0 is .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "math",
+      "dynamic-programming"
+    ]
+  },
+  {
+    "id": 257,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Anagram Check — Write a function that returns if and contain exactly the same characters with the same counts, and otherwise. Treat spaces and punctuation as ordinary characters.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "strings",
+      "hash-map",
+      "anagram"
+    ]
+  },
+  {
+    "id": 258,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Matrix Transpose — Write a function that returns the transpose of a rectangular matrix. Assume the input matrix is non-empty and all rows have the same length.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "matrix",
+      "array"
+    ]
+  },
+  {
+    "id": 259,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Maximum Subarray Sum — Write a function that returns the largest possible sum of a non-empty contiguous subarray.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "dynamic-programming",
+      "kadane"
+    ]
+  },
+  {
+    "id": 260,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Product of Array Except Self — Write a function that returns a list where each element at index is the product of all elements in except . Do not use division.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "prefix-suffix"
+    ]
+  },
+  {
+    "id": 261,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Group Words by Anagram — Write a function that groups words that are anagrams of each other. Within each group, preserve the original input order. Return groups in the order their first member appears.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "strings",
+      "hash-map",
+      "anagram",
+      "grouping"
+    ]
+  },
+  {
+    "id": 262,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Set Matrix Zeroes — Write a function that returns a new matrix where if any cell in the input is , its entire row and column are set to .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "matrix",
+      "array"
+    ]
+  },
+  {
+    "id": 263,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Spiral Order Traversal — Write a function that returns all elements of a rectangular matrix in clockwise spiral order.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "matrix",
+      "array",
+      "simulation"
+    ]
+  },
+  {
+    "id": 264,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Coin Change Minimum Coins — Write a function that returns the minimum number of coins needed to make exactly . Return if it is impossible. You may use each coin denomination any number of times.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "dynamic-programming",
+      "coin-change"
+    ]
+  },
+  {
+    "id": 265,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Climbing Stairs — Write a function that returns the number of distinct ways to reach the top of a staircase with steps, when each move can climb either 1 or 2 steps. Assume , and there is exactly 1 way to climb 0 steps.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "dynamic-programming",
+      "fibonacci"
+    ]
+  },
+  {
+    "id": 266,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Longest Increasing Subsequence Length — Write a function that returns the length of the longest strictly increasing subsequence in .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "array",
+      "dynamic-programming",
+      "binary-search"
+    ]
+  },
+  {
+    "id": 267,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Decode Ways — Write a function that returns how many ways a digit string can be decoded where , ..., . A cannot be decoded by itself.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "dynamic-programming",
+      "strings"
+    ]
+  },
+  {
+    "id": 268,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Generate All Subsets — Write a function that returns all possible subsets of . Preserve the relative order of elements inside each subset. The output may list subsets in any order.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "backtracking",
+      "array",
+      "subsets"
+    ]
+  },
+  {
+    "id": 269,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Permutations of Distinct Integers — Write a function that returns all permutations of a list of distinct integers. The output may be in any order.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "backtracking",
+      "array",
+      "permutations"
+    ]
+  },
+  {
+    "id": 270,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Combination Sum — Write a function that returns all unique combinations of numbers from that sum to . Each number may be used unlimited times. Two combinations are considered the same if they contain the same values with the same multiplicities, regardless of order. Return combinations in any order.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "backtracking",
+      "dynamic-programming",
+      "combination-sum"
+    ]
+  },
+  {
+    "id": 271,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Word Break — Write a function that returns if can be segmented into a sequence of one or more dictionary words from , and otherwise. Words may be reused.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "dynamic-programming",
+      "strings",
+      "hash-set"
+    ]
+  },
+  {
+    "id": 272,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Number of Islands — Write a function that counts how many connected components of land exist in a 2D grid. Each cell is (land) or (water). Cells are connected horizontally or vertically.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "graph",
+      "grid",
+      "dfs",
+      "bfs"
+    ]
+  },
+  {
+    "id": 273,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Shortest Path in Binary Grid — Write a function that returns the length of the shortest path from the top-left cell to the bottom-right cell in a binary matrix, moving in 8 directions. A cell value of is open and is blocked. Return if no path exists. The path length counts both the starting and ending cells.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "graph",
+      "grid",
+      "bfs",
+      "shortest-path"
+    ]
+  },
+  {
+    "id": 274,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Validate Binary Search Tree — Write a function that returns if a binary tree is a valid binary search tree, and otherwise. Each node has attributes , , and . In a valid BST, all values in the left subtree are strictly less than the node value, and all values in the right subtree are strictly greater.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "tree",
+      "binary-search-tree",
+      "dfs"
+    ]
+  },
+  {
+    "id": 275,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Lowest Common Ancestor in a Binary Tree — Write a function that returns the node representing the lowest common ancestor of nodes and in a binary tree. Each node has attributes , , and . Assume both nodes exist in the tree and all node objects are unique.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "tree",
+      "binary-tree",
+      "lowest-common-ancestor",
+      "dfs"
+    ]
+  },
+  {
+    "id": 276,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Topological Sort — Write a function that returns a topological ordering of a directed graph with nodes to . Each edge means . If the graph contains a cycle, return . If multiple valid orders exist, any one is acceptable.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "graph",
+      "topological-sort",
+      "dag"
+    ]
+  },
+  {
+    "id": 277,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Dijkstra Shortest Paths — Write a function that returns the shortest distance from to every node in a directed weighted graph with nonnegative edge weights. Each edge is . Use for unreachable nodes.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "graph",
+      "shortest-path",
+      "dijkstra",
+      "heap"
+    ]
+  },
+  {
+    "id": 278,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Detect Cycle in Directed Graph — Write a function that returns if a directed graph contains at least one cycle, and otherwise. Nodes are labeled to .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "graph",
+      "cycle-detection",
+      "dfs"
+    ]
+  },
+  {
+    "id": 279,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Union-Find Connected Components — Write a function that returns the number of connected components in an undirected graph with nodes to .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "graph",
+      "union-find",
+      "disjoint-set"
+    ]
+  },
+  {
+    "id": 280,
+    "tier": "T2",
+    "category": "code_python",
+    "task": "Minimum Spanning Tree Weight — Write a function that returns the total weight of a minimum spanning tree of an undirected weighted graph with nodes to . Each edge is . If the graph is disconnected and no spanning tree exists, return .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "graph",
+      "minimum-spanning-tree",
+      "kruskal",
+      "prim"
+    ]
+  },
+  {
+    "id": 281,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Find all files under the current directory, excluding , and print their paths sorted by size descending.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "files",
+      "find",
+      "sorting",
+      "size"
+    ]
+  },
+  {
+    "id": 282,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Count how many lines in  contain the exact string  and print only the count.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "text-processing",
+      "count",
+      "exact-match",
+      "file"
+    ]
+  },
+  {
+    "id": 283,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "In , print the email address field from rows where the third column is , assuming comma-separated fields and a header row.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "csv",
+      "filtering",
+      "field-extraction",
+      "file"
+    ]
+  },
+  {
+    "id": 284,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Show the 10 most frequent IP addresses in the first whitespace-separated field of , along with their counts.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "log-processing",
+      "frequency",
+      "ip-address",
+      "top-n"
+    ]
+  },
+  {
+    "id": 285,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Recursively find all files named  under the current directory and print only those located at depth 3 or less.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "files",
+      "find",
+      "depth",
+      "recursion"
+    ]
+  },
+  {
+    "id": 286,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Replace every occurrence of  with  in all  files under the current directory.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "search-and-replace",
+      "files",
+      "batch-edit",
+      "text-processing"
+    ]
+  },
+  {
+    "id": 287,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Print the total number of files and the total number of directories under the current directory, excluding .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "files",
+      "directories",
+      "count",
+      "find"
+    ]
+  },
+  {
+    "id": 288,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Find all empty files under  and delete them.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "files",
+      "empty-files",
+      "delete",
+      "cleanup"
+    ]
+  },
+  {
+    "id": 289,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Create a gzipped tar archive named  containing the directories , , and .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "archive",
+      "tar",
+      "gzip",
+      "directories"
+    ]
+  },
+  {
+    "id": 290,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Extract  into  and preserve file permissions.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "archive",
+      "extract",
+      "permissions",
+      "files"
+    ]
+  },
+  {
+    "id": 291,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Print the 5 largest files under the current directory, showing size in human-readable form and path.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "files",
+      "size",
+      "top-n",
+      "human-readable"
+    ]
+  },
+  {
+    "id": 292,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Find all  files modified in the last 2 days under  and print their paths.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "files",
+      "modified-time",
+      "find",
+      "filtering"
+    ]
+  },
+  {
+    "id": 293,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "In , print lines that contain  but do not contain .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "text-processing",
+      "include-exclude",
+      "filtering",
+      "file"
+    ]
+  },
+  {
+    "id": 294,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Print the line numbers of all matches for the regex  in .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "regex",
+      "line-numbers",
+      "search",
+      "file"
+    ]
+  },
+  {
+    "id": 295,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "From , print the second and fourth tab-separated columns for rows where the first column starts with .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "tsv",
+      "field-extraction",
+      "filtering",
+      "file"
+    ]
+  },
+  {
+    "id": 296,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Sort , remove duplicates, and write the result to .",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "sorting",
+      "deduplication",
+      "output",
+      "file"
+    ]
+  },
+  {
+    "id": 297,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Print all environment variable names currently defined in the shell, sorted alphabetically.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "environment",
+      "shell",
+      "sorting",
+      "variables"
+    ]
+  },
+  {
+    "id": 298,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Show the current machine architecture, kernel name, and kernel release in one line.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "system-info",
+      "kernel",
+      "architecture",
+      "shell"
+    ]
+  },
+  {
+    "id": 299,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Print the top 10 processes by memory usage, showing PID, command name, and %MEM.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "processes",
+      "memory",
+      "top-n",
+      "system-info"
+    ]
+  },
+  {
+    "id": 300,
+    "tier": "T2",
+    "category": "bash_tasks",
+    "task": "Show disk usage for all mounted filesystems in human-readable form.",
+    "tools_required": [
+      "bash"
+    ],
+    "skills_required": [],
+    "setup": null,
+    "verify": null,
+    "expected_keywords": [],
+    "expected_output": null,
+    "difficulty": 2,
+    "tags": [
+      "disk-usage",
+      "filesystems",
+      "human-readable",
+      "system-info"
+    ]
+  }
+]
