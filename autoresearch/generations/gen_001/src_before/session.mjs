@@ -15,12 +15,42 @@ import { resolveModel } from "./config.mjs";
 import { detectProvider, PROVIDERS } from "./providers.mjs";
 import { PermissionManager } from "./security.mjs";
 import { AgentLoop, buildSystemPrompt, SkillLoader, SkillExecutionContext, HookRunner, AgentLoader, loadSettings, applySettings, loadRules, loadClaudeMdFiles, findProjectRoot, PROVIDER_CONVENTION_FILES, ensureMemoryDir, loadMemoryIndex, skillImport, skillList, skillInfo, skillRemove, skillUpdate, skillExport, skillVerify, skillSearch, skillPublish, registerAgentTool, SubAgentRunner, BackgroundAgentManager, _scanProjectStructure, ensureSkillDataDir, getMemoryDir } from "./engine.mjs";
-import { ToolRegistry, registerBuiltinTools, registerDeferredBuiltinTools, registerBriefTools, registerToolSearch, registerAskUserQuestion, scanCustomTools, registerMcpResourceTools, registerDesktopTools, registerSpreadsheetTools, registerPdfTools, registerDocumentTools, registerPresentationTools, _OFFICIAL_CATALOG, _loadToolManifest, toolList, toolInfo, toolEnable, toolDisable, toolTest, toolInstall, toolRemove, toolCatalog, toolPublish } from "./tools.mjs";
+import { ToolRegistry, registerBuiltinTools, registerMemoryTools, registerDeferredBuiltinTools, registerBriefTools, registerToolSearch, registerAskUserQuestion, scanCustomTools, registerMcpResourceTools, registerDesktopTools, registerSpreadsheetTools, registerPdfTools, registerDocumentTools, registerPresentationTools, _OFFICIAL_CATALOG, _loadToolManifest, toolList, toolInfo, toolEnable, toolDisable, toolTest, toolInstall, toolUpdate, toolRemove, toolCatalog, toolPublish } from "./tools.mjs";
 import { registerBrowserTools } from "./browser.mjs";
 import { oauthLogin, oauthLogout, openaiOAuthLogin, openaiOAuthLogout, getOAuthAccessToken, getOpenAIAccessToken } from "./auth.mjs";
 import { AutoMemory } from "./auto-memory.mjs";
+import { shouldDream, runDream, incrementDreamSessionCount } from "./memory-dream.mjs";
 import { expandContextRefs } from "./context-refs.mjs";
 import { routeModel } from "./smart-routing.mjs";
+
+function _parseStructuredOutput(toolName, result) {
+  if (result?.is_error) return null;
+  if (toolName !== "SendUserMessage" && toolName !== "TaskOutput") return null;
+  try {
+    return JSON.parse(result.content);
+  } catch {
+    return null;
+  }
+}
+
+function _renderStructuredOutput(parsed, toolName) {
+  if (!parsed) return "";
+  if (toolName === "TaskOutput") {
+    const status = parsed.status ? `[${parsed.status}] ` : "";
+    return `${status}${parsed.message || ""}`.trim();
+  }
+  return parsed.message || "";
+}
+
+function _flattenUserFacingOutputs(outputs, fallbackText = "") {
+  if (!Array.isArray(outputs) || outputs.length === 0) return fallbackText || "";
+  const parts = outputs.map((output) => {
+    if (!output || typeof output !== "object") return "";
+    if (output.kind === "task_output") return output.message || output.summary || "";
+    return output.message || "";
+  }).filter(Boolean);
+  return parts.length > 0 ? parts.join("\n") : (fallbackText || "");
+}
 
 // ── SessionManager ──────────────────────────────────────────────
 
@@ -479,11 +509,6 @@ class NdjsonBridge {
 
         case "set_brief":
           this.cfg.briefMode = !!msg.enabled;
-          if (this.cfg.briefMode) {
-            registerBriefTools(this.registry, this.cfg);
-          } else {
-            this.registry.unregister("SendUserMessage");
-          }
           registerToolSearch(this.registry); // Re-evaluate ToolSearch availability
           this.emit({ type: "brief_mode", enabled: this.cfg.briefMode });
           break;
@@ -542,11 +567,22 @@ class NdjsonBridge {
         });
       },
       onToolResult: (id, result, toolName) => {
-        if (toolName === "SendUserMessage" && !result.is_error) {
-          try {
-            const parsed = JSON.parse(result.content);
-            this.emit({ type: "user_message", message: parsed.message, attachments: parsed.attachments, status: parsed.status, sentAt: parsed.sentAt });
-          } catch { /* ignore: non-JSON tool result from SendUserMessage */ }
+        const parsed = _parseStructuredOutput(toolName, result);
+        if (toolName === "SendUserMessage" && parsed) {
+          this.emit({ type: "user_message", message: parsed.message, attachments: parsed.attachments, status: parsed.status, sentAt: parsed.sentAt });
+        } else if (toolName === "TaskOutput" && parsed) {
+          this.emit({
+            type: "task_output",
+            task_id: parsed.task_id,
+            status: parsed.status,
+            message: parsed.message,
+            summary: parsed.summary,
+            output_file: parsed.output_file,
+            session_url: parsed.session_url,
+            attachments: parsed.attachments,
+            metadata: parsed.metadata,
+            sentAt: parsed.sentAt,
+          });
         }
       },
       onPermissionDeny: (block, msg) => {
@@ -570,6 +606,17 @@ class NdjsonBridge {
 
     try {
       const result = await loop.run(messages, systemBlocks);
+      const fallbackOutputs = (result.userFacingOutputs || []).filter((output) => output?.source === "plain_text_fallback");
+      for (const output of fallbackOutputs) {
+        this.emit({
+          type: "user_message",
+          message: output.message,
+          attachments: output.attachments || [],
+          status: output.status || "normal",
+          sentAt: output.sentAt,
+          source: output.source,
+        });
+      }
 
       // Save messages to session
       for (const m of messages) {
@@ -579,6 +626,7 @@ class NdjsonBridge {
       this.emit({
         type: "response",
         content: result.text,
+        user_facing_outputs: result.userFacingOutputs || [],
         session_id: sessionId,
         iterations: result.turns,
         usage: result.usage,
@@ -961,6 +1009,7 @@ class InteractiveMode {
     this.slashCommands = new SlashCommandRegistry();
     this._rl = null;
     this._statuslineScript = null;
+    this._exchangeBuffer = [];  // ring buffer of last 5 exchanges for auto-memory context
   }
 
   // ── Command Registration ─────────────────────────────────────
@@ -1018,13 +1067,38 @@ class InteractiveMode {
     s.register({ name: "thinking", argumentHint: "[budget]", description: "Toggle extended thinking", immediate: true,
       handler: (args) => { const b = parseInt(args[0], 10); self.cfg.thinkingBudget = b || (self.cfg.thinkingBudget ? 0 : 10000); process.stderr.write(`\x1b[2mThinking: ${self.cfg.thinkingBudget ? `enabled (${self.cfg.thinkingBudget} tokens)` : "disabled"}\x1b[0m\n`); } });
     s.register({ name: "brief", description: "Toggle brief mode", immediate: true,
-      handler: () => { self.cfg.briefMode = !self.cfg.briefMode; if (self.cfg.briefMode) { registerBriefTools(self.registry, self.cfg); self.messages.push({ role: "user", content: "<system-reminder>Brief mode enabled. Use SendUserMessage for all user-facing output.</system-reminder>" }); } else { self.registry.unregister("SendUserMessage"); self.messages.push({ role: "user", content: "<system-reminder>Brief mode disabled. Reply with plain text.</system-reminder>" }); } registerToolSearch(self.registry); process.stderr.write(`\x1b[2mBrief mode: ${self.cfg.briefMode ? "enabled" : "disabled"}\x1b[0m\n`); } });
+      handler: () => { self.cfg.briefMode = !self.cfg.briefMode; self.messages.push({ role: "user", content: self.cfg.briefMode ? "<system-reminder>Brief mode enabled. Use SendUserMessage for all direct replies and TaskOutput for async/proactive task updates.</system-reminder>" : "<system-reminder>Brief mode disabled. Plain text replies are allowed, but SendUserMessage and TaskOutput remain available.</system-reminder>" }); registerToolSearch(self.registry); process.stderr.write(`\x1b[2mBrief mode: ${self.cfg.briefMode ? "enabled" : "disabled"}\x1b[0m\n`); } });
     s.register({ name: "permission", aliases: ["permissions", "mode"], argumentHint: "[mode]", description: "Get/set permission mode", immediate: true,
       handler: (args) => { if (args[0]) { self.permissions?.setMode(args[0]); process.stderr.write(`\x1b[2mPermission mode: ${args[0]}\x1b[0m\n`); } else { process.stderr.write(`\x1b[2mPermission mode: ${self.permissions?.mode || "default"}\x1b[0m\n`); process.stderr.write(`\x1b[2mModes: default, plan, acceptEdits, bypassPermissions, dontAsk\x1b[0m\n`); } } });
 
     // Memory / Checkpoints
-    s.register({ name: "memory", aliases: ["mem"], description: "Show memory index", immediate: true,
-      handler: () => { const d = ensureMemoryDir(self.cfg.cwd); const idx = loadMemoryIndex(self.cfg.cwd); process.stderr.write(`\x1b[2mMemory directory: ${d}\x1b[0m\n`); if (idx) { process.stderr.write(`\x1b[2m${idx.split("\n").length} lines in MEMORY.md:\x1b[0m\n`); process.stderr.write(`\x1b[2m${idx.substring(0, 500)}\x1b[0m\n`); } else { process.stderr.write(`\x1b[2mNo memories yet.\x1b[0m\n`); } } });
+    s.register({ name: "memory", aliases: ["mem"], description: "Show user/project memory indexes", immediate: true,
+      handler: (args) => {
+        const scope = args[0] || "all";
+        const projectDir = ensureMemoryDir(self.cfg.cwd);
+        const userDir = path.join(os.homedir(), ".claude-native", "user-memory");
+        const projectIdx = loadMemoryIndex(self.cfg.cwd, "project");
+        const userIdx = loadMemoryIndex(self.cfg.cwd, "user");
+        if (scope === "user" || scope === "all") {
+          process.stderr.write(`\x1b[2mUser memory: ${userDir}\x1b[0m\n`);
+          if (userIdx) {
+            process.stderr.write(`\x1b[2m${userIdx.split("\n").length} lines in user MEMORY.md:\x1b[0m\n`);
+            process.stderr.write(`\x1b[2m${userIdx.substring(0, 500)}\x1b[0m\n`);
+          } else {
+            process.stderr.write(`\x1b[2mNo user memories yet.\x1b[0m\n`);
+          }
+        }
+        if (scope === "all") process.stderr.write("\n");
+        if (scope === "project" || scope === "all") {
+          process.stderr.write(`\x1b[2mProject memory: ${projectDir}\x1b[0m\n`);
+          if (projectIdx) {
+            process.stderr.write(`\x1b[2m${projectIdx.split("\n").length} lines in project MEMORY.md:\x1b[0m\n`);
+            process.stderr.write(`\x1b[2m${projectIdx.substring(0, 500)}\x1b[0m\n`);
+          } else {
+            process.stderr.write(`\x1b[2mNo project memories yet.\x1b[0m\n`);
+          }
+        }
+      } });
     s.register({ name: "checkpoints", aliases: ["ckpt"], description: "List file checkpoints", immediate: true,
       handler: () => { if (!self.checkpoints) { process.stderr.write("\x1b[2mCheckpointing not enabled.\x1b[0m\n"); return; } const snaps = self.checkpoints.getSnapshots(); if (snaps.length === 0) { process.stderr.write("\x1b[2mNo checkpoints yet.\x1b[0m\n"); return; } for (const sn of snaps) { const ago = Math.floor((Date.now() - new Date(sn.timestamp).getTime()) / 1000); const agoStr = ago < 60 ? `${ago}s ago` : ago < 3600 ? `${Math.floor(ago/60)}m ago` : `${Math.floor(ago/3600)}h ago`; process.stderr.write(`\x1b[2m  [${sn.messageId.slice(0,8)}] ${sn.fileCount} files | ${agoStr}\x1b[0m\n`); } } });
     s.register({ name: "rewind", argumentHint: "[id]", description: "Rewind to a checkpoint",
@@ -1568,10 +1642,11 @@ class InteractiveMode {
         else if (sub === "disable") toolDisable(self.cfg, self.registry, args[1]);
         else if (sub === "test") await toolTest(self.cfg, self.registry, args[1]);
         else if (sub === "install") { await toolInstall(self.cfg, args.slice(1).join(" ")); scanCustomTools(self.registry, self.cfg); }
+        else if (sub === "update") { await toolUpdate(self.cfg, args[1]); scanCustomTools(self.registry, self.cfg); }
         else if (sub === "remove") { toolRemove(self.cfg, args[1]); if (args[1] && self.registry.has(args[1])) self.registry.unregister(args[1]); }
         else if (sub === "catalog") { await toolCatalog(args.slice(1).join(" ") || "*"); }
         else if (sub === "publish") { await toolPublish(self.cfg, args[1]); }
-        else process.stderr.write("Usage: /tool <subcommand>\n  list, info, enable, disable, test, install, remove, catalog, publish\n");
+        else process.stderr.write("Usage: /tool <subcommand>\n  list, info, enable, disable, test, install, update, remove, catalog, publish\n");
       } });
 
     // Catalog shortcut — /catalog [query]
@@ -2040,6 +2115,9 @@ class InteractiveMode {
       });
     }
 
+    // Increment dream session counter for consolidation trigger
+    try { incrementDreamSessionCount(); } catch { /* non-fatal */ }
+
     this.mcpManager.shutdown();
   }
 
@@ -2198,9 +2276,13 @@ class InteractiveMode {
         if (remote) remote.emit({ type: "tool_use", name: block.name, input: block.input, id: block.id });
       },
       onToolResult: (id, result, toolName) => {
-        if (toolName === "SendUserMessage" && brief && !result.is_error) {
-          try { const parsed = JSON.parse(result.content); process.stderr.write(`\n${parsed.message}\n`); } catch { /* ignore */ }
-        } else if (result.is_error) { process.stderr.write(`\x1b[31m[Error]\x1b[0m\n`); }
+        const parsed = _parseStructuredOutput(toolName, result);
+        if (parsed) {
+          const rendered = _renderStructuredOutput(parsed, toolName);
+          if (rendered) process.stderr.write(`\n${rendered}\n`);
+        } else if (result.is_error) {
+          process.stderr.write(`\x1b[31m[Error]\x1b[0m\n`);
+        }
         if (remote) remote.emit({ type: "tool_result", id, tool_name: toolName, is_error: result.is_error });
       },
       onPermissionDeny: (block, msg) => {
@@ -2253,21 +2335,33 @@ class InteractiveMode {
 
     try {
       const result = await loop.run(this.messages, systemBlocks);
+      const assistantVisibleText = _flattenUserFacingOutputs(result.userFacingOutputs, result.text);
 
       // Save assistant message
-      this.sessions.append(this.sessionId, { role: "assistant", content: result.text });
+      this.sessions.append(this.sessionId, { role: "assistant", content: assistantVisibleText });
 
       // Auto-memory: LLM-based classification of what to remember
       try {
         if (!this._autoMemory) this._autoMemory = new AutoMemory(this.cfg.cwd, this.client, this.cfg._provider);
         const userText = typeof input === "string" ? input : JSON.stringify(input);
+        // Maintain exchange buffer (rolling window of 5)
+        this._exchangeBuffer.push({ user: userText, assistant: assistantVisibleText || "" });
+        if (this._exchangeBuffer.length > 5) this._exchangeBuffer.shift();
         // Fire and forget — don't block the REPL on memory classification
-        this._autoMemory.processExchange(userText, result.text || "").then(saved => {
+        this._autoMemory.processExchange(userText, assistantVisibleText || "", this._exchangeBuffer).then(saved => {
           for (const s of saved) log(`[auto-memory] Saved ${s.type}: ${s.name}`);
         }).catch(e => log(`[auto-memory] Error: ${e.message}`));
       } catch (e) { /* ignore: auto-memory is non-fatal */
         log(`[auto-memory] Error: ${e.message}`);
       }
+
+      // Dream trigger — consolidate memories if conditions are met
+      try {
+        if (shouldDream(this.cfg.cwd)) {
+          runDream(this.cfg.cwd, this.client, this.registry, this.permissions, new BackgroundAgentManager())
+            .catch(e => log(`[dream] Error: ${e.message}`));
+        }
+      } catch (e) { log(`[dream] Check error: ${e.message}`); }
 
       // Auto-save session title on first exchange
       if (!this.sessions.getMeta(this.sessionId, "title") && this.messages.length >= 2) {
@@ -2372,11 +2466,10 @@ class InteractiveMode {
         process.stderr.write(`\n\x1b[2m[${block.name}: ${inputStr}]\x1b[0m\n`);
       },
       onToolResult: (id, result, toolName) => {
-        if (toolName === "SendUserMessage" && brief && !result.is_error) {
-          try {
-            const parsed = JSON.parse(result.content);
-            process.stderr.write(`\n${parsed.message}\n`);
-          } catch { /* ignore: non-JSON tool result from SendUserMessage */ }
+        const parsed = _parseStructuredOutput(toolName, result);
+        if (parsed) {
+          const rendered = _renderStructuredOutput(parsed, toolName);
+          if (rendered) process.stderr.write(`\n${rendered}\n`);
         } else if (result.is_error) {
           process.stderr.write(`\x1b[31m[Error]\x1b[0m\n`);
         }
@@ -2407,9 +2500,10 @@ class InteractiveMode {
 
     try {
       const result = await loop.run(this.messages, systemBlocks);
+      const assistantVisibleText = _flattenUserFacingOutputs(result.userFacingOutputs, result.text);
 
       // Save assistant message
-      this.sessions.append(this.sessionId, { role: "assistant", content: result.text });
+      this.sessions.append(this.sessionId, { role: "assistant", content: assistantVisibleText });
 
       // Cost estimate
       const costIn = (result.usage.input_tokens / 1_000_000) * 3;

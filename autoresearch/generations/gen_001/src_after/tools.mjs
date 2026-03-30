@@ -9,6 +9,7 @@ import _http from "node:http";
 import _https from "node:https";
 
 import { log, sleep, EXIT, _VERSION, _httpGet, getMemoryDir, ensureMemoryDir, getUserMemoryDir, ensureUserMemoryDir } from "./utils.mjs";
+import { appendMemoryMetric } from "./memory-metrics.mjs";
 import { detectProvider, PROVIDERS, isOpenAIModel } from "./providers.mjs";
 import { isDomainPreapproved, _checkFilePath } from "./security.mjs";
 
@@ -201,6 +202,7 @@ function _extractToolEnvRequirements(toolDef) {
 }
 
 function _buildManifestEntry(toolDef, source, existing = {}, extras = {}) {
+  const disabled = extras.disabled ?? existing.disabled ?? false;
   return {
     name: toolDef.name,
     type: toolDef.type,
@@ -208,7 +210,8 @@ function _buildManifestEntry(toolDef, source, existing = {}, extras = {}) {
     installSource: extras.installSource || existing.installSource || source,
     installedAt: existing.installedAt || new Date().toISOString(),
     updatedAt: new Date().toISOString(),
-    disabled: false,
+    disabled,
+    ...(disabled && existing.disabledAt ? { disabledAt: existing.disabledAt } : {}),
     version: extras.version || toolDef.version || existing.version || null,
     publisher: extras.publisher || toolDef._meta?.author || existing.publisher || null,
     category: extras.category || toolDef._meta?.category || existing.category || null,
@@ -2416,6 +2419,46 @@ function _memoryDirForScope(scope, cwd) {
   return ensureMemoryDir(cwd);
 }
 
+function _getScopedMemoryRoots(cwd, scope = "all") {
+  const roots = [];
+  if (scope === "user" || scope === "all") roots.push({ scope: "user", dir: getUserMemoryDir() });
+  if (scope === "project" || scope === "all") roots.push({ scope: "project", dir: getMemoryDir(cwd) });
+  return roots;
+}
+
+function _toolsRealpathOrResolve(targetPath) {
+  const resolved = path.resolve(String(targetPath || ""));
+  try {
+    return fs.realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+function _toolsPathWithinRoot(filePath, rootPath) {
+  const rel = path.relative(rootPath, filePath);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+function _resolveScopedMemoryFile(cwd, scope, filePath) {
+  const resolved = path.resolve(String(filePath || ""));
+  if (!fs.existsSync(resolved)) return { error: "Memory not found." };
+
+  const realFile = _toolsRealpathOrResolve(resolved);
+  if (path.extname(realFile).toLowerCase() !== ".md" || path.basename(realFile) === MEMORY_INDEX_FILE) {
+    return { error: "Memory file path must point to a markdown memory entry." };
+  }
+
+  for (const root of _getScopedMemoryRoots(cwd, scope || "all")) {
+    const realRoot = _toolsRealpathOrResolve(root.dir);
+    if (_toolsPathWithinRoot(realFile, realRoot)) {
+      return { file: realFile, scope: root.scope };
+    }
+  }
+
+  return { error: "Memory file path must be inside user or project memory directories." };
+}
+
 function _stripMemoryFrontmatter(raw) {
   return String(raw || "").replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
 }
@@ -2476,11 +2519,7 @@ function _rebuildMemoryIndex(dir) {
 }
 
 function _findMemoryEntry(cwd, scope, { name, file_path }) {
-  if (file_path) {
-    const resolved = path.resolve(file_path);
-    if (!fs.existsSync(resolved)) return null;
-    return { file: resolved, scope: resolved.startsWith(getUserMemoryDir()) ? "user" : "project" };
-  }
+  if (file_path) return _resolveScopedMemoryFile(cwd, scope || "all", file_path);
   const entries = _listMemoryEntries(cwd, scope || "all");
   const wanted = String(name || "").trim().toLowerCase();
   if (!wanted) return null;
@@ -2509,6 +2548,7 @@ ${content.trim()}
 
 function _forgetMemoryEntry(cwd, scope, name, file_path) {
   const found = _findMemoryEntry(cwd, scope, { name, file_path });
+  if (found?.error) return found;
   if (!found) return null;
   fs.rmSync(found.file, { force: true });
   _rebuildMemoryIndex(_memoryDirForScope(found.scope, cwd));
@@ -2544,20 +2584,30 @@ function registerMemoryTools(registry) {
       properties: {
         scope: { type: "string", enum: MEMORY_SCOPES, description: "Optional memory scope to search." },
         name: { type: "string", description: "Memory name or filename stem." },
-        file_path: { type: "string", description: "Direct path to a memory file." },
+        file_path: { type: "string", description: "Direct path to a memory file inside the memory directories." },
       },
     },
   }, async (input) => {
     const cwd = registry._cwd || process.cwd();
     const found = _findMemoryEntry(cwd, input.scope || "all", input);
+    if (found?.error) return { content: found.error, is_error: true };
     if (!found) return { content: "Memory not found.", is_error: true };
     const raw = fs.readFileSync(found.file, "utf-8");
     const meta = _parseMemoryFrontmatter(raw);
+    const memName = meta.name || path.basename(found.file, ".md");
+    // Emit memory_referenced metric
+    try {
+      appendMemoryMetric(cwd, found.scope || "project", {
+        type: "memory_referenced",
+        file: path.basename(found.file),
+        name: memName,
+      });
+    } catch { /* non-fatal */ }
     return {
       content: JSON.stringify({
         scope: meta.scope || found.scope,
         type: meta.type || "reference",
-        name: meta.name || path.basename(found.file, ".md"),
+        name: memName,
         description: meta.description || "",
         file: found.file,
         content: _stripMemoryFrontmatter(raw),
@@ -2592,12 +2642,13 @@ function registerMemoryTools(registry) {
       properties: {
         scope: { type: "string", enum: MEMORY_SCOPES, description: "Optional memory scope to search." },
         name: { type: "string", description: "Memory name or filename stem." },
-        file_path: { type: "string", description: "Direct path to a memory file." },
+        file_path: { type: "string", description: "Direct path to a memory file inside the memory directories." },
       },
     },
   }, async (input) => {
     const cwd = registry._cwd || process.cwd();
     const forgotten = _forgetMemoryEntry(cwd, input.scope || "all", input.name, input.file_path);
+    if (forgotten?.error) return { content: forgotten.error, is_error: true };
     if (!forgotten) return { content: "Memory not found.", is_error: true };
     return { content: JSON.stringify({ forgotten: true, scope: forgotten.scope, file: forgotten.file }, null, 2), is_error: false };
   });
@@ -2621,6 +2672,23 @@ function _resolveOutputAttachments(attachments) {
 }
 
 function registerBriefTools(registry, cfg) {
+  const resolveAttachments = typeof _resolveOutputAttachments === "function"
+    ? _resolveOutputAttachments
+    : (attachments) => {
+      const resolved = [];
+      for (const filePath of attachments || []) {
+        try {
+          const stat = fs.statSync(filePath);
+          const ext = path.extname(filePath).toLowerCase();
+          const isImage = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"].includes(ext);
+          resolved.push({ path: filePath, size: stat.size, isImage });
+        } catch {
+          return { error: `Attachment not found: ${filePath}` };
+        }
+      }
+      return { attachments: resolved };
+    };
+
   registry.register("SendUserMessage", {
     description: "Send a message the user will read. Text outside this tool is visible in the detail view, but most won't open it — the answer lives here.",
     input_schema: {
@@ -2641,7 +2709,7 @@ function registerBriefTools(registry, cfg) {
   }, async (input) => {
     const message = input.message;
     const status = input.status || "normal";
-    const attachmentResult = _resolveOutputAttachments(input.attachments);
+    const attachmentResult = resolveAttachments(input.attachments);
     if (attachmentResult.error) return { content: attachmentResult.error, is_error: true };
 
     const result = { kind: "user_message", message, attachments: attachmentResult.attachments, status, sentAt: new Date().toISOString() };
@@ -2676,7 +2744,7 @@ function registerBriefTools(registry, cfg) {
       required: ["status", "message"],
     },
   }, async (input) => {
-    const attachmentResult = _resolveOutputAttachments(input.attachments);
+    const attachmentResult = resolveAttachments(input.attachments);
     if (attachmentResult.error) return { content: attachmentResult.error, is_error: true };
     const result = {
       kind: "task_output",

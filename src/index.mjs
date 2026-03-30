@@ -10,10 +10,12 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import { log, sleep, EXIT, _VERSION, setVerbose, _verbose } from "./utils.mjs";
+import { log, sleep, memoize, EXIT, _VERSION, setVerbose, _verbose } from "./utils.mjs";
 import { parseArgs, resolveModel, resolveModelForWorkload } from "./config.mjs";
 import { detectProvider, PROVIDERS, AnthropicClient, OpenAIClient, OpenAIResponsesClient } from "./providers.mjs";
 import { getOAuthAccessToken, getOpenAIAccessToken } from "./auth.mjs";
+import { incrementDreamSessionCount } from "./memory-dream.mjs";
+import { appendSkillMetric } from "./skill-metrics.mjs";
 import {
   ToolRegistry, registerBuiltinTools, registerAskUserQuestion,
   registerMemoryTools,
@@ -41,7 +43,7 @@ import { handleCronCommand } from "./cron.mjs";
 
 // ── McpManager ──────────────────────────────────────────────────
 
-function flattenUserFacingOutputs(outputs, fallbackText = "") {
+const flattenUserFacingOutputs = memoize(function flattenUserFacingOutputs(outputs, fallbackText = "") {
   if (!Array.isArray(outputs) || outputs.length === 0) return fallbackText || "";
   const parts = outputs.map((output) => {
     if (!output || typeof output !== "object") return "";
@@ -49,7 +51,9 @@ function flattenUserFacingOutputs(outputs, fallbackText = "") {
     return output.message || "";
   }).filter(Boolean);
   return parts.length > 0 ? parts.join("\n") : (fallbackText || "");
-}
+}, {
+  key: (outputs, fallbackText = "") => JSON.stringify([outputs, fallbackText]),
+});
 
 class McpManager {
   constructor() {
@@ -171,6 +175,198 @@ class McpManager {
   }
 }
 
+// ── Onboarding Wizard ────────────────────────────────────────────
+
+async function runOnboarding() {
+  const W = (s) => process.stderr.write(s);
+  // Buffer all stdin lines upfront (works with both TTY and piped input)
+  const _lines = [];
+  let _lineIdx = 0;
+  const _rl = createInterface({ input: process.stdin });
+  await new Promise((resolve) => {
+    _rl.on("line", (line) => _lines.push(line));
+    _rl.on("close", resolve);
+    // For TTY: don't wait for EOF, resolve after a short delay if lines come in
+    if (process.stdin.isTTY) _rl.close();
+  });
+  const _readLine = (prompt) => new Promise((resolve) => {
+    W(prompt);
+    if (_lineIdx < _lines.length) {
+      const line = _lines[_lineIdx++];
+      W(line + "\n");
+      resolve(line);
+    } else {
+      // Fallback to interactive readline for TTY
+      const rl2 = createInterface({ input: process.stdin, output: process.stderr });
+      rl2.question("", (answer) => { rl2.close(); resolve(answer); });
+    }
+  });
+  const ask = async (prompt, defaultVal = "") => {
+    const suffix = defaultVal ? ` (${defaultVal})` : "";
+    const answer = await _readLine(`${prompt}${suffix}: `);
+    return answer.trim() || defaultVal;
+  };
+  const choose = async (prompt, options) => {
+    W(`\n${prompt}\n`);
+    for (let i = 0; i < options.length; i++) {
+      W(`  \x1b[1m${i + 1}.\x1b[0m ${options[i].label}\n`);
+    }
+    const answer = await _readLine(`\nChoice (1-${options.length}): `);
+    const idx = parseInt(answer.trim(), 10) - 1;
+    return options[Math.max(0, Math.min(idx, options.length - 1))];
+  };
+
+  W("\x1b[1m\n  Welcome to cloclo\x1b[0m\n");
+  W("  One CLI to orchestrate them all\n\n");
+
+  // Step 1: Create directories
+  W("\x1b[2mSetting up directories...\x1b[0m\n");
+  const nativeDir = path.join(os.homedir(), ".claude-native");
+  const claudeDir = path.join(os.homedir(), ".claude");
+  fs.mkdirSync(nativeDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+
+  // Step 2: Choose provider
+  const provider = await choose("Which AI provider do you want to use?", [
+    { label: "Anthropic (Claude) — recommended", value: "anthropic" },
+    { label: "OpenAI (GPT, o-series, Codex)", value: "openai" },
+    { label: "Google (Gemini)", value: "google" },
+    { label: "DeepSeek", value: "deepseek" },
+    { label: "Mistral", value: "mistral" },
+    { label: "Ollama (local, no auth needed)", value: "ollama" },
+    { label: "Other / I'll configure later", value: "skip" },
+  ]);
+
+  let model = null;
+  let authMethod = null;
+
+  // Step 3: Auth setup per provider
+  if (provider.value === "anthropic") {
+    const auth = await choose("How do you want to authenticate?", [
+      { label: "Browser login (OAuth) — Pro/Max subscription", value: "oauth" },
+      { label: "API key (ANTHROPIC_API_KEY)", value: "apikey" },
+    ]);
+    if (auth.value === "oauth") {
+      W("\n\x1b[2mLaunching browser for Anthropic login...\x1b[0m\n");
+      try {
+        const { oauthLogin: login } = await import("./auth.mjs");
+        await login();
+        authMethod = "oauth";
+      } catch (e) {
+        W(`\x1b[31mLogin failed: ${e.message}\x1b[0m\n`);
+        W("You can retry later with: cloclo --login\n");
+      }
+    } else {
+      const key = await ask("Enter your Anthropic API key");
+      if (key) {
+        W(`\n\x1b[2mTip: add to your shell profile:\x1b[0m\n`);
+        W(`  export ANTHROPIC_API_KEY="${key}"\n\n`);
+        authMethod = "apikey";
+      }
+    }
+    model = "claude-sonnet-4-6";
+
+  } else if (provider.value === "openai") {
+    const auth = await choose("How do you want to authenticate?", [
+      { label: "Browser login (OAuth) — ChatGPT Plus/Pro subscription", value: "oauth" },
+      { label: "API key (OPENAI_API_KEY)", value: "apikey" },
+    ]);
+    if (auth.value === "oauth") {
+      W("\n\x1b[2mLaunching browser for OpenAI login...\x1b[0m\n");
+      try {
+        const { openaiOAuthLogin: login } = await import("./auth.mjs");
+        await login();
+        authMethod = "oauth";
+      } catch (e) {
+        W(`\x1b[31mLogin failed: ${e.message}\x1b[0m\n`);
+        W("You can retry later with: cloclo --openai-login\n");
+      }
+    } else {
+      const key = await ask("Enter your OpenAI API key");
+      if (key) {
+        W(`\n\x1b[2mTip: add to your shell profile:\x1b[0m\n`);
+        W(`  export OPENAI_API_KEY="${key}"\n\n`);
+        authMethod = "apikey";
+      }
+    }
+    const m = await choose("Default model?", [
+      { label: "GPT-5.4 (latest, most capable)", value: "gpt-5.4" },
+      { label: "GPT-4o (fast, cheaper)", value: "gpt-4o" },
+      { label: "GPT-4o-mini (fastest, cheapest)", value: "gpt-4o-mini" },
+      { label: "Codex (code-optimized)", value: "gpt-5.3-codex" },
+    ]);
+    model = m.value;
+
+  } else if (provider.value === "google") {
+    const key = await ask("Enter your Google API key (GOOGLE_API_KEY)");
+    if (key) {
+      W(`\n\x1b[2mTip: add to your shell profile:\x1b[0m\n`);
+      W(`  export GOOGLE_API_KEY="${key}"\n\n`);
+    }
+    model = "gemini-2.5-pro";
+
+  } else if (provider.value === "deepseek") {
+    const key = await ask("Enter your DeepSeek API key (DEEPSEEK_API_KEY)");
+    if (key) {
+      W(`\n\x1b[2mTip: add to your shell profile:\x1b[0m\n`);
+      W(`  export DEEPSEEK_API_KEY="${key}"\n\n`);
+    }
+    model = "deepseek-chat";
+
+  } else if (provider.value === "mistral") {
+    const key = await ask("Enter your Mistral API key (MISTRAL_API_KEY)");
+    if (key) {
+      W(`\n\x1b[2mTip: add to your shell profile:\x1b[0m\n`);
+      W(`  export MISTRAL_API_KEY="${key}"\n\n`);
+    }
+    model = "mistral-large-latest";
+
+  } else if (provider.value === "ollama") {
+    W("\n\x1b[2mNo auth needed for Ollama.\x1b[0m\n");
+    const ollamaModel = await ask("Which model? (e.g. llama3.2, codellama, mistral)", "llama3.2");
+    model = `ollama/${ollamaModel}`;
+    authMethod = "none";
+  }
+
+  // Step 4: Permissions
+  const perms = await choose("Browser & Desktop tool permissions?", [
+    { label: "Auto-allow (recommended — no prompts for Browser/Desktop)", value: "allow" },
+    { label: "Ask each time (safer, but more prompts)", value: "ask" },
+  ]);
+
+  // Step 5: Write settings.json (cloclo primary: ~/.claude-native/)
+  const settingsPath = path.join(nativeDir, "settings.json");
+  let settings = {};
+  try { settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8")); } catch { /* new file */ }
+
+  if (model) settings.model = model;
+  if (perms.value === "allow") {
+    settings.permissions = settings.permissions || {};
+    settings.permissions.allow = [...new Set([...(settings.permissions?.allow || []), "Browser", "Desktop"])];
+  }
+
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+  W(`\n\x1b[2mSettings saved to ${settingsPath}\x1b[0m\n`);
+
+  // Step 6: Summary
+  W("\n\x1b[1m  Setup complete!\x1b[0m\n\n");
+  W(`  Provider:    ${provider.label}\n`);
+  if (model) W(`  Model:       ${model}\n`);
+  if (authMethod === "oauth") W(`  Auth:        OAuth (saved in keychain)\n`);
+  else if (authMethod === "apikey") W(`  Auth:        API key (set it in your shell profile)\n`);
+  else if (authMethod === "none") W(`  Auth:        None needed\n`);
+  if (perms.value === "allow") W(`  Permissions: Browser & Desktop auto-allowed\n`);
+  W(`\n  Run \x1b[1mcloclo\x1b[0m to start!\n\n`);
+
+  W("\x1b[2mUseful commands:\n");
+  W("  cloclo                          Interactive REPL\n");
+  W("  cloclo -p \"explain this code\"    One-shot mode\n");
+  W("  cloclo --login                  Re-authenticate Anthropic\n");
+  W("  cloclo --openai-login           Re-authenticate OpenAI\n");
+  W("  cloclo --help                   Full help\x1b[0m\n\n");
+
+}
+
 // ── Main ────────────────────────────────────────────────────────
 
 async function main() {
@@ -179,6 +375,21 @@ async function main() {
 
   // Early dispatch: cron doesn't need auth/provider/tools
   if (cfg._subcommand === "cron") { handleCronCommand(cfg._cronArgs || []); return; }
+
+  // Onboarding wizard
+  if (cfg._subcommand === "onboarding") { await runOnboarding(); return; }
+
+  // Auto-trigger onboarding on first launch if no auth is found
+  const hasAnyAuth = cfg.apiKey || cfg.authToken || cfg.openaiApiKey
+    || process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY
+    || process.env.GOOGLE_API_KEY || process.env.DEEPSEEK_API_KEY;
+  const nativeDir = path.join(os.homedir(), ".claude-native");
+  const settingsFile = path.join(os.homedir(), ".claude", "settings.json");
+  if (!hasAnyAuth && !fs.existsSync(nativeDir) && !fs.existsSync(settingsFile) && cfg.interactive && !cfg.ndjson) {
+    process.stderr.write("\x1b[33mFirst time? Running onboarding...\x1b[0m\n\n");
+    await runOnboarding();
+    return;
+  }
 
   // Resolve auth: --oauth (keychain) > --auth-token > --api-key > ANTHROPIC_API_KEY
   if (cfg.useOAuth || (!cfg.apiKey && !cfg.authToken)) {
@@ -367,6 +578,11 @@ Important:
     }, async (input) => {
       const skillName = input.skill.replace(/^\//, ""); // strip leading / if present
       const invoked = cfg._skillLoader.invoke(skillName, input.args || "");
+      appendSkillMetric(cfg.cwd, {
+        skill_name: skillName, found: !!invoked, is_error: !invoked,
+        args_present: !!(input.args), args_preview: input.args ? input.args.substring(0, 100) : undefined,
+        session_id: cfg.sessionId, turn_index: undefined,
+      });
       if (!invoked) {
         const available = cfg._skillLoader.list().map(s => s.name).join(", ");
         return { content: `Skill "${skillName}" not found. Available: ${available}`, is_error: true };
@@ -589,6 +805,9 @@ Important:
     if (_verbose && !isJsonOutput) {
       process.stderr.write(`\x1b[2m(${result.usage.input_tokens} in / ${result.usage.output_tokens} out | ${result.turns} turns)\x1b[0m\n`);
     }
+
+    // Increment dream session counter (one-shot counts as a session)
+    try { incrementDreamSessionCount(); } catch { /* non-fatal */ }
   } else {
     // Interactive REPL
     const repl = new InteractiveMode(cfg, registry, client, mcpManager, permissions);

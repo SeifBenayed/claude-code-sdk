@@ -8778,7 +8778,7 @@
       "id": 469,
       "tier": "T2",
       "category": "debug",
-      "task": "JavaScript — missing in: Identify why returns and fix the branch.",
+      "task": "JavaScript — missing return in else branch: Identify why a function returns undefined and fix it.",
       "tools_required": [
         "bash"
       ],

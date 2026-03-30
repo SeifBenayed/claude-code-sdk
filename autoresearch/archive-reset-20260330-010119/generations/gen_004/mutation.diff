@@ -1,0 +1,18 @@
+diff -ru /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_004/src_before/config.mjs /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_004/src_after/config.mjs
+--- /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_004/src_before/config.mjs	2026-03-29 18:56:11
++++ /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_004/src_after/config.mjs	2026-03-29 20:00:34
+@@ -148,8 +148,12 @@
+       case "--provider": cfg.provider = needValue(a, ++i); break;
+       case "--ndjson": cfg.ndjson = true; cfg.interactive = false; break;
+       case "-p": case "--print": {
+-        const v = needValue(a, ++i);
+-        if (v.startsWith("-")) {
++        if (i + 1 >= argv.length) {
++          process.stderr.write(`Error: ${a} requires a prompt value\n  Use ${a} "your prompt"\n`);
++          process.exit(EXIT.BAD_ARGS);
++        }
++        const v = argv[++i];
++        if (typeof v === "string" && v.startsWith("-")) {
+           process.stderr.write(`Error: ${a} requires a prompt value; got another flag "${v}"\n  Use ${a} "your prompt"\n`);
+           process.exit(EXIT.BAD_ARGS);
+         }

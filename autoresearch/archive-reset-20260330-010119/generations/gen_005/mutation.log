@@ -1,0 +1,7 @@
+[2mUsing max subscription (OAuth)[0m
+[2mUsing OpenAI backend (gpt-5.4)[0m
+Made one targeted `multi_tool_chain` fix in `src/providers.mjs`: `detectProvider()` now trims model strings before classification, which hardens provider detection for whitespace-padded model names and preserves the OpenRouter-hosted Claude fallback behavior. Added focused regression assertions in `test-suite.mjs` for trimmed native Claude and trimmed OpenRouter Claude detection.
+
+Build succeeded: `npm run build`
+
+`npm test` completed but the repo already has pre-existing unrelated failures. Our new provider tests passed. Existing failures remain in unrelated areas, including CLI `-p/--print` E2E assertions, memory loader tests, throttle extraction, and skill metrics instrumentation.

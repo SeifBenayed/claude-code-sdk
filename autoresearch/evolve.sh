@@ -5,12 +5,12 @@
 # Example: ./evolve.sh 8 gpt-5.4
 #
 # Flow per generation:
-#   1. Cloclo (GPT-5.4) answers 1000 questions (parallel, ~5min)
-#   2. Score against Claude ground truth
-#   3. Find weakest category
-#   4. Claude modifies src/*.mjs to improve
-#   5. npm run build → rebuild cloclo
-#   6. Save generation snapshot
+#   1. Restore the current best code
+#   2. Mutate the best code once
+#   3. npm run build → rebuild cloclo
+#   4. Cloclo answers 1000 questions
+#   5. Score against ground truth
+#   6. Keep the mutation only if it beats the best
 #   7. Repeat
 
 set -euo pipefail
@@ -59,11 +59,17 @@ LAST_GEN_NUM=$(find "$GEN_DIR" -maxdepth 1 -type d -name 'gen_*' -exec basename 
 GEN="${LAST_GEN_NUM:-0}"
 
 while [ "$(date +%s)" -lt "$END_TIME" ]; do
+  RESUMING=0
   CURRENT_MAX_LABEL="gen_$(printf '%03d' "$GEN")"
-  if [ "$GEN" -gt 0 ] && [ -d "$GEN_DIR/$CURRENT_MAX_LABEL" ] && [ ! -f "$RESULTS_DIR/${CURRENT_MAX_LABEL}_scores.json" ]; then
+  if [ "$GEN" -gt 0 ] && [ -d "$GEN_DIR/$CURRENT_MAX_LABEL" ] && [ ! -f "$RESULTS_DIR/${CURRENT_MAX_LABEL}_scores.json" ] && [ -d "$GEN_DIR/$CURRENT_MAX_LABEL/src_after" ]; then
     GEN_LABEL="$CURRENT_MAX_LABEL"
+    RESUMING=1
     echo "  ↺ Resuming incomplete generation $GEN_LABEL"
   else
+    if [ "$GEN" -gt 0 ] && [ -d "$GEN_DIR/$CURRENT_MAX_LABEL" ] && [ ! -f "$RESULTS_DIR/${CURRENT_MAX_LABEL}_scores.json" ]; then
+      echo "  ↷ Skipping incompatible incomplete generation $CURRENT_MAX_LABEL"
+      echo "    It does not have a benchmarkable candidate snapshot, so a fresh generation will be created."
+    fi
     GEN=$((GEN + 1))
     GEN_LABEL="gen_$(printf '%03d' "$GEN")"
   fi
@@ -75,11 +81,138 @@ while [ "$(date +%s)" -lt "$END_TIME" ]; do
   echo "  GENERATION $GEN [$GEN_LABEL] — ${REMAINING}min remaining"
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-  # ── Step 1: Save snapshot BEFORE ──
-  mkdir -p "$GEN_SNAPSHOT/src_before"
-  cp "$SRC_DIR"/*.mjs "$GEN_SNAPSHOT/src_before/"
+  mkdir -p "$GEN_SNAPSHOT"
 
-  # ── Step 2: Run cloclo on 1000 questions (parallel) ──
+  if [ "$RESUMING" = "1" ]; then
+    cp "$GEN_SNAPSHOT/src_after/"*.mjs "$SRC_DIR/"
+    cd "$PROJECT" && npm run build 2>/dev/null || true
+    DIFF_LINES=$(wc -l < "$GEN_SNAPSHOT/mutation.diff" 2>/dev/null || echo 0)
+    TEE_ARGS=(-a)
+    echo "  → Restored candidate snapshot from $GEN_LABEL"
+  else
+    BEST_GEN=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$SCOREBOARD','utf-8')).best_gen || 'none')")
+    if [ "$BEST_GEN" != "none" ] && [ -d "$GEN_DIR/$BEST_GEN/src_after" ]; then
+      cp "$GEN_DIR/$BEST_GEN/src_after/"*.mjs "$SRC_DIR/"
+      cd "$PROJECT" && npm run build 2>/dev/null
+      echo "  → Restored best baseline from $BEST_GEN"
+    fi
+
+    mkdir -p "$GEN_SNAPSHOT/src_before"
+    rm -f "$GEN_SNAPSHOT/src_before/"*.mjs 2>/dev/null || true
+    cp "$SRC_DIR"/*.mjs "$GEN_SNAPSHOT/src_before/"
+
+    FEEDBACK_LABEL="$BEST_GEN"
+    FEEDBACK_SCORES_FILE="$RESULTS_DIR/${FEEDBACK_LABEL}_scores.json"
+    if [ "$FEEDBACK_LABEL" != "none" ] && [ -f "$FEEDBACK_SCORES_FILE" ]; then
+      FEEDBACK_WEAK_CAT=$(node -e "
+        const s = JSON.parse(require('fs').readFileSync('$FEEDBACK_SCORES_FILE','utf-8'));
+        const sorted = Object.entries(s.catScores).sort((a,b) => a[1].sum/a[1].count - b[1].sum/b[1].count);
+        console.log(sorted[0]?.[0] || 'unknown');
+      ")
+      FEEDBACK_WEAK_CATS=$(node -e "
+        const s = JSON.parse(require('fs').readFileSync('$FEEDBACK_SCORES_FILE','utf-8'));
+        const sorted = Object.entries(s.catScores).sort((a,b) => a[1].sum/a[1].count - b[1].sum/b[1].count);
+        console.log(sorted.slice(0,3).map(([c,d]) => c + ' (' + (d.sum/d.count*100).toFixed(1) + '%)').join(', '));
+      ")
+      FEEDBACK_READ_INSTRUCTIONS="Read ~/claude-tool-loop/autoresearch/results/${FEEDBACK_LABEL}_scores.json for detailed scores."
+
+      FAILURE_CONTEXT=$(FEEDBACK_LABEL="$FEEDBACK_LABEL" FEEDBACK_SCORES_FILE="$FEEDBACK_SCORES_FILE" BENCH_FILE="$BENCH_FILE" RESULTS_DIR="$RESULTS_DIR" node <<'NODE'
+const fs = require("fs");
+const path = require("path");
+
+const { FEEDBACK_LABEL, FEEDBACK_SCORES_FILE, BENCH_FILE, RESULTS_DIR } = process.env;
+const scores = JSON.parse(fs.readFileSync(FEEDBACK_SCORES_FILE, "utf-8"));
+const bench = JSON.parse(fs.readFileSync(BENCH_FILE, "utf-8"));
+const answersPath = path.join(RESULTS_DIR, `${FEEDBACK_LABEL}_cloclo.json`);
+const candidate = fs.existsSync(answersPath)
+  ? JSON.parse(fs.readFileSync(answersPath, "utf-8"))
+  : { answers: {} };
+
+const clean = (value, limit) => String(value || "")
+  .replace(/\s+/g, " ")
+  .trim()
+  .slice(0, limit);
+
+const sortedCats = Object.entries(scores.catScores)
+  .sort((a, b) => a[1].sum / a[1].count - b[1].sum / b[1].count)
+  .slice(0, 3)
+  .map(([cat]) => cat);
+
+const lines = [];
+for (const [index, cat] of sortedCats.entries()) {
+  const ranked = bench.tasks
+    .filter((task) => task.category === cat)
+    .map((task) => {
+      const ans = candidate.answers?.[task.id] || {};
+      const answer = typeof ans.answer === "string" ? ans.answer : "";
+      const runtime = typeof ans.errorMessage === "string" ? ans.errorMessage : "";
+      const blocked = /(isn't in|couldn't find|give me its path|attach it|not present under|couldn’t find|give me the file)/i.test(answer);
+      const score = (ans.error ? 100 : 0) + (!answer.trim() ? 50 : 0) + (blocked ? 20 : 0) + Math.max(0, 200 - answer.length);
+      return { task, ans, score, answer, runtime };
+    })
+    .sort((a, b) => b.score - a.score)
+    .slice(0, index === 0 ? 2 : 1);
+
+  lines.push(`Category ${cat}:`);
+  for (const item of ranked) {
+    lines.push(`- Q${item.task.id}: ${clean(item.task.task, 220)}`);
+    lines.push(`  Candidate: ${clean(item.answer || "<empty>", 220)}`);
+    if (item.runtime) lines.push(`  Runtime: ${clean(item.runtime, 160)}`);
+  }
+}
+
+process.stdout.write(lines.join("\n"));
+NODE
+      )
+    else
+      FEEDBACK_WEAK_CAT="unknown"
+      FEEDBACK_WEAK_CATS="unknown"
+      FEEDBACK_READ_INSTRUCTIONS="No prior scored generation is available yet; inspect the current code directly."
+      FAILURE_CONTEXT="No prior scored generation is available yet."
+    fi
+
+    echo "  → cloclo ($MUTATOR_MODEL) is mutating from the current best..."
+    if ! (
+      cd "$PROJECT" && \
+      node "$PROJECT/claude-native.mjs" --yes --model "$MUTATOR_MODEL" -p "You are optimizing cloclo CLI to score better on benchmarks.
+
+Current best generation: ${BEST_GEN}.
+Current best score: ${BEST_SCORE}%.
+Weakest categories in the current best: $FEEDBACK_WEAK_CATS
+
+Read ~/claude-tool-loop/autoresearch/program.md for full directives.
+$FEEDBACK_READ_INSTRUCTIONS
+
+Concrete failure examples from the current best run:
+$FAILURE_CONTEXT
+
+Then:
+1. Read the relevant src/ file(s) for the weakest category
+2. Make ONE targeted improvement to the current best code
+3. Run: cd ~/claude-tool-loop && npm run build
+4. Run: cd ~/claude-tool-loop && npm test (verify nothing broke)
+
+Focus on '$FEEDBACK_WEAK_CAT'. Small, surgical change only.
+The goal is to beat the current best score.
+If the failures point to infrastructure (permissions, retries, output handling, path assumptions), fix that root cause instead of making a cosmetic prompt tweak."
+    ) 2>&1 | tee "$GEN_SNAPSHOT/mutation.log"; then
+      echo "  ⚠ Mutation step exited non-zero. Continuing with the current src/ state."
+    fi
+
+    mkdir -p "$GEN_SNAPSHOT/src_after"
+    rm -f "$GEN_SNAPSHOT/src_after/"*.mjs 2>/dev/null || true
+    cp "$SRC_DIR"/*.mjs "$GEN_SNAPSHOT/src_after/"
+
+    diff -ru "$GEN_SNAPSHOT/src_before" "$GEN_SNAPSHOT/src_after" > "$GEN_SNAPSHOT/mutation.diff" 2>/dev/null || true
+    DIFF_LINES=$(wc -l < "$GEN_SNAPSHOT/mutation.diff" 2>/dev/null || echo 0)
+    echo "  → Mutation diff: $DIFF_LINES lines changed"
+
+    echo "  → Rebuilding cloclo..."
+    cd "$PROJECT" && npm run build 2>/dev/null
+    echo "  → Build complete"
+    TEE_ARGS=()
+  fi
+
   echo "  → Running cloclo ($MODEL) on 1000 questions..."
   if ! node "$DIR/run-cloclo-parallel.mjs" \
     --model="$MODEL" \
@@ -88,11 +221,10 @@ while [ "$(date +%s)" -lt "$END_TIME" ]; do
     --log-every="$BENCH_LOG_EVERY" \
     --checkpoint-every="$BENCH_CHECKPOINT_EVERY" \
     --retries="$BENCH_RETRIES" \
-    --gen="$GEN_LABEL" 2>&1 | tee "$GEN_SNAPSHOT/run.log"; then
+    --gen="$GEN_LABEL" 2>&1 | tee "${TEE_ARGS[@]}" "$GEN_SNAPSHOT/run.log"; then
     echo "  ⚠ Benchmark command exited non-zero. If a checkpoint exists, the next loop pass will resume it."
   fi
 
-  # ── Step 3: Extract score ──
   SCORES_FILE="$RESULTS_DIR/${GEN_LABEL}_scores.json"
   if [ ! -f "$SCORES_FILE" ]; then
     echo "  ✗ No scores file, skipping generation"
@@ -110,10 +242,8 @@ while [ "$(date +%s)" -lt "$END_TIME" ]; do
   echo "  Score: ${NUMERIC_SCORE}% (best: ${BEST_SCORE}%)"
   echo "  Weakest: $WEAK_CAT"
 
-  # Save scores to snapshot
   cp "$SCORES_FILE" "$GEN_SNAPSHOT/"
 
-  # ── Step 4: Keep or revert decision ──
   KEEP=$(node -e "console.log(parseFloat('$NUMERIC_SCORE') > parseFloat('$BEST_SCORE') ? 1 : 0)")
 
   if [ "$KEEP" = "1" ]; then
@@ -121,59 +251,14 @@ while [ "$(date +%s)" -lt "$END_TIME" ]; do
     BEST_SCORE="$NUMERIC_SCORE"
   else
     echo "  ❌ No improvement. Reverting src/ to previous best."
-    # Find the best generation's src and restore it
-    BEST_GEN=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$SCOREBOARD','utf-8')).best_gen)")
-    if [ -d "$GEN_DIR/$BEST_GEN/src_after" ]; then
+    BEST_GEN=$(node -e "console.log(JSON.parse(require('fs').readFileSync('$SCOREBOARD','utf-8')).best_gen || 'none')")
+    if [ "$BEST_GEN" != "none" ] && [ -d "$GEN_DIR/$BEST_GEN/src_after" ]; then
       cp "$GEN_DIR/$BEST_GEN/src_after/"*.mjs "$SRC_DIR/"
       cd "$PROJECT" && npm run build 2>/dev/null
       echo "  → Reverted to $BEST_GEN"
     fi
   fi
 
-  # ── Step 5: Claude mutates src/ ──
-  echo "  → cloclo ($MUTATOR_MODEL) is analyzing and mutating src/..."
-
-  # Get top 3 weak categories for context
-  WEAK_CATS=$(node -e "
-    const s = JSON.parse(require('fs').readFileSync('$SCORES_FILE','utf-8'));
-    const sorted = Object.entries(s.catScores).sort((a,b) => a[1].sum/a[1].count - b[1].sum/b[1].count);
-    console.log(sorted.slice(0,3).map(([c,d]) => c + ' (' + (d.sum/d.count*100).toFixed(1) + '%)').join(', '));
-  ")
-
-  # Use cloclo with GPT-5.4 to make the mutation
-  if ! node "$PROJECT/claude-native.mjs" --model "$MUTATOR_MODEL" -p "You are optimizing cloclo CLI to score better on benchmarks.
-
-Current score: ${NUMERIC_SCORE}%. Best: ${BEST_SCORE}%.
-Weakest categories: $WEAK_CATS
-
-Read ~/claude-tool-loop/autoresearch/program.md for full directives.
-Read ~/claude-tool-loop/autoresearch/results/${GEN_LABEL}_scores.json for detailed scores.
-
-Then:
-1. Read the relevant src/ file(s) for the weakest category
-2. Make ONE targeted improvement
-3. Run: cd ~/claude-tool-loop && npm run build
-4. Run: cd ~/claude-tool-loop && npm test (verify nothing broke)
-
-Focus on '$WEAK_CAT'. Small, surgical change only." 2>&1 | tee "$GEN_SNAPSHOT/mutation.log"; then
-    echo "  ⚠ Mutation step exited non-zero. Continuing with the current src/ state."
-  fi
-
-  # ── Step 6: Save snapshot AFTER ──
-  mkdir -p "$GEN_SNAPSHOT/src_after"
-  cp "$SRC_DIR"/*.mjs "$GEN_SNAPSHOT/src_after/"
-
-  # Save diff
-  diff -ru "$GEN_SNAPSHOT/src_before" "$GEN_SNAPSHOT/src_after" > "$GEN_SNAPSHOT/mutation.diff" 2>/dev/null || true
-  DIFF_LINES=$(wc -l < "$GEN_SNAPSHOT/mutation.diff" 2>/dev/null || echo 0)
-  echo "  → Mutation diff: $DIFF_LINES lines changed"
-
-  # ── Step 7: Rebuild ──
-  echo "  → Rebuilding cloclo..."
-  cd "$PROJECT" && npm run build 2>/dev/null
-  echo "  → Build complete"
-
-  # ── Step 8: Update scoreboard ──
   node -e "
     const fs = require('fs');
     const sb = JSON.parse(fs.readFileSync('$SCOREBOARD','utf-8'));

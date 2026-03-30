@@ -9,6 +9,7 @@ import _http from "node:http";
 import _https from "node:https";
 
 import { log, sleep, EXIT, _VERSION, _httpGet, getMemoryDir, ensureMemoryDir, getUserMemoryDir, ensureUserMemoryDir } from "./utils.mjs";
+import { appendMemoryMetric } from "./memory-metrics.mjs";
 import { detectProvider, PROVIDERS, isOpenAIModel } from "./providers.mjs";
 import { isDomainPreapproved, _checkFilePath } from "./security.mjs";
 
@@ -2593,11 +2594,20 @@ function registerMemoryTools(registry) {
     if (!found) return { content: "Memory not found.", is_error: true };
     const raw = fs.readFileSync(found.file, "utf-8");
     const meta = _parseMemoryFrontmatter(raw);
+    const memName = meta.name || path.basename(found.file, ".md");
+    // Emit memory_referenced metric
+    try {
+      appendMemoryMetric(cwd, found.scope || "project", {
+        type: "memory_referenced",
+        file: path.basename(found.file),
+        name: memName,
+      });
+    } catch { /* non-fatal */ }
     return {
       content: JSON.stringify({
         scope: meta.scope || found.scope,
         type: meta.type || "reference",
-        name: meta.name || path.basename(found.file, ".md"),
+        name: memName,
         description: meta.description || "",
         file: found.file,
         content: _stripMemoryFrontmatter(raw),

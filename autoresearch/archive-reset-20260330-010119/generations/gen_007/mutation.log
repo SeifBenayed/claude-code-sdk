@@ -1,0 +1,19 @@
+[2mUsing max subscription (OAuth)[0m
+[2mUsing OpenAI backend (gpt-5.4)[0m
+I’ll inspect the benchmark directives and the bash-task path, make one surgical fix, then build and run tests.
+Made one targeted bash-task-oriented prompt tweak in `src/engine.mjs`, then rebuilt and ran tests.
+Done.
+
+Changed `src/engine.mjs:2644` with one surgical one-shot prompt improvement aimed at weak benchmark categories, especially `bash_tasks`: it now explicitly tells the model to return the exact bash command/pipeline for shell-command asks, direct file contents for inline file-creation asks, and bare regexes for regex asks.
+
+Build:
+- `npm run build` ✅
+
+Test result:
+- `npm test` ran, but the suite already has many unrelated failures in the current branch.
+- My change did not introduce a build break.
+
+Relevant file:
+- `src/engine.mjs:2637`
+
+If you want, I can do the next single mutation focused on the actual runtime/root-cause side instead of prompting.

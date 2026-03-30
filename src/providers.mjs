@@ -29,6 +29,7 @@ const PROVIDERS = {
       supportsThinking: true,
       supportsHostedWebSearch: true,
       summaryModel: "claude-haiku-4-5-20251001",
+      contextWindow: 1000000, // claude-opus/sonnet; haiku is 200000 but resolved per-model in _getContextLimit
     },
   },
   openai: {
@@ -51,6 +52,7 @@ const PROVIDERS = {
       summaryModel: "gpt-4o-mini",
       // Reasoning models (o1, o3, etc.) use "developer-message" — resolved per-model via reasoningModelPattern
       reasoningModelPattern: "^o[1-9]",
+      contextWindow: 128000, // gpt-4o/4.1 default; gpt-5=1000000, o3/o4=200000 resolved per-model
     },
   },
   "openai-responses": {
@@ -71,6 +73,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: "gpt-4o-mini",
+      contextWindow: 192000,
     },
   },
   google: {
@@ -90,6 +93,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: "gemini-2.5-flash",
+      contextWindow: 1000000,
     },
   },
   deepseek: {
@@ -109,6 +113,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: "deepseek-chat",
+      contextWindow: 64000,
     },
   },
   mistral: {
@@ -128,6 +133,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: "mistral-small-latest",
+      contextWindow: 128000,
     },
   },
   groq: {
@@ -147,6 +153,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: "llama-3.3-70b-versatile",
+      contextWindow: 128000,
     },
   },
   ollama: {
@@ -166,6 +173,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: null,
+      contextWindow: 128000,
     },
   },
   lmstudio: {
@@ -185,6 +193,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: null,
+      contextWindow: 128000,
     },
   },
   vllm: {
@@ -204,6 +213,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: null,
+      contextWindow: 128000,
     },
   },
   jan: {
@@ -223,6 +233,27 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: null,
+      contextWindow: 128000,
+    },
+  },
+  minimax: {
+    name: "MiniMax",
+    detect: (m) => m.startsWith("minimax/") || m.startsWith("MiniMax-"),
+    envKey: "MINIMAX_API_KEY",
+    defaultUrl: "https://api.minimaxi.chat",
+    createClient: (cfg) => new OpenAIClient({ apiKey: cfg.providerKey, apiUrl: cfg.providerUrl }),
+    resolveAuth: (cfg) => process.env.MINIMAX_API_KEY || null,
+    resolveBaseUrl: () => process.env.MINIMAX_API_URL || "https://api.minimaxi.chat",
+    transformModel: (m) => m.replace(/^minimax\//, ""),
+    capabilities: {
+      apiStyle: "openai-chat",
+      toolCallStyle: "openai-chat",
+      instructionPlacement: "system-message",
+      supportsToolCalling: true,
+      supportsThinking: false,
+      supportsHostedWebSearch: false,
+      summaryModel: null,
+      contextWindow: 1000000,
     },
   },
   llamacpp: {
@@ -242,6 +273,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: null,
+      contextWindow: 128000,
     },
   },
 };
@@ -333,6 +365,7 @@ function detectProvider(model, explicitProvider) {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: "gpt-4o-mini",
+      contextWindow: 128000,
     },
   };
 }

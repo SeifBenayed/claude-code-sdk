@@ -78,6 +78,17 @@ function createEvent(type, data = {}) {
   };
 }
 
+function addCalendarMonth(date) {
+  const result = new Date(date);
+  const day = result.getDate();
+  const targetMonth = result.getMonth() + 1;
+  result.setDate(1);
+  result.setMonth(targetMonth);
+  const lastDayOfTargetMonth = new Date(result.getFullYear(), result.getMonth() + 1, 0).getDate();
+  result.setDate(Math.min(day, lastDayOfTargetMonth));
+  return result;
+}
+
 // ── Audit Logger ─────────────────────────────────────────────
 
 class AuditLogger {

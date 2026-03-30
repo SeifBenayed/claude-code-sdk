@@ -522,13 +522,13 @@ function formatDiagnostics(diagnostics, filePath, { compact = false } = {}) {
   if (!diagnostics || diagnostics.length === 0) return "";
 
   const seen = new Set();
-  const deduped = diagnostics.filter((d) => {
+  const deduped = diagnostics.filter(d => {
     const key = JSON.stringify([
-      path.resolve(filePath),
+      path.basename(filePath),
       d.severity || 4,
       d.message || "",
       d.source || "",
-      typeof d.code === "object" ? d.code?.value : d.code,
+      typeof d.code === "object" ? d.code?.value : d.code || "",
       d.range?.start?.line ?? null,
       d.range?.start?.character ?? null,
       d.range?.end?.line ?? null,

@@ -32,7 +32,66 @@ export function log(...args) {
 
 export function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-const CASE_FOLD_COLLATOR = new Intl.Collator("und", { sensitivity: "base", usage: "search" });
+export function throttle(fn, wait) {
+  let lastCallAt = 0;
+  let timer = null;
+  let lastResult;
+  let lastArgs = [];
+  let lastThis = null;
+
+  const invoke = (context, args) => {
+    lastCallAt = Date.now();
+    lastResult = fn.apply(context, args);
+    return lastResult;
+  };
+
+  const throttled = function (...args) {
+    const now = Date.now();
+    if (!lastCallAt || now - lastCallAt >= wait) {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      return invoke(this, args);
+    }
+
+    lastArgs = args;
+    lastThis = this;
+    if (!timer) {
+      timer = setTimeout(() => {
+        timer = null;
+        invoke(lastThis, lastArgs);
+      }, wait - (now - lastCallAt));
+    }
+    return lastResult;
+  };
+
+  throttled.cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    lastArgs = [];
+    lastThis = null;
+  };
+
+  return throttled;
+}
+
+export function memoize(fn, { key = (...args) => JSON.stringify(args) } = {}) {
+  const cache = new Map();
+  const memoized = (...args) => {
+    const cacheKey = key(...args);
+    if (cache.has(cacheKey)) return cache.get(cacheKey);
+    const value = fn(...args);
+    cache.set(cacheKey, value);
+    return value;
+  };
+  memoized.cache = cache;
+  memoized.clear = () => cache.clear();
+  memoized.delete = (...args) => cache.delete(key(...args));
+  return memoized;
+}
+
+const CASE_FOLD_COLLATOR = new Intl.Collator("tr", { sensitivity: "base", usage: "search" });
 
 export function caseInsensitiveIncludes(haystack, needle) {
   const text = String(haystack);
@@ -158,6 +217,7 @@ Options:
   --logout                    Remove Anthropic credentials
   --oauth                     Use Anthropic Pro/Max subscription (keychain)
   --openai-login              Login to OpenAI via browser (OAuth)
+  --onboarding                First-time setup wizard
   --openai-logout             Remove OpenAI credentials
   --openai                    Use OpenAI subscription (keychain)
   --api-key <key>             Anthropic API key (or ANTHROPIC_API_KEY env)

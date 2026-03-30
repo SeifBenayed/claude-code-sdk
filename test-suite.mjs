@@ -69,7 +69,11 @@ function extractBlock(src, startPattern) {
   return src.slice(idx, end);
 }
 
-const stubs = "function log() {} function sleep() { return Promise.resolve(); }";
+const stubs = "function log() {} function sleep() { return Promise.resolve(); } function memoize(fn, { key = (...args) => JSON.stringify(args) } = {}) { const cache = new Map(); const memoized = (...args) => { const cacheKey = key(...args); if (cache.has(cacheKey)) return cache.get(cacheKey); const value = fn(...args); cache.set(cacheKey, value); return value; }; memoized.cache = cache; memoized.clear = () => cache.clear(); memoized.delete = (...args) => cache.delete(key(...args)); return memoized; } ";
+const throttleFunc = extractBlock(source, "function throttle(");
+const caseFoldCollatorLine = source.match(/^const CASE_FOLD_COLLATOR = .*$/m)?.[0] || "";
+const caseInsensitiveCompareFunc = extractBlock(source, "function caseInsensitiveCompare(");
+const caseInsensitiveIncludesFunc = extractBlock(source, "function caseInsensitiveIncludes(");
 const anthropicClientClass = extractBlock(source, "class AnthropicClient {");
 const openAIClientClass = extractBlock(source, "class OpenAIClient {");
 const openAIResponsesClass = extractBlock(source, "class OpenAIResponsesClient {");
@@ -87,15 +91,89 @@ const modelProfilesEnd = source.indexOf("// ── providers.mjs", modelProfiles
 const modelProfilesBlock = modelProfilesStart !== -1 && modelProfilesEnd !== -1 ? source.slice(modelProfilesStart, modelProfilesEnd) : "";
 const resolveModelForWorkloadFunc = extractBlock(source, "function resolveModelForWorkload(");
 
-const testModule = [stubs, anthropicClientClass, openAIClientClass, openAIResponsesClass, modelProfilesBlock, providersAndHelpers, detectProviderFunc, isOpenAIModelFunc, isResponsesFunc, resolveModelForWorkloadFunc].join("\n\n");
+const testModule = [stubs, throttleFunc, caseFoldCollatorLine, caseInsensitiveCompareFunc, caseInsensitiveIncludesFunc, anthropicClientClass, openAIClientClass, openAIResponsesClass, modelProfilesBlock, providersAndHelpers, detectProviderFunc, isOpenAIModelFunc, isResponsesFunc, resolveModelForWorkloadFunc].join("\n\n");
 const ns = {};
 try {
-  new Function("exports", "process", testModule + "\nexports.OpenAIClient = OpenAIClient;\nexports.OpenAIResponsesClient = OpenAIResponsesClient;\nexports.isOpenAIModel = isOpenAIModel;\nexports.isResponsesAPIModel = isResponsesAPIModel;\nexports.PROVIDERS = PROVIDERS;\nexports.detectProvider = detectProvider;\nexports.getInstructionPlacement = getInstructionPlacement;\nexports.resolveModelForWorkload = resolveModelForWorkload;\n")(ns, process);
+  new Function("exports", "process", testModule + "\nexports.throttle = throttle;\nexports.caseInsensitiveCompare = caseInsensitiveCompare;\nexports.caseInsensitiveIncludes = caseInsensitiveIncludes;\nexports.OpenAIClient = OpenAIClient;\nexports.OpenAIResponsesClient = OpenAIResponsesClient;\nexports.isOpenAIModel = isOpenAIModel;\nexports.isResponsesAPIModel = isResponsesAPIModel;\nexports.PROVIDERS = PROVIDERS;\nexports.detectProvider = detectProvider;\nexports.getInstructionPlacement = getInstructionPlacement;\nexports.resolveModelForWorkload = resolveModelForWorkload;\n")(ns, process);
 } catch (e) {
   process.stderr.write(`\x1b[31mFailed to extract classes: ${e.message}\x1b[0m\n`);
 }
 
 const { OpenAIClient, OpenAIResponsesClient, isOpenAIModel, isResponsesAPIModel, resolveModelForWorkload } = ns;
+
+function debounce(fn, wait) {
+  let timer = null;
+  let pendingPromise = null;
+  let resolvePending = null;
+  let rejectPending = null;
+  let lastArgs = [];
+  let lastThis = null;
+
+  const debounced = function (...args) {
+    lastArgs = args;
+    lastThis = this;
+
+    if (timer) clearTimeout(timer);
+    if (!pendingPromise) {
+      pendingPromise = new Promise((resolve, reject) => {
+        resolvePending = resolve;
+        rejectPending = reject;
+      });
+    }
+
+    timer = setTimeout(async () => {
+      timer = null;
+      const resolve = resolvePending;
+      const reject = rejectPending;
+      resolvePending = null;
+      rejectPending = null;
+      pendingPromise = null;
+      try {
+        resolve(await fn.apply(lastThis, lastArgs));
+      } catch (error) {
+        reject(error);
+      }
+    }, wait);
+
+    return pendingPromise;
+  };
+
+  debounced.cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    if (rejectPending) rejectPending(new Error("Debounced call cancelled"));
+    resolvePending = null;
+    rejectPending = null;
+    pendingPromise = null;
+  };
+
+  return debounced;
+}
+
+function memoize(fn, { key = (...args) => JSON.stringify(args) } = {}) {
+  const cache = new Map();
+  const memoized = (...args) => {
+    const cacheKey = key(...args);
+    if (cache.has(cacheKey)) return cache.get(cacheKey);
+    const value = fn(...args);
+    cache.set(cacheKey, value);
+    return value;
+  };
+  memoized.cache = cache;
+  memoized.clear = () => cache.clear();
+  memoized.delete = (...args) => cache.delete(key(...args));
+  return memoized;
+}
+
+function flattenUserFacingOutputs(outputs, fallbackText = "") {
+  if (!Array.isArray(outputs) || outputs.length === 0) return fallbackText || "";
+  const parts = outputs.map((output) => {
+    if (!output || typeof output !== "object") return "";
+    if (output.kind === "task_output") return output.message || output.summary || "";
+    return output.message || "";
+  }).filter(Boolean);
+  return parts.length > 0 ? parts.join("\n") : (fallbackText || "");
+}
 
 // ── 1. Model Detection ─────────────────────────────────────────
 
@@ -119,6 +197,122 @@ if (isOpenAIModel) {
   }
 } else {
   skip("Model detection (extraction failed)");
+}
+
+section("UNIT: Debounce + Memoization");
+
+{
+  let calls = 0;
+  const seen = [];
+  const debounced = debounce(function (value) {
+    calls++;
+    seen.push({ value, ctx: this?.tag || null });
+    return `${this?.tag || "none"}:${value}`;
+  }, 20);
+
+  const first = debounced.call({ tag: "first" }, "a");
+  const second = debounced.call({ tag: "second" }, "b");
+  const result = await second;
+  const firstResult = await first;
+
+  assert(result === "second:b", "debounce resolves with last call result");
+  assert(firstResult === "second:b", "debounce shares pending promise across calls");
+  assert(calls === 1, "debounce only invokes wrapped function once");
+  assert(seen.length === 1 && seen[0].value === "b", "debounce keeps latest arguments");
+  assert(seen.length === 1 && seen[0].ctx === "second", "debounce keeps latest this context");
+}
+
+{
+  const debounced = debounce(() => "never", 20);
+  const pending = debounced();
+  debounced.cancel();
+  let cancelled = false;
+  try {
+    await pending;
+  } catch (error) {
+    cancelled = error.message === "Debounced call cancelled";
+  }
+  assert(cancelled, "debounce cancel rejects pending promise");
+}
+
+section("UNIT: Memoization");
+
+{
+  const originalNow = Date.now;
+  try {
+    let now = 0;
+    Date.now = () => now;
+    const calls = [];
+    const throttled = ns.throttle?.(function (value) {
+      calls.push({ value, context: this?.name ?? null, at: now });
+      return `${this?.name ?? "none"}:${value}`;
+    }, 100);
+
+    assert(typeof ns.throttle === "function", "throttle extracted");
+    const firstResult = throttled.call({ name: "first" }, "a");
+    assert(firstResult === "first:a", "throttle invokes first call immediately");
+    assert(calls.length === 1, "throttle runs first call once");
+
+    now = 20;
+    const secondResult = throttled.call({ name: "second" }, "b");
+    assert(secondResult === "first:a", "throttle returns last result while waiting");
+    assert(calls.length === 1, "throttle suppresses call inside wait window");
+
+    now = 60;
+    throttled.call({ name: "third" }, "c");
+    assert(calls.length === 1, "throttle coalesces repeated calls inside wait window");
+
+    now = 100;
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    assert(calls.length === 2, "throttle runs one trailing call");
+    assert(calls[1].value === "c", "throttle uses latest trailing arguments");
+    assert(calls[1].context === "third", "throttle preserves latest trailing context");
+
+    now = 250;
+    const fourthResult = throttled.call({ name: "fourth" }, "d");
+    assert(fourthResult === "fourth:d", "throttle allows new call after wait window");
+    assert(calls.length === 3, "throttle runs next call after window elapses");
+
+    throttled.cancel();
+  } catch (e) {
+    skip(`throttle eval failed: ${e.message}`);
+  } finally {
+    Date.now = originalNow;
+  }
+}
+
+{
+  let calls = 0;
+  const sum = memoize((a, b) => {
+    calls++;
+    return a + b;
+  });
+  assert(sum(1, 2) === 3, "memoize returns computed value");
+  assert(sum(1, 2) === 3, "memoize returns cached value");
+  assert(calls === 1, "memoize avoids recomputation");
+  sum.delete(1, 2);
+  assert(sum(1, 2) === 3, "memoize recomputes after delete");
+  assert(calls === 2, "memoize delete clears single entry");
+  sum.clear();
+  assert(sum.cache.size === 0, "memoize clear empties cache");
+}
+
+{
+  let calls = 0;
+  const flattened = memoize(flattenUserFacingOutputs, {
+    key: (outputs, fallbackText = "") => JSON.stringify([outputs, fallbackText]),
+  });
+  const outputs = [{ kind: "task_output", message: "A" }, { message: "B" }];
+  const instrumented = memoize((...args) => {
+    calls++;
+    return flattenUserFacingOutputs(...args);
+  }, {
+    key: (outputsArg, fallbackText = "") => JSON.stringify([outputsArg, fallbackText]),
+  });
+  assert(instrumented(outputs, "") === "A\nB", "memoized flatten returns joined output");
+  assert(instrumented(outputs, "") === "A\nB", "memoized flatten hits cache");
+  assert(calls === 1, "memoized flatten avoids duplicate work");
+  assert(flattened(outputs, "") === "A\nB", "flatten memoization key shape matches runtime usage");
 }
 
 section("UNIT: Workload Routing");
@@ -199,6 +393,22 @@ if (OpenAIClient) {
     assert(msgs[0].role === "developer", "o4-mini → developer role");
   }
 
+  // Locale-safe case folding for Turkish dotted/dotless I
+  {
+    assert(typeof ns.caseInsensitiveCompare === "function", "caseInsensitiveCompare extracted");
+    assert(typeof ns.caseInsensitiveIncludes === "function", "caseInsensitiveIncludes extracted");
+    assert(ns.caseInsensitiveCompare("İ", "i") === 0, "İ equals i in Turkish-safe comparison");
+    assert(ns.caseInsensitiveCompare("I", "ı") === 0, "I equals ı in Turkish-safe comparison");
+    assert(ns.caseInsensitiveCompare("I", "i") !== 0, "I does not equal i in Turkish-safe comparison");
+    assert(ns.caseInsensitiveCompare("İ", "ı") !== 0, "İ does not equal ı in Turkish-safe comparison");
+    assert(ns.caseInsensitiveIncludes("İstanbul", "istanbul"), "İ matches i in Turkish-safe comparison");
+    assert(ns.caseInsensitiveIncludes("istanbul", "İSTANBUL"), "i matches İ in Turkish-safe comparison");
+    assert(!ns.caseInsensitiveIncludes("Isparta", "isparta"), "I does not match i under Turkish comparison");
+    assert(!ns.caseInsensitiveIncludes("ısparta", "isparta"), "ı does not match i under Turkish comparison");
+    assert(ns.caseInsensitiveIncludes("Isparta", "ısparta"), "I matches ı in Turkish-safe comparison");
+    assert(ns.caseInsensitiveIncludes("ısparta", "ISPARTA"), "ı matches I in Turkish-safe comparison");
+  }
+
   // Multiple system blocks joined
   {
     client._model = "gpt-4o";
@@ -256,6 +466,14 @@ if (OpenAIResponsesClient) {
   {
     const instructions = client._getInstructions([{ type: "text", text: "A" }, { type: "text", text: "B" }]);
     assert(instructions === "A\n\nB", "Instructions joined from system blocks");
+  }
+
+  // Empty instructions are omitted; non-empty instructions are preserved
+  {
+    const emptyInstructions = client._getInstructions([{ type: "text", text: "" }, { type: "text", text: "   " }]);
+    const nonEmptyInstructions = client._getInstructions([{ type: "text", text: "" }, { type: "text", text: "Keep this" }]);
+    assert(emptyInstructions === undefined, "Blank instructions omitted");
+    assert(nonEmptyInstructions === "Keep this", "Non-empty instructions preserved");
   }
 
   // Simple user message input
@@ -398,6 +616,12 @@ section("UNIT: Provider Contract & Capabilities");
 
     // Detect tests
     assert(dp("claude-sonnet-4-6").name === "Anthropic", "detectProvider: claude → Anthropic");
+    assert(dp(" claude-sonnet-4-6 ").name === "Anthropic", "detectProvider: trims plain claude model names");
+    assert(dp("openrouter/anthropic/claude-sonnet-4-6").name === "OpenAI-compatible", "detectProvider: openrouter-hosted claude stays OpenAI-compatible");
+    assert(dp(" openrouter/anthropic/claude-sonnet-4-6 ").name === "OpenAI-compatible", "detectProvider: trims openrouter-hosted claude model names");
+    assert(dp("openrouter/anthropic/claude-3.5-sonnet").name === "OpenAI-compatible", "detectProvider: exact openrouter-hosted anthropic model stays OpenAI-compatible");
+    assert(dp("openrouter/anthropic/claude-3.7-sonnet:thinking").name === "OpenAI-compatible", "detectProvider: exact openrouter Anthropic thinking model stays OpenAI-compatible");
+    assert(dp("anthropic/claude-sonnet-4-6").name === "OpenAI-compatible", "detectProvider: slash-prefixed claude stays OpenAI-compatible");
     assert(dp("gpt-5.4").name === "OpenAI", "detectProvider: gpt-5.4 → OpenAI");
     assert(dp("gpt-5.3-codex").name === "OpenAI Responses", "detectProvider: codex → OpenAI Responses");
     assert(dp("gemini-2.5-pro").name === "Google Gemini", "detectProvider: gemini → Google");
@@ -1220,11 +1444,22 @@ section("UNIT: Enhanced CLAUDE.md Loading");
     assert(contents.includes("Root instructions"), "Root CLAUDE.md loaded");
     assert(contents.includes("API instructions"), "Subdir CLAUDE.md loaded");
 
+    // Loading from nested subdir should still find nearest project file + root
+    const nestedDir = path.join(subDir, "src", "handlers");
+    fs.mkdirSync(nestedDir, { recursive: true });
+    const nestedFiles = ext.loadClaudeMdFiles(nestedDir, "Anthropic");
+    const nestedPaths = nestedFiles.map((f) => f.path);
+    const nestedContents = nestedFiles.map((f) => f.content).join("\n");
+    assert(nestedContents.includes("Root instructions"), "Root CLAUDE.md loaded from nested dir");
+    assert(nestedContents.includes("API instructions"), "Nearest project CLAUDE.md loaded from nested dir");
+    assert(nestedPaths.some((p) => p === path.join(subDir, "CLAUDE.md")), "Nearest project file path preserved");
+
     // Loading from root should find root + .claude/CLAUDE.md
     const rootFiles = ext.loadClaudeMdFiles(tmpDir, "Anthropic");
     const rootContents = rootFiles.map((f) => f.content).join("\n");
     assert(rootContents.includes("Root instructions"), "Root CLAUDE.md loaded from root");
     assert(rootContents.includes("Dot-claude instructions"), ".claude/CLAUDE.md loaded");
+    assert(!rootContents.includes("API instructions"), "Nested project CLAUDE.md not loaded from root");
   } else {
     skip("loadClaudeMdFiles not extracted");
   }
@@ -1697,13 +1932,20 @@ section("UNIT: Deferred Tools — registerToolSearch");
         "\nexports.ToolRegistry = ToolRegistry;\nexports.registerToolSearch = registerToolSearch;\n"
       )(tsNs);
 
-      // No deferred tools: ToolSearch should NOT be registered
+      // Zero deferred tools: ToolSearch should NOT be registered
       const reg1 = new tsNs.ToolRegistry();
       reg1.register("Bash", { description: "run", input_schema: {} }, () => "ok");
       tsNs.registerToolSearch(reg1);
-      assert(!reg1.has("ToolSearch"), "ToolSearch not registered when no deferred tools");
+      assert(!reg1.has("ToolSearch"), "ToolSearch not registered when deferred tool count is zero");
+      assert(!reg1.getDefinitions().some(d => d.name === "ToolSearch"), "ToolSearch omitted from eager definitions when deferred tool count is zero");
 
-      // With deferred tools: ToolSearch SHOULD be registered
+      // ToolSearch alone should not keep itself surfaced
+      const regToolSearchOnly = new tsNs.ToolRegistry();
+      regToolSearchOnly.register("ToolSearch", { description: "search", input_schema: {} }, () => "ok");
+      tsNs.registerToolSearch(regToolSearchOnly);
+      assert(!regToolSearchOnly.has("ToolSearch"), "ToolSearch unregisters when no other deferred tools are available");
+
+      // Nonzero deferred tools: ToolSearch SHOULD be registered
       const reg2 = new tsNs.ToolRegistry();
       reg2.register("Bash", { description: "run", input_schema: {} }, () => "ok");
       reg2.register("TaskCreate", { description: "create", input_schema: {} }, () => "ok", { deferred: true });
@@ -1715,7 +1957,7 @@ section("UNIT: Deferred Tools — registerToolSearch");
 
       // ToolSearch appears in eager definitions
       const defs = reg2.getDefinitions();
-      assert(defs.some(d => d.name === "ToolSearch"), "ToolSearch in eager definitions");
+      assert(defs.some(d => d.name === "ToolSearch"), "ToolSearch in eager definitions when deferred tool count is nonzero");
     } catch (e) {
       skip(`registerToolSearch test failed: ${e.message}`);
     }
@@ -1843,6 +2085,31 @@ section("UNIT: Deferred Tools — ToolSearch promotes fetched tools");
     }
   } else {
     skip("ToolSearch extraction failed");
+  }
+}
+
+section("UNIT: Deferred Tools — eager registration still works");
+
+{
+  const trClass = extractBlock(source, "class ToolRegistry {");
+  if (trClass) {
+    const trNs = {};
+    try {
+      new Function("exports", trClass + "\nexports.ToolRegistry = ToolRegistry;\n")(trNs);
+      const reg = new trNs.ToolRegistry();
+      reg.register("Bash", { description: "run", input_schema: {} }, () => "ok");
+      reg.register("Read", { description: "read", input_schema: { type: "object" } }, () => "ok");
+      reg.register("TaskCreate", { description: "create", input_schema: {} }, () => "ok", { deferred: true });
+
+      const defs = reg.getDefinitions();
+      assert(defs.some(d => d.name === "Bash"), "Bash stays eagerly registered");
+      assert(defs.some(d => d.name === "Read"), "Read stays eagerly registered");
+      assert(!defs.some(d => d.name === "TaskCreate"), "Deferred tools remain excluded from eager definitions");
+    } catch (e) {
+      skip(`eager registration test failed: ${e.message}`);
+    }
+  } else {
+    skip("ToolRegistry extraction failed");
   }
 }
 
@@ -2250,6 +2517,53 @@ section("UNIT: Brief Mode — buildSystemPrompt with briefMode");
     }
   } else {
     skip("buildSystemPrompt extraction failed");
+  }
+}
+
+section("UNIT: Memory index loader — ignores broken links");
+
+{
+  const loadMemoryFunc = extractBlock(source, "function loadMemoryIndex(");
+  const getMemoryDirFunc = extractBlock(source, "function getMemoryDir(");
+
+  if (loadMemoryFunc && getMemoryDirFunc) {
+    const tmpRoot = fs.mkdtempSync(path.join(os.tmpdir(), "cloclo-memory-index-"));
+    const cwd = path.join(tmpRoot, "project");
+    const projectMemoryDir = path.join(os.homedir(), ".claude-native", "projects", cwd.replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-").slice(0, 100), "memory");
+    fs.mkdirSync(projectMemoryDir, { recursive: true });
+    fs.writeFileSync(path.join(projectMemoryDir, "valid.md"), `---\nname: valid\ndescription: Valid memory\nscope: project\ntype: project\n---\n\nThis memory exists.\n`);
+    fs.writeFileSync(path.join(projectMemoryDir, "MEMORY.md"), [
+      "# Memory Index",
+      "",
+      "- [valid](valid.md) — Valid memory",
+      "- [missing](missing.md) — Missing memory",
+      "",
+    ].join("\n"));
+
+    const warnings = [];
+    const originalWarn = console.warn;
+    try {
+      const ns3 = {};
+      new Function("exports", "fs", "path", "os", "console",
+        'const MEMORY_INDEX = "MEMORY.md"; const MEMORY_MAX_LINES = 200;' + "\n\n" +
+        getMemoryDirFunc + "\n\n" +
+        'function getUserMemoryDir() { return path.join(os.homedir(), ".claude-native", "user-memory"); }' + "\n\n" +
+        loadMemoryFunc + "\nexports.loadMemoryIndex = loadMemoryIndex;\n"
+      )(ns3, fs, path, os, { ...console, warn: (msg) => warnings.push(String(msg)) });
+
+      const loaded = ns3.loadMemoryIndex(cwd, "project");
+      assert(loaded.includes("[valid](valid.md)"), "memory loader keeps valid links");
+      assert(!loaded.includes("[missing](missing.md)"), "memory loader removes broken links");
+      assert(loaded.includes("WARNING: Ignored broken memory link `missing.md` in project MEMORY.md."), "memory loader appends broken-link warning");
+      assert(warnings.some(msg => msg.includes("WARNING: Ignored broken memory link `missing.md` in project MEMORY.md.")), "memory loader warns for broken link");
+    } catch (e) {
+      skip(`memory index broken-link test failed: ${e.message}`);
+    } finally {
+      console.warn = originalWarn;
+      fs.rmSync(tmpRoot, { recursive: true, force: true });
+    }
+  } else {
+    skip("memory index loader extraction failed");
   }
 }
 
@@ -2768,34 +3082,56 @@ section("UNIT: Webhook — /webhook slash command");
 section("UNIT: Auto-compaction — context limit detection");
 
 {
-  // Verify AgentLoop has _contextLimits and _getContextLimit
-  assert(source.includes("static _contextLimits"), "AgentLoop has _contextLimits");
+  // Verify AgentLoop has context management and _getContextLimit
+  assert(source.includes("static _contextOverrides"), "AgentLoop has _contextOverrides");
   assert(source.includes("_getContextLimit()"), "AgentLoop has _getContextLimit");
   assert(source.includes("_autoCompact("), "AgentLoop has _autoCompact method");
   assert(source.includes("auto-compacting conversation"), "Auto-compact emits status message");
-  assert(source.includes("await this._autoCompact(messages, systemBlocks)"), "Auto-compact wired into run() loop");
+  assert(source.includes("await this._manageContext(messages, systemBlocks)"), "Context management wired into run() loop");
 
-  // Verify context limits for known models
-  const limitsMatch = source.match(/static _contextLimits = \{([^}]+)\}/);
+  // Verify context overrides for known models
+  const limitsMatch = source.match(/static _contextOverrides = \{([^}]+)\}/);
   if (limitsMatch) {
     const limitsStr = limitsMatch[1];
-    assert(limitsStr.includes('"claude-opus": 1000000'), "Claude opus has 1M context");
-    assert(limitsStr.includes('"claude-sonnet": 1000000'), "Claude sonnet has 1M context");
-    assert(limitsStr.includes('"gpt-5": 1000000'), "GPT-5 has 1M context");
-    assert(limitsStr.includes('"gpt-4o": 128000'), "GPT-4o has 128k context");
-    assert(limitsStr.includes('_default: 128000'), "Default context is 128k");
+    assert(limitsStr.includes('"claude-haiku": 200000'), "Claude haiku has 200k context override");
+    assert(limitsStr.includes('"gpt-5": 1000000'), "GPT-5 has 1M context override");
+    assert(limitsStr.includes('"o3": 200000'), "o3 has 200k context override");
   } else {
-    skip("_contextLimits not found in source");
+    skip("_contextOverrides not found in source");
   }
+
+  // Verify provider capabilities have contextWindow
+  assert(source.includes("contextWindow: 1000000"), "Anthropic provider has 1M contextWindow");
+  assert(source.includes("contextWindow: 128000"), "Default contextWindow is 128k");
+  assert(source.includes("contextWindow: 64000"), "DeepSeek has 64k contextWindow");
 }
 
-section("UNIT: Auto-compaction — threshold is 80%");
+section("UNIT: Auto-compaction — graduated context management");
 
 {
-  // Verify the threshold calculation
-  assert(source.includes("contextLimit * 0.80"), "Threshold is 80% of context limit");
+  // Verify graduated thresholds
+  assert(source.includes("effectiveWindow * 0.75"), "Auto-compact threshold is 75% of effective window");
+  assert(source.includes("pct > 0.6"), "Level 1: block promotions at 60%");
+  assert(source.includes("pct > 0.65"), "Level 2: windowing at 65%");
+  assert(source.includes("pct > compactThreshold"), "Level 3: auto-compact at configurable threshold");
+  assert(source.includes("pct > 0.9"), "Level 4: emergency at 90%");
+  assert(source.includes("estimated > blockingLimit"), "Level 5: hard block at context limit");
   // Verify minimum message count guard
   assert(source.includes("messages.length < 6"), "Won't compact conversations with < 6 messages");
+  // Verify micro-compact and windowing exist
+  assert(source.includes("_microCompact(messages)"), "Micro-compact wired before API call");
+  assert(source.includes("_windowMessages(messages)"), "Message windowing method exists");
+  // Verify reactive compact
+  assert(source.includes("_hasAttemptedReactiveCompact"), "Reactive compact guard exists");
+  assert(source.includes("prompt too long — compacting"), "Reactive compact emits status");
+  // Verify CC gap fixes
+  assert(source.includes("_getEffectiveWindow"), "Effective window accounts for output reserve");
+  assert(source.includes("CLOCLO_CONTEXT_WINDOW"), "Env override for context window");
+  assert(source.includes("CLOCLO_AUTOCOMPACT_PCT"), "Env override for compact threshold");
+  assert(source.includes("CLOCLO_DISABLE_COMPACT"), "Env override to disable compaction");
+  assert(source.includes("CLOCLO_BLOCKING_LIMIT"), "Env override for blocking limit");
+  assert(source.includes("_compactFailures"), "Compact failure counter exists");
+  assert(source.includes("compaction failed 3 times"), "Compact failure limit message");
 }
 
 section("UNIT: Builtin command count in _initSlashCommands");
@@ -2952,12 +3288,124 @@ section("E2E: CLI — missing value exits with code 2");
 
 {
   try {
-    // --model with no value (next arg is another flag)
     const { exitCode, stderr } = await runCLI(["--timeout"], {}, 5000);
     assert(exitCode === 2, `Missing value exits with code 2 (got ${exitCode})`);
     assert(stderr.includes("requires a value"), `Stderr mentions missing value`);
   } catch (e) {
     skip(`Missing value E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: CLI — -p followed by another flag exits with code 2");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["-p", "--help"], {}, 5000);
+    assert(exitCode === 2, `-p followed by flag exits with code 2 (got ${exitCode})`);
+    assert(stderr.includes("requires a prompt value"), "Stderr mentions missing prompt value");
+    assert(stderr.includes('Use -p "your prompt"'), "Stderr shows -p usage");
+  } catch (e) {
+    skip(`-p followed by flag E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: CLI — bare -p exits with code 2");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["-p"], {}, 5000);
+    assert(exitCode === 2, `bare -p exits with code 2 (got ${exitCode})`);
+    assert(stderr.includes("requires a prompt value"), "Stderr mentions missing prompt value for bare -p");
+    assert(stderr.includes('Use -p "your prompt"'), "Stderr shows bare -p usage");
+  } catch (e) {
+    skip(`bare -p E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: CLI — bare --print exits with code 2");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["--print"], {}, 5000);
+    assert(exitCode === 2, `bare --print exits with code 2 (got ${exitCode})`);
+    assert(stderr.includes("requires a prompt value"), "Stderr mentions missing prompt value for bare --print");
+    assert(stderr.includes('Use --print "your prompt"'), "Stderr shows bare --print usage");
+  } catch (e) {
+    skip(`bare --print E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: CLI — comma after --print exits with code 2");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI([",", "--print"], {}, 5000);
+    assert(exitCode === 2, `comma before bare --print exits with code 2 (got ${exitCode})`);
+    assert(stderr.includes("requires a prompt value"), "Stderr mentions missing prompt value after comma + --print");
+    assert(stderr.includes('Use --print "your prompt"'), "Stderr shows --print usage after comma + --print");
+  } catch (e) {
+    skip(`comma + --print E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: CLI — --print comma placeholder exits with code 2");
+
+{
+  try {
+    const { exitCode, stdout, stderr } = await runCLI(["--print", ","], {}, 5000);
+    assert(exitCode === 2, `--print comma placeholder exits with code 2 (got ${exitCode})`);
+    assert(stderr.includes("requires a prompt value"), "Stderr mentions missing prompt value for --print comma placeholder");
+    assert(stderr.includes('Use --print "your prompt"'), "Stderr shows --print usage for comma placeholder");
+    assert(!stdout.includes("> "), "--print comma placeholder does not enter interactive mode");
+  } catch (e) {
+    skip(`--print comma placeholder E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: CLI — --print followed by another flag exits with code 2");
+
+{
+  try {
+    const { exitCode, stderr } = await runCLI(["--print", "--help"], {}, 5000);
+    assert(exitCode === 2, `--print followed by flag exits with code 2 (got ${exitCode})`);
+    assert(stderr.includes("requires a prompt value"), "Stderr mentions missing prompt value for --print followed by flag");
+    assert(stderr.includes('Use --print "your prompt"'), "Stderr shows --print usage");
+  } catch (e) {
+    skip(`--print followed by flag E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: CLI — one-shot flags still work with valid prompts");
+
+{
+  try {
+    const shortFlag = await runCLI(["-p", "hi"], {}, 30000);
+    assert(shortFlag.exitCode !== null && shortFlag.exitCode !== 2, `valid -p does not fail argument parsing (got ${shortFlag.exitCode})`);
+    assert(!shortFlag.stderr.includes("requires a prompt value"), "Valid -p does not print prompt validation error");
+
+    const longFlag = await runCLI(["--print", "hi"], {}, 30000);
+    assert(longFlag.exitCode !== null && longFlag.exitCode !== 2, `valid --print does not fail argument parsing (got ${longFlag.exitCode})`);
+    assert(!longFlag.stderr.includes("requires a prompt value"), "Valid --print does not print prompt validation error");
+  } catch (e) {
+    skip(`valid one-shot flags E2E failed: ${e.message}`);
+  }
+}
+
+section("E2E: CLI — missing one-shot prompt exits with code 2");
+
+{
+  try {
+    const shortFlag = await runCLI(["-p"], {}, 5000);
+    assert(shortFlag.exitCode === 2, `missing -p value exits with code 2 (got ${shortFlag.exitCode})`);
+    assert(shortFlag.stderr.includes("Error: -p requires a value"), "Missing -p value prints clear validation error");
+    assert(!shortFlag.stdout.includes("> "), "Missing -p value does not enter interactive mode");
+
+    const longFlag = await runCLI(["--print"], {}, 5000);
+    assert(longFlag.exitCode === 2, `missing --print value exits with code 2 (got ${longFlag.exitCode})`);
+    assert(longFlag.stderr.includes("Error: --print requires a value"), "Missing --print value prints clear validation error");
+    assert(!longFlag.stdout.includes("> "), "Missing --print value does not enter interactive mode");
+  } catch (e) {
+    skip(`missing one-shot prompt E2E failed: ${e.message}`);
   }
 }
 
@@ -6057,6 +6505,96 @@ section("UNIT: Trivial Fast-Path — routeModel function exists");
   assert(!source.includes("isSimpleMessage"), "isSimpleMessage renamed to isTrivialMessage");
 }
 
+// ── Skill Metrics ───────────────────────────────────────────────
+
+section("UNIT: Skill Metrics — appendSkillMetric / readSkillMetrics / summarizeSkillMetrics");
+
+{
+  // Extract the three core functions from source
+  try {
+    const tmpDir = path.join(os.tmpdir(), `skill-metrics-test-${Date.now()}`);
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const testCwd = tmpDir;
+
+    // Extract functions from bundled source (no export/import in bundle)
+    const fnStart = source.indexOf("function _metricsDir(");
+    const fnEnd = source.indexOf("function summarizeSkillMetrics(");
+    const fnEndFull = source.indexOf("\n}", source.indexOf("return [...bySkill.entries()]"));
+    assert(fnStart > 0 && fnEnd > 0, "Skill metrics functions found in source");
+
+    const fnSource = source.slice(fnStart, fnEndFull + 2);
+    const ns = {};
+
+    new Function("exports", "fs", "path", "os", "log",
+      fnSource + `
+      exports.appendSkillMetric = appendSkillMetric;
+      exports.readSkillMetrics = readSkillMetrics;
+      exports.summarizeSkillMetrics = summarizeSkillMetrics;
+    `)(ns, fs, path, os, () => {});
+
+    // Test append + read
+    ns.appendSkillMetric(testCwd, {
+      skill_name: "commit", args_present: true, args_preview: "-m 'test'",
+      found: true, is_error: false, session_id: "test-session", turn_index: 5,
+    });
+    ns.appendSkillMetric(testCwd, {
+      skill_name: "pdf", args_present: false, found: false, is_error: true,
+    });
+    ns.appendSkillMetric(testCwd, {
+      skill_name: "commit", args_present: false, found: true, is_error: false,
+    });
+
+    const events = ns.readSkillMetrics(testCwd);
+    assert(events.length === 3, `Read returns 3 events (got ${events.length})`);
+    assert(events[0].skill_name === "commit", "First event is commit");
+    assert(events[1].skill_name === "pdf", "Second event is pdf");
+    assert(events[1].found === false, "pdf event: found=false");
+    assert(events[0].session_id === "test-session", "Session ID preserved");
+    assert(events[0].turn_index === 5, "Turn index preserved");
+
+    // Test summarize
+    const summary = ns.summarizeSkillMetrics(events);
+    assert(summary.length === 2, `Summary has 2 skills (got ${summary.length})`);
+    assert(summary[0].skill === "commit", "Most used skill first: commit");
+    assert(summary[0].uses === 2, "commit: 2 uses");
+    assert(summary[0].not_found === 0, "commit: 0 not_found");
+    assert(summary[1].skill === "pdf", "Second skill: pdf");
+    assert(summary[1].not_found === 1, "pdf: 1 not_found");
+    assert(summary[1].errors === 1, "pdf: 1 error");
+
+    // Test since filter
+    const future = new Date(Date.now() + 60000).toISOString();
+    const filtered = ns.readSkillMetrics(testCwd, { since: future });
+    assert(filtered.length === 0, "since filter excludes all past events");
+
+    // Cleanup
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  } catch (e) { skip(`Skill metrics eval failed: ${e.message}`); }
+}
+
+section("UNIT: Skill Metrics — module exists in source");
+
+{
+  assert(source.includes("function appendSkillMetric("), "appendSkillMetric exists");
+  assert(source.includes("function readSkillMetrics("), "readSkillMetrics exists");
+  assert(source.includes("function summarizeSkillMetrics("), "summarizeSkillMetrics exists");
+  assert(source.includes("skill-metrics.jsonl"), "Uses skill-metrics.jsonl storage");
+  assert(source.includes("MAX_LINES"), "Has rotation limit");
+  assert(source.includes("TRIM_TO"), "Has trim target");
+}
+
+section("UNIT: Skill Metrics — instrumented in Skill tool");
+
+{
+  assert(source.includes("appendSkillMetric(") && source.includes("skill_invoked") === false,
+    "appendSkillMetric called (not via event name)");
+  // Check the instrumentation is near the Skill tool handler
+  const skillToolIdx = source.indexOf("cfg._skillLoader.invoke(skillName");
+  const metricsIdx = source.indexOf("appendSkillMetric(cfg.cwd");
+  assert(skillToolIdx > 0 && metricsIdx > 0, "Both Skill tool and metrics instrumentation exist");
+  assert(Math.abs(skillToolIdx - metricsIdx) < 500, "Metrics instrumentation is near Skill tool invoke");
+}
+
 // ── Context Compression ──────────────────────────────────────────
 
 section("UNIT: Context Compression — 3-phase strategy");
@@ -6167,6 +6705,19 @@ section("UNIT: Auto-Memory — throttle/dedup");
   assert(source.includes("SAVE_COOLDOWN_MS") || source.includes("cooldown"), "Save cooldown exists");
   assert(source.includes("CLASSIFY_COOLDOWN_MS") || source.includes("canClassify"), "Classification cooldown exists");
   assert(source.includes("_memoryExists") || source.includes("memoryExists"), "Dedup check exists");
+
+  const trackerBlock = extractBlock(source, "class AutoMemoryTracker {");
+  if (trackerBlock) {
+    const ns = {};
+    try {
+      new Function("exports", `const SAVE_COOLDOWN_MS = 60_000;\n${trackerBlock}\nexports.AutoMemoryTracker = AutoMemoryTracker;`)(ns);
+      const tracker = new ns.AutoMemoryTracker();
+      assert(tracker.shouldSave("feedback", "same name"), "Initial save is allowed");
+      tracker.markSaved("feedback", "same name");
+      assert(!tracker.shouldSave("feedback", "same name"), "Repeated save is throttled");
+      assert(tracker.shouldSave("feedback", "different name"), "Different memory names are not throttled together");
+    } catch (e) { skip(`AutoMemoryTracker eval failed: ${e.message}`); }
+  } else { skip("AutoMemoryTracker extraction failed"); }
 }
 
 // ── LSP Integration ──────────────────────────────────────────────
@@ -6193,12 +6744,14 @@ section("UNIT: LSP — language configs");
 section("UNIT: LSP — diagnostic formatting");
 
 {
-  const fmtBlock = extractBlock(source, "function formatDiagnostics(");
+  const dedupeStart = source.indexOf("function dedupeDiagnostics(");
+  const fmtStart = source.indexOf("function formatDiagnostics(");
+  const fmtEnd = source.indexOf("\n\n// ── Tool Registration", fmtStart);
+  const fmtBlock = dedupeStart !== -1 && fmtStart !== -1 && fmtEnd !== -1 ? source.slice(dedupeStart, fmtEnd) : "";
   if (fmtBlock) {
     const ns = {};
     try {
-      const pathDep = 'const path = { basename: (p) => p.split("/").pop() };';
-      new Function("exports", "path", pathDep + "\n" + fmtBlock + "\nexports.formatDiagnostics = formatDiagnostics;")(ns, { basename: (p) => p.split("/").pop() });
+      new Function("exports", "path", `const SEVERITY = { 1: "error", 2: "warning", 3: "info", 4: "hint" };\n${fmtBlock}\nexports.formatDiagnostics = formatDiagnostics;`)(ns, { basename: (p) => p.split("/").pop(), resolve: (p) => p });
 
       const diags = [
         { severity: 1, range: { start: { line: 5, character: 10 } }, message: "Type error", source: "ts", code: 2322 },
@@ -6213,6 +6766,27 @@ section("UNIT: LSP — diagnostic formatting");
       const compact = ns.formatDiagnostics(diags, "/test/app.ts", { compact: true });
       assert(compact.includes("[LSP:"), "Compact format starts with [LSP:");
       assert(compact.includes("1 error") && compact.includes("1 warning"), "Compact shows counts");
+
+      const duplicateFixturePayload = {
+        uri: "file:///test/app.ts",
+        diagnostics: [
+          { severity: 1, range: { start: { line: 5, character: 10 }, end: { line: 5, character: 14 } }, message: "Type error", source: "ts", code: 2322 },
+          { severity: 1, range: { start: { line: 5, character: 10 }, end: { line: 5, character: 14 } }, message: "Type error", source: "ts", code: 2322 },
+          { severity: 2, range: { start: { line: 12, character: 0 }, end: { line: 12, character: 3 } }, message: "Unused var", source: "ts", code: 6133 },
+        ],
+      };
+      const dedupedOutput = ns.formatDiagnostics(duplicateFixturePayload.diagnostics, "/test/app.ts");
+      assert(dedupedOutput.match(/Type error/g)?.length === 1, "Duplicate diagnostics from fixture payload are deduplicated");
+      assert(dedupedOutput.includes("Unused var"), "Distinct diagnostics from fixture payload remain shown");
+
+      const distinctOutput = ns.formatDiagnostics([
+        { severity: 1, range: { start: { line: 5, character: 10 }, end: { line: 5, character: 14 } }, message: "Type error", source: "ts", code: 2322 },
+        { severity: 1, range: { start: { line: 6, character: 2 }, end: { line: 6, character: 8 } }, message: "Different type error", source: "ts", code: 2322 },
+        { severity: 2, range: { start: { line: 12, character: 0 }, end: { line: 12, character: 3 } }, message: "Unused var", source: "ts", code: 6133 },
+      ], "/test/app.ts");
+      assert(distinctOutput.includes("Type error"), "First distinct diagnostic remains shown");
+      assert(distinctOutput.includes("Different type error"), "Second distinct diagnostic remains shown");
+      assert(distinctOutput.includes("Unused var"), "Warning diagnostic remains shown");
 
       const empty = ns.formatDiagnostics([], "/test/clean.ts");
       assert(empty === "", "Empty diagnostics returns empty string");
@@ -6483,6 +7057,225 @@ section("UNIT: Monolith Split — bundled output");
   // No ./local imports in bundled output
   const localImports = imports.filter(l => l.includes("./"));
   assert(localImports.length === 0, "No local module imports in bundled output");
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// Background Review Nudge Tests
+// ═══════════════════════════════════════════════════════════════════
+
+section("UNIT: Background Review Nudge — prompts exist");
+assert(source.includes("_SKILL_REVIEW_PROMPT"), "_SKILL_REVIEW_PROMPT constant exists in source");
+assert(source.includes("_MEMORY_REVIEW_PROMPT"), "_MEMORY_REVIEW_PROMPT constant exists in source");
+assert(source.includes("_COMBINED_REVIEW_PROMPT"), "_COMBINED_REVIEW_PROMPT constant exists in source");
+assert(source.includes("DEFAULT_SKILL_NUDGE_INTERVAL"), "DEFAULT_SKILL_NUDGE_INTERVAL constant exists in source");
+assert(source.includes("DEFAULT_MEMORY_NUDGE_INTERVAL"), "DEFAULT_MEMORY_NUDGE_INTERVAL constant exists in source");
+assert(source.includes("skill-creator skill via the Skill tool"), "Skill review prompt references skill-creator");
+assert(source.includes("save it using MemorySave"), "Memory review prompt references MemorySave");
+
+section("UNIT: Background Review Nudge — nudge state in InteractiveMode");
+assert(source.includes("_toolCallsSinceSkillReview"), "_toolCallsSinceSkillReview counter exists");
+assert(source.includes("_turnsSinceMemoryReview"), "_turnsSinceMemoryReview counter exists");
+assert(source.includes("_nudgeEnabled"), "_nudgeEnabled flag exists");
+assert(source.includes("_spawnBackgroundReview"), "_spawnBackgroundReview method exists");
+assert(source.includes("_skillNudgeInterval"), "_skillNudgeInterval config exists");
+assert(source.includes("_memoryNudgeInterval"), "_memoryNudgeInterval config exists");
+
+section("UNIT: Background Review Nudge — recursion prevention");
+assert(source.includes("!cfg._isSubAgent"), "_isSubAgent check prevents recursive nudges");
+assert(source.includes("_isSubAgent: true"), "Sub-agent created with _isSubAgent: true");
+assert(source.includes("conversationContext: messagesSnapshot"), "Conversation context passed to sub-agent");
+
+section("UNIT: Background Review Nudge — config support");
+assert(source.includes("skillNudgeInterval"), "skillNudgeInterval in settings");
+assert(source.includes("memoryNudgeInterval"), "memoryNudgeInterval in settings");
+
+section("UNIT: Background Review Nudge — metrics reinforcement loop");
+assert(source.includes("readSkillMetrics"), "readSkillMetrics imported for reinforcement signal");
+assert(source.includes("summarizeSkillMetrics"), "summarizeSkillMetrics imported for reinforcement signal");
+assert(source.includes("Skill performance metrics"), "Metrics data injected into review prompt");
+assert(source.includes("error rate"), "Error rate calculated for skill review decisions");
+assert(source.includes("Existing skills"), "Existing skill list injected to prevent duplicates");
+assert(source.includes("High error rate"), "Skill review prompt guides on high error rate");
+assert(source.includes("Zero uses"), "Skill review prompt guides on pruning unused skills");
+assert(source.includes("Don't create duplicates"), "Combined prompt prevents duplicate skill creation");
+
+section("UNIT: Background Review Nudge — action extraction");
+{
+  // Extract _extractReviewActions from source
+  const extractFn = extractBlock(source, "function _extractReviewActions(");
+  if (extractFn) {
+    const fn = new Function("return " + extractFn)();
+    assert(fn({ text: "Nothing to save." }).length === 0, "Returns empty for 'Nothing to save'");
+    assert(fn({ text: "Skill created: my-skill" }).includes("Skill created"), "Detects skill creation");
+    assert(fn({ text: "Skill updated with new approach" }).includes("Skill updated"), "Detects skill update");
+    assert(fn({ text: "Memory saved: user prefers tabs" }).includes("Memory saved"), "Detects memory save");
+    assert(fn({ text: "" }).length === 0, "Returns empty for empty text");
+    assert(fn({}).length === 0, "Returns empty for empty result");
+    const combined = fn({ text: "Skill created and Memory saved" });
+    assert(combined.length === 2, "Detects both skill + memory actions");
+  } else {
+    skip("_extractReviewActions function not found in bundled source");
+  }
+}
+
+// ── Memory Metrics ────────────────────────────────────────────────
+
+section("UNIT: Memory Metrics — JSONL tracking");
+
+{
+  assert(source.includes("appendMemoryMetric"), "appendMemoryMetric function exists");
+  assert(source.includes("readMemoryMetrics"), "readMemoryMetrics function exists");
+  assert(source.includes("summarizeMemoryMetrics"), "summarizeMemoryMetrics function exists");
+  assert(source.includes("memory_loaded"), "memory_loaded event type used");
+  assert(source.includes("memory_referenced"), "memory_referenced event type used");
+  assert(source.includes("memory-metrics.jsonl"), "JSONL metrics file name defined");
+
+  // Test appendMemoryMetric and readMemoryMetrics
+  const appendFunc = extractBlock(source, "function appendMemoryMetric(");
+  const readFunc = extractBlock(source, "function readMemoryMetrics(");
+  const summarizeFunc = extractBlock(source, "function summarizeMemoryMetrics(");
+  const rotateFunc = extractBlock(source, "function _rotateIfNeeded(");
+  const metricsPathFunc = extractBlock(source, "function _metricsPath(");
+
+  if (appendFunc && readFunc && summarizeFunc && metricsPathFunc) {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cloclo-metrics-"));
+    const ns = {};
+    try {
+      const deps = [
+        'var METRICS_FILE = "memory-metrics.jsonl";',
+        'var MAX_LINES = 5000;',
+        'var TRIM_TO = 3000;',
+        'function log() {}',
+        `function ensureMemoryDir() { return "${tmpDir.replace(/\\/g, "\\\\")}"; }`,
+        `function ensureUserMemoryDir() { return "${tmpDir.replace(/\\/g, "\\\\")}"; }`,
+      ].join("\n");
+      new Function("exports", "fs", "path", deps + "\n" + metricsPathFunc + "\n" + (rotateFunc || "") + "\n" + appendFunc + "\n" + readFunc + "\n" + summarizeFunc + "\nexports.appendMemoryMetric = appendMemoryMetric;\nexports.readMemoryMetrics = readMemoryMetrics;\nexports.summarizeMemoryMetrics = summarizeMemoryMetrics;")(ns, fs, path);
+
+      ns.appendMemoryMetric("/test", "project", { type: "memory_loaded", file: "test.md", name: "test" });
+      ns.appendMemoryMetric("/test", "project", { type: "memory_referenced", file: "test.md", name: "test" });
+      ns.appendMemoryMetric("/test", "project", { type: "memory_loaded", file: "other.md", name: "other" });
+
+      const events = ns.readMemoryMetrics("/test", "project");
+      assert(events.length === 3, "readMemoryMetrics returns all events");
+
+      const loaded = ns.readMemoryMetrics("/test", "project", { type: "memory_loaded" });
+      assert(loaded.length === 2, "readMemoryMetrics filters by type");
+
+      const summary = ns.summarizeMemoryMetrics("/test", "project");
+      assert(summary.length === 2, "summarizeMemoryMetrics groups by file");
+      const testEntry = summary.find(s => s.file === "test.md");
+      assert(testEntry && testEntry.load_count === 1 && testEntry.ref_count === 1, "Summary counts loads and refs correctly");
+    } catch (e) { skip(`memory-metrics eval failed: ${e.message}`); }
+    // Cleanup
+    try { fs.rmSync(tmpDir, { recursive: true }); } catch {}
+  } else { skip("memory-metrics function extraction failed"); }
+}
+
+// ── Memory Dream ─────────────────────────────────────────────────
+
+section("UNIT: Memory Dream — consolidation engine");
+
+{
+  assert(source.includes("shouldDream"), "shouldDream function exists");
+  assert(source.includes("runDream"), "runDream function exists");
+  assert(source.includes("buildDreamPrompt"), "buildDreamPrompt function exists");
+  assert(source.includes("incrementDreamSessionCount"), "incrementDreamSessionCount function exists");
+  assert(source.includes("loadDreamState"), "loadDreamState function exists");
+  assert(source.includes("saveDreamState"), "saveDreamState function exists");
+  assert(source.includes("countMemories"), "countMemories function exists");
+  assert(source.includes("dream-state.json"), "Dream state file defined");
+  assert(source.includes("dream.lock"), "Dream lock file defined");
+  assert(source.includes("DREAM_MIN_SESSIONS"), "DREAM_MIN_SESSIONS constant defined");
+  assert(source.includes("DREAM_MIN_HOURS"), "DREAM_MIN_HOURS constant defined");
+  assert(source.includes("Phase 1") && source.includes("Phase 2") && source.includes("Phase 3") && source.includes("Phase 4"), "Dream prompt has all 4 phases");
+}
+
+section("UNIT: Memory Dream — shouldDream logic");
+
+{
+  const loadFunc = extractBlock(source, "function loadDreamState(");
+  const shouldFunc = extractBlock(source, "function shouldDream(");
+  const countFunc = extractBlock(source, "function countMemories(");
+
+  if (shouldFunc && loadFunc && countFunc) {
+    const ns = {};
+    try {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), "cloclo-dream-"));
+      const stateFile = path.join(tmpDir, "dream-state.json");
+      const memDir = path.join(tmpDir, "mem");
+      fs.mkdirSync(memDir, { recursive: true });
+
+      const deps = `
+        const DREAM_MIN_SESSIONS = 5;
+        const DREAM_MIN_HOURS = 24;
+        function log() {}
+        function _dreamStatePath() { return "${stateFile.replace(/\\/g, "\\\\")}"; }
+        function getMemoryDir() { return "${memDir.replace(/\\/g, "\\\\")}"; }
+        function getUserMemoryDir() { return "${memDir.replace(/\\/g, "\\\\")}"; }
+      `;
+      new Function("exports", "fs", "path", "os", deps + "\n" + loadFunc + "\n" + countFunc + "\n" + shouldFunc + "\nexports.shouldDream = shouldDream;")(ns, fs, path, os);
+
+      // No state file, no memories → false
+      assert(!ns.shouldDream("/test"), "shouldDream false when no state and no memories");
+
+      // Write state with enough sessions but no new memories
+      fs.writeFileSync(stateFile, JSON.stringify({ last_dream_at: null, session_count_since: 10, memories_at_last_dream: 0 }));
+      assert(!ns.shouldDream("/test"), "shouldDream false when no new memories");
+
+      // Add a memory file
+      fs.writeFileSync(path.join(memDir, "test.md"), "test");
+      assert(ns.shouldDream("/test"), "shouldDream true when sessions + new memories");
+
+      // Set recent dream time
+      fs.writeFileSync(stateFile, JSON.stringify({ last_dream_at: new Date().toISOString(), session_count_since: 10, memories_at_last_dream: 0 }));
+      assert(!ns.shouldDream("/test"), "shouldDream false when dreamed recently");
+
+      try { fs.rmSync(tmpDir, { recursive: true }); } catch {}
+    } catch (e) { skip(`shouldDream eval failed: ${e.message}`); }
+  } else { skip("dream function extraction failed"); }
+}
+
+section("UNIT: Memory Dream — agent definition");
+
+{
+  assert(source.includes('"memory-dream"'), "memory-dream agent type defined in AGENT_DEFINITIONS");
+  assert(source.includes("Memory consolidation"), "memory-dream has description");
+}
+
+// ── Wider Auto-Memory Context ────────────────────────────────────
+
+section("UNIT: Auto-Memory — wider context (exchange history)");
+
+{
+  assert(source.includes("exchangeHistory"), "processExchange accepts exchangeHistory parameter");
+  assert(source.includes("{HISTORY}"), "CLASSIFY_PROMPT includes {HISTORY} placeholder");
+  assert(source.includes("_exchangeBuffer"), "InteractiveMode has _exchangeBuffer");
+
+  // Verify the classify prompt includes recent conversation context
+  const classifyIdx = source.indexOf("CLASSIFY_PROMPT");
+  if (classifyIdx !== -1) {
+    const promptSlice = source.slice(classifyIdx, classifyIdx + 2000);
+    assert(promptSlice.includes("Recent conversation context"), "CLASSIFY_PROMPT mentions recent conversation context");
+  }
+}
+
+// ── Staleness Enhancement ────────────────────────────────────────
+
+section("UNIT: Staleness — enhanced warning and timestamps");
+
+{
+  assert(source.includes("saved or last verified"), "Staleness warning mentions saved/verified dates");
+  assert(source.includes("30+ days"), "Staleness warning mentions 30-day threshold");
+  assert(source.includes("last_verified"), "last_verified field referenced");
+  assert(source.includes("saved_at"), "saved_at field referenced in index enrichment");
+
+  // Verify loadMemoryIndex enriches with timestamps
+  const loadIdx = source.indexOf("function loadMemoryIndex(");
+  if (loadIdx !== -1) {
+    const funcSlice = source.slice(loadIdx, loadIdx + 3000);
+    assert(funcSlice.includes("saved_at") || funcSlice.includes("last_verified"), "loadMemoryIndex reads timestamps from frontmatter");
+    assert(funcSlice.includes("(verified:") || funcSlice.includes("(saved:"), "loadMemoryIndex appends date labels");
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════

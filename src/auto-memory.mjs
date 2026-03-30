@@ -57,16 +57,26 @@ Respond with EXACTLY one JSON object (no markdown, no explanation):
 or
 {"save":true,"scope":"user","type":"feedback","name":"short slug","description":"one-line description for index","content":"the actual memory content to persist"}
 
+Recent conversation context (for understanding the flow):
+{HISTORY}
+
 User message:
 {MESSAGE}
 
 Context (last assistant response, for understanding corrections):
 {CONTEXT}`;
 
-async function classifyWithLLM(client, provider, userMessage, assistantContext) {
+async function classifyWithLLM(client, provider, userMessage, assistantContext, exchangeHistory = []) {
   const today = new Date().toISOString().split("T")[0];
+  // Build history string from last 4 exchanges (skip current), ~150 chars each
+  const historyStr = exchangeHistory.slice(0, -1).slice(-4).map((ex, i) => {
+    const u = (ex.user || "").slice(0, 150);
+    const a = (ex.assistant || "").slice(0, 150);
+    return `[${i + 1}] User: ${u}${u.length >= 150 ? "…" : ""}\n    Assistant: ${a}${a.length >= 150 ? "…" : ""}`;
+  }).join("\n") || "(no prior context)";
   const prompt = CLASSIFY_PROMPT
     .replace("{TODAY}", today)
+    .replace("{HISTORY}", historyStr)
     .replace("{MESSAGE}", userMessage.slice(0, 2000))
     .replace("{CONTEXT}", (assistantContext || "").slice(0, 500));
 
@@ -148,7 +158,7 @@ class AutoMemoryTracker {
   }
 
   markSaved(type, name) {
-    this._lastSave.set(type + ":" + name, Date.now());
+    this._lastSave.set(this._key(type, name), Date.now());
   }
 
   markClassified() {
@@ -233,7 +243,7 @@ class AutoMemory {
   }
 
   // Called after each user↔assistant exchange
-  async processExchange(userMessage, assistantResponse) {
+  async processExchange(userMessage, assistantResponse, exchangeHistory = []) {
     this._lastAssistant = assistantResponse || "";
 
     // Tier 1: cheap pre-filter
@@ -247,7 +257,8 @@ class AutoMemory {
       this._client,
       this._provider,
       userMessage,
-      this._lastAssistant
+      this._lastAssistant,
+      exchangeHistory
     );
 
     if (!result) return [];

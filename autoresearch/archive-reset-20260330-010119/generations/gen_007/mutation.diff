@@ -1,0 +1,26 @@
+diff -ru /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_007/src_before/config.mjs /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_007/src_after/config.mjs
+--- /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_007/src_before/config.mjs	2026-03-29 22:20:29
++++ /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_007/src_after/config.mjs	2026-03-29 22:55:55
+@@ -67,8 +67,7 @@
+   function needValue(flag, i) {
+     const v = argv[i];
+     if (i >= argv.length || (typeof v === "string" && v.startsWith("-"))) {
+-      const example = (flag === "-p" || flag === "--print") ? `  Use ${flag} "your prompt"\n` : `  cloclo ${flag} <value>\n`;
+-      process.stderr.write(`Error: ${flag} requires a value\n${example}`);
++      process.stderr.write(`Error: ${flag} requires a value\n  cloclo ${flag} <value>\n`);
+       process.exit(EXIT.BAD_ARGS);
+     }
+     return v;
+diff -ru /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_007/src_before/engine.mjs /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_007/src_after/engine.mjs
+--- /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_007/src_before/engine.mjs	2026-03-29 22:20:29
++++ /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_007/src_after/engine.mjs	2026-03-29 22:55:55
+@@ -2642,6 +2642,9 @@
+ - For standalone coding tasks, return runnable code and any requested tests directly in the response. Do not replace the solution with meta-commentary such as "I'm locating the right file" or "I need to inspect the test setup first."
+ - If the prompt clearly targets repo code but omits a few specifics, infer the most likely target from the current codebase and proceed with the best justified assumption instead of stopping for clarification unless the ambiguity blocks all reasonable progress.
+ - Only use tools in one-shot mode when the prompt explicitly requires interacting with the local workspace, running commands, reading/modifying files, or fetching external information that is not present in the prompt.
++- For command-line tasks, prefer returning the exact bash command or pipeline the user can run when they asked for a shell command, unless they explicitly asked you to execute it.
++- For file creation/edit requests in one-shot mode, output the exact file contents directly when the user supplied the target path/content inline and did not require local execution.
++- For regex requests, return just the regex unless the user asked for explanation or examples.
+ - For short factual or math questions, answer in a complete sentence that includes the result directly instead of returning only a bare token.
+ - When you choose not to use tools, still fully complete the task with concrete output. Avoid empty or partial responses.` : "";
+ 

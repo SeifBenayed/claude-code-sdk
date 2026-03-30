@@ -1,0 +1,148 @@
+{
+  "gen": "gen_003",
+  "score": 48.83634182447237,
+  "avgScore": 0.48836341824472373,
+  "count": 1000,
+  "catScores": {
+    "factual": {
+      "sum": 17.821150974026843,
+      "count": 25
+    },
+    "math": {
+      "sum": 11.672200467405865,
+      "count": 25
+    },
+    "cs_theory": {
+      "sum": 16.311061321715894,
+      "count": 25
+    },
+    "language": {
+      "sum": 14.511372795358936,
+      "count": 25
+    },
+    "coding_trivia": {
+      "sum": 9.458014375646181,
+      "count": 25
+    },
+    "logic_puzzles": {
+      "sum": 12.297934726007949,
+      "count": 25
+    },
+    "api_knowledge": {
+      "sum": 13.503220135979596,
+      "count": 25
+    },
+    "devops": {
+      "sum": 12.618844263458064,
+      "count": 25
+    },
+    "code_js": {
+      "sum": 23.213167875301444,
+      "count": 40
+    },
+    "code_python": {
+      "sum": 25.3274797359834,
+      "count": 40
+    },
+    "bash_tasks": {
+      "sum": 17.56808586450697,
+      "count": 40
+    },
+    "file_ops": {
+      "sum": 10.991306341356026,
+      "count": 30
+    },
+    "regex": {
+      "sum": 12.15350077472288,
+      "count": 25
+    },
+    "sql": {
+      "sum": 22.91322701413083,
+      "count": 25
+    },
+    "data_transform": {
+      "sum": 7.393602933710661,
+      "count": 25
+    },
+    "git_ops": {
+      "sum": 8.996563255413498,
+      "count": 25
+    },
+    "debug": {
+      "sum": 12.515524196072601,
+      "count": 25
+    },
+    "web_fetch": {
+      "sum": 11.186846746041947,
+      "count": 25
+    },
+    "build_and_test": {
+      "sum": 34.61348349983681,
+      "count": 50
+    },
+    "research_and_code": {
+      "sum": 13.634045421545506,
+      "count": 50
+    },
+    "refactor": {
+      "sum": 22.833115773453606,
+      "count": 50
+    },
+    "system_design": {
+      "sum": 26.694631248521027,
+      "count": 50
+    },
+    "pipeline": {
+      "sum": 8.79057881936642,
+      "count": 50
+    },
+    "explain_and_implement": {
+      "sum": 36.393772506963735,
+      "count": 50
+    },
+    "edge_cases": {
+      "sum": 20.180452377612355,
+      "count": 40
+    },
+    "error_recovery": {
+      "sum": 21.22935579151747,
+      "count": 40
+    },
+    "security": {
+      "sum": 16.620473737643845,
+      "count": 30
+    },
+    "trick_questions": {
+      "sum": 9.759410412961795,
+      "count": 30
+    },
+    "performance": {
+      "sum": 16.845819037106555,
+      "count": 30
+    },
+    "multi_tool_chain": {
+      "sum": 0.31517582135523614,
+      "count": 30
+    }
+  },
+  "tierScores": {
+    "T1": {
+      "sum": 108.19379905959939,
+      "count": 200
+    },
+    "T2": {
+      "sum": 152.25930473724026,
+      "count": 300
+    },
+    "T3": {
+      "sum": 142.95962726968708,
+      "count": 300
+    },
+    "T4": {
+      "sum": 84.95068717819724,
+      "count": 200
+    }
+  },
+  "timestamp": "2026-03-29T16:53:49.684Z",
+  "weakest": "multi_tool_chain"
+}

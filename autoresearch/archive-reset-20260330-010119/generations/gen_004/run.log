@@ -1,0 +1,138 @@
+
+╔═══════════════════════════════════════════════════╗
+║  CLOCLO BENCHMARK RUN [gen_004]
+║  Concurrency: 4 query at a time
+╚═══════════════════════════════════════════════════╝
+
+  Model: gpt-5.4
+  Per-question timeout: 600000ms
+
+  Batch log size: 10
+
+  Retries per question: 2
+  Checkpoint cadence: every 1 result(s)
+
+  Running 1000 pending questions with 4 workers...
+
+  [10/1000] batch 1/100 ok=10 empty=0 err=0 avg=10709ms max=11114ms wall=38879ms last=factual ✅ 10665ms attempts=1
+  [20/1000] batch 2/100 ok=10 empty=0 err=0 avg=10659ms max=10784ms wall=25760ms last=factual ✅ 10669ms attempts=1
+  [30/1000] batch 3/100 ok=10 empty=0 err=0 avg=10670ms max=10973ms wall=27848ms last=math ✅ 10973ms attempts=1
+  [40/1000] batch 4/100 ok=10 empty=0 err=0 avg=10692ms max=10908ms wall=25469ms last=math ✅ 10686ms attempts=1
+  [50/1000] batch 5/100 ok=10 empty=0 err=0 avg=10638ms max=10762ms wall=27699ms last=math ✅ 10603ms attempts=1
+  [60/1000] batch 6/100 ok=10 empty=0 err=0 avg=10620ms max=10692ms wall=25312ms last=cs_theory ✅ 10604ms attempts=1
+  [70/1000] batch 7/100 ok=10 empty=0 err=0 avg=10696ms max=10834ms wall=27966ms last=cs_theory ✅ 10708ms attempts=1
+  [80/1000] batch 8/100 ok=10 empty=0 err=0 avg=10798ms max=11058ms wall=25601ms last=language ✅ 10616ms attempts=1
+  [90/1000] batch 9/100 ok=10 empty=0 err=0 avg=10617ms max=10730ms wall=27904ms last=language ✅ 10663ms attempts=1
+  [100/1000] batch 10/100 ok=10 empty=0 err=0 avg=10598ms max=10705ms wall=25126ms last=language ✅ 10689ms attempts=1
+  [110/1000] batch 11/100 ok=10 empty=0 err=0 avg=10593ms max=10665ms wall=27859ms last=coding_trivia ✅ 10568ms attempts=1
+  [120/1000] batch 12/100 ok=10 empty=0 err=0 avg=10686ms max=11192ms wall=25033ms last=coding_trivia ✅ 10544ms attempts=1
+  [130/1000] batch 13/100 ok=10 empty=0 err=0 avg=10655ms max=10799ms wall=28729ms last=logic_puzzles ✅ 10630ms attempts=1
+  [140/1000] batch 14/100 ok=10 empty=0 err=0 avg=10644ms max=10744ms wall=24325ms last=logic_puzzles ✅ 10608ms attempts=1
+  [150/1000] batch 15/100 ok=10 empty=0 err=0 avg=10872ms max=11324ms wall=29556ms last=logic_puzzles ✅ 10722ms attempts=1
+  [160/1000] batch 16/100 ok=10 empty=0 err=0 avg=10891ms max=11028ms wall=24928ms last=api_knowledge ✅ 10777ms attempts=1
+  [170/1000] batch 17/100 ok=10 empty=0 err=0 avg=10790ms max=11049ms wall=28886ms last=api_knowledge ✅ 10640ms attempts=1
+  [180/1000] batch 18/100 ok=10 empty=0 err=0 avg=10735ms max=10867ms wall=24961ms last=devops ✅ 10676ms attempts=1
+  [190/1000] batch 19/100 ok=10 empty=0 err=0 avg=10666ms max=10736ms wall=28219ms last=devops ✅ 10675ms attempts=1
+  [200/1000] batch 20/100 ok=10 empty=0 err=0 avg=10813ms max=11252ms wall=25773ms last=devops ✅ 11252ms attempts=1
+  [210/1000] batch 21/100 ok=10 empty=0 err=0 avg=10619ms max=10686ms wall=27435ms last=code_js ✅ 10559ms attempts=1
+  [220/1000] batch 22/100 ok=10 empty=0 err=0 avg=10814ms max=11050ms wall=26353ms last=code_js ✅ 10850ms attempts=1
+  [230/1000] batch 23/100 ok=10 empty=0 err=0 avg=11260ms max=11534ms wall=28610ms last=code_js ✅ 11041ms attempts=1
+  [240/1000] batch 24/100 ok=10 empty=0 err=0 avg=11512ms max=16081ms wall=52507ms last=code_python ✅ 10590ms attempts=1
+  [250/1000] batch 25/100 ok=9 empty=0 err=1 avg=11981ms max=23234ms wall=32229ms last=code_python ✅ 10698ms attempts=1
+  [260/1000] batch 26/100 ok=10 empty=0 err=0 avg=10893ms max=11304ms wall=28300ms last=code_python ✅ 10559ms attempts=1
+  [270/1000] batch 27/100 ok=10 empty=0 err=0 avg=10597ms max=10730ms wall=25638ms last=code_python ✅ 10615ms attempts=1
+  [280/1000] batch 28/100 ok=10 empty=0 err=0 avg=10696ms max=10800ms wall=27613ms last=code_python ✅ 10777ms attempts=1
+  [290/1000] batch 29/100 ok=10 empty=0 err=0 avg=10642ms max=10829ms wall=25733ms last=bash_tasks ✅ 10761ms attempts=1
+  [300/1000] batch 30/100 ok=10 empty=0 err=0 avg=10759ms max=11049ms wall=32669ms last=bash_tasks ✅ 10774ms attempts=1
+  [310/1000] batch 31/100 ok=10 empty=0 err=0 avg=10751ms max=11640ms wall=43545ms last=bash_tasks ✅ 11640ms attempts=1
+  [320/1000] batch 32/100 ok=10 empty=0 err=0 avg=11243ms max=14530ms wall=50392ms last=file_ops ✅ 10598ms attempts=1
+  [330/1000] batch 33/100 ok=10 empty=0 err=0 avg=24219ms max=146572ms wall=26253ms last=file_ops ✅ 10803ms attempts=1
+  [340/1000] batch 34/100 ok=10 empty=0 err=0 avg=10597ms max=10679ms wall=30758ms last=file_ops ✅ 10679ms attempts=1
+  [350/1000] batch 35/100 ok=10 empty=0 err=0 avg=10613ms max=10718ms wall=22155ms last=file_ops ✅ 10546ms attempts=1
+  [360/1000] batch 36/100 ok=10 empty=0 err=0 avg=10713ms max=11013ms wall=31337ms last=regex ✅ 10664ms attempts=1
+  [370/1000] batch 37/100 ok=10 empty=0 err=0 avg=10656ms max=10853ms wall=21800ms last=regex ✅ 10558ms attempts=1
+  [380/1000] batch 38/100 ok=10 empty=0 err=0 avg=10609ms max=10725ms wall=31487ms last=sql ✅ 10630ms attempts=1
+  [390/1000] batch 39/100 ok=10 empty=0 err=0 avg=10589ms max=10644ms wall=21403ms last=sql ✅ 10582ms attempts=1
+  [400/1000] batch 40/100 ok=10 empty=0 err=0 avg=10625ms max=10761ms wall=31584ms last=sql ✅ 10606ms attempts=1
+  [410/1000] batch 41/100 ok=10 empty=0 err=0 avg=10585ms max=10617ms wall=21261ms last=data_transform ✅ 10540ms attempts=1
+  [420/1000] batch 42/100 ok=10 empty=0 err=0 avg=10637ms max=10828ms wall=32031ms last=data_transform ✅ 10828ms attempts=1
+  [430/1000] batch 43/100 ok=10 empty=0 err=0 avg=10695ms max=10857ms wall=21359ms last=git_ops ✅ 10673ms attempts=1
+  [440/1000] batch 44/100 ok=10 empty=0 err=0 avg=10761ms max=11120ms wall=32374ms last=git_ops ✅ 10646ms attempts=1
+  [450/1000] batch 45/100 ok=10 empty=0 err=0 avg=10649ms max=10711ms wall=21320ms last=git_ops ✅ 10711ms attempts=1
+  [460/1000] batch 46/100 ok=10 empty=0 err=0 avg=10616ms max=10670ms wall=31873ms last=debug ✅ 10619ms attempts=1
+  [470/1000] batch 47/100 ok=10 empty=0 err=0 avg=10646ms max=10791ms wall=26577ms last=debug ✅ 10570ms attempts=1
+  [480/1000] batch 48/100 ok=10 empty=0 err=0 avg=10692ms max=11007ms wall=37416ms last=web_fetch ✅ 10601ms attempts=1
+  [490/1000] batch 49/100 ok=10 empty=0 err=0 avg=10723ms max=11316ms wall=32627ms last=web_fetch ✅ 11316ms attempts=1
+  [500/1000] batch 50/100 ok=10 empty=0 err=0 avg=12525ms max=16558ms wall=50353ms last=build_and_test ✅ 16099ms attempts=1
+  [510/1000] batch 51/100 ok=10 empty=0 err=0 avg=13737ms max=21084ms wall=37098ms last=build_and_test ✅ 10802ms attempts=1
+  [520/1000] batch 52/100 ok=9 empty=0 err=1 avg=15674ms max=36221ms wall=38082ms last=build_and_test ✅ 14630ms attempts=1
+  [530/1000] batch 53/100 ok=10 empty=0 err=0 avg=13143ms max=16287ms wall=35183ms last=build_and_test ✅ 12898ms attempts=1
+  [540/1000] batch 54/100 ok=10 empty=0 err=0 avg=15728ms max=27259ms wall=36516ms last=build_and_test ✅ 17528ms attempts=1
+  [550/1000] batch 55/100 ok=10 empty=0 err=0 avg=13665ms max=30080ms wall=32191ms last=build_and_test ✅ 10824ms attempts=1
+  [560/1000] batch 56/100 ok=10 empty=0 err=0 avg=10639ms max=10741ms wall=25611ms last=research_and_code ✅ 10698ms attempts=1
+  [570/1000] batch 57/100 ok=10 empty=0 err=0 avg=10778ms max=11350ms wall=27756ms last=research_and_code ✅ 10667ms attempts=1
+  [580/1000] batch 58/100 ok=10 empty=0 err=0 avg=11050ms max=12073ms wall=27091ms last=research_and_code ✅ 10793ms attempts=1
+  [590/1000] batch 59/100 ok=10 empty=0 err=0 avg=10685ms max=10926ms wall=27484ms last=research_and_code ✅ 10620ms attempts=1
+  [600/1000] batch 60/100 ok=10 empty=0 err=0 avg=10946ms max=12840ms wall=26081ms last=research_and_code ✅ 10621ms attempts=1
+  [610/1000] batch 61/100 ok=10 empty=0 err=0 avg=10613ms max=10728ms wall=26839ms last=refactor ✅ 10552ms attempts=1
+  [620/1000] batch 62/100 ok=10 empty=0 err=0 avg=10581ms max=10691ms wall=26027ms last=refactor ✅ 10541ms attempts=1
+  [630/1000] batch 63/100 ok=10 empty=0 err=0 avg=10713ms max=11003ms wall=27462ms last=refactor ✅ 10630ms attempts=1
+  [640/1000] batch 64/100 ok=10 empty=0 err=0 avg=10634ms max=10677ms wall=25918ms last=refactor ✅ 10666ms attempts=1
+  [650/1000] batch 65/100 ok=10 empty=0 err=0 avg=10768ms max=11223ms wall=27921ms last=refactor ✅ 10729ms attempts=1
+  [660/1000] batch 66/100 ok=10 empty=0 err=0 avg=28257ms max=35668ms wall=78330ms last=system_design ✅ 29770ms attempts=1
+  [670/1000] batch 67/100 ok=10 empty=0 err=0 avg=34283ms max=49177ms wall=91154ms last=system_design ✅ 43474ms attempts=1
+  [680/1000] batch 68/100 ok=10 empty=0 err=0 avg=33487ms max=50106ms wall=84528ms last=system_design ✅ 32294ms attempts=1
+  [690/1000] batch 69/100 ok=10 empty=0 err=0 avg=29903ms max=37659ms wall=69157ms last=system_design ✅ 34704ms attempts=1
+  [700/1000] batch 70/100 ok=10 empty=0 err=0 avg=29724ms max=43453ms wall=68473ms last=pipeline ✅ 10971ms attempts=1
+  [710/1000] batch 71/100 ok=9 empty=0 err=1 avg=13312ms max=39207ms wall=32080ms last=pipeline ✅ 10755ms attempts=1
+  [720/1000] batch 72/100 ok=6 empty=0 err=4 avg=12984ms max=27600ms wall=62297ms last=pipeline ❌ 14408ms attempts=3
+  [730/1000] batch 73/100 ok=5 empty=0 err=5 avg=8864ms max=16721ms wall=44857ms last=pipeline ✅ 16721ms attempts=1
+  [740/1000] batch 74/100 ok=3 empty=0 err=7 avg=8413ms max=17035ms wall=60844ms last=pipeline ❌ 4530ms attempts=3
+  [750/1000] batch 75/100 ok=4 empty=0 err=6 avg=12197ms max=19195ms wall=49774ms last=pipeline ❌ 13244ms attempts=3
+  [760/1000] batch 76/100 ok=10 empty=0 err=0 avg=11923ms max=19111ms wall=30836ms last=explain_and_implement ✅ 10657ms attempts=1
+  [770/1000] batch 77/100 ok=10 empty=0 err=0 avg=11691ms max=17191ms wall=32480ms last=explain_and_implement ✅ 12144ms attempts=1
+  [780/1000] batch 78/100 ok=10 empty=0 err=0 avg=11934ms max=14915ms wall=28089ms last=explain_and_implement ✅ 10639ms attempts=1
+  [790/1000] batch 79/100 ok=10 empty=0 err=0 avg=11212ms max=12962ms wall=27859ms last=explain_and_implement ✅ 10637ms attempts=1
+  [800/1000] batch 80/100 ok=10 empty=0 err=0 avg=11439ms max=15661ms wall=31287ms last=edge_cases ✅ 10579ms attempts=1
+  [810/1000] batch 81/100 ok=10 empty=0 err=0 avg=11243ms max=14704ms wall=31916ms last=edge_cases ✅ 10562ms attempts=1
+  [820/1000] batch 82/100 ok=10 empty=0 err=0 avg=11021ms max=12723ms wall=33335ms last=edge_cases ✅ 10612ms attempts=1
+  [830/1000] batch 83/100 ok=10 empty=0 err=0 avg=11337ms max=15327ms wall=35819ms last=edge_cases ✅ 15327ms attempts=1
+  [840/1000] batch 84/100 ok=10 empty=0 err=0 avg=13415ms max=24519ms wall=35648ms last=error_recovery ✅ 10679ms attempts=1
+  [850/1000] batch 85/100 ok=10 empty=0 err=0 avg=11083ms max=15404ms wall=27064ms last=error_recovery ✅ 10685ms attempts=1
+  [860/1000] batch 86/100 ok=10 empty=0 err=0 avg=10616ms max=10824ms wall=25941ms last=error_recovery ✅ 10646ms attempts=1
+  [870/1000] batch 87/100 ok=10 empty=0 err=0 avg=10596ms max=10774ms wall=26974ms last=error_recovery ✅ 10532ms attempts=1
+  [880/1000] batch 88/100 ok=10 empty=0 err=0 avg=10604ms max=10754ms wall=25809ms last=error_recovery ✅ 10544ms attempts=1
+  [890/1000] batch 89/100 ok=10 empty=0 err=0 avg=11683ms max=16890ms wall=30488ms last=security ✅ 12438ms attempts=1
+  [900/1000] batch 90/100 ok=10 empty=0 err=0 avg=12599ms max=16659ms wall=34456ms last=security ✅ 16659ms attempts=1
+  [910/1000] batch 91/100 ok=10 empty=0 err=0 avg=12530ms max=18907ms wall=25739ms last=security ✅ 11391ms attempts=1
+  [920/1000] batch 92/100 ok=10 empty=0 err=0 avg=10626ms max=10682ms wall=30094ms last=trick_questions ✅ 10644ms attempts=1
+  [930/1000] batch 93/100 ok=10 empty=0 err=0 avg=10727ms max=11144ms wall=23118ms last=trick_questions ✅ 10742ms attempts=1
+  [940/1000] batch 94/100 ok=10 empty=0 err=0 avg=10639ms max=10776ms wall=30630ms last=performance ✅ 10559ms attempts=1
+  [950/1000] batch 95/100 ok=10 empty=0 err=0 avg=12602ms max=18556ms wall=30196ms last=performance ✅ 18556ms attempts=1
+  [960/1000] batch 96/100 ok=10 empty=0 err=0 avg=11902ms max=17078ms wall=28676ms last=performance ✅ 10562ms attempts=1
+  [970/1000] batch 97/100 ok=10 empty=0 err=0 avg=12900ms max=20705ms wall=31794ms last=performance ✅ 20705ms attempts=1
+  [980/1000] batch 98/100 ok=0 empty=0 err=10 avg=15055ms max=31648ms wall=151645ms last=multi_tool_chain ❌ 10342ms attempts=3
+  [990/1000] batch 99/100 ok=0 empty=0 err=10 avg=9527ms max=25100ms wall=105238ms last=multi_tool_chain ❌ 3166ms attempts=3
+  [1000/1000] batch 100/100 ok=2 empty=0 err=8 avg=50649ms max=137058ms wall=295859ms last=multi_tool_chain ✅ 137058ms attempts=3
+
+════════════════════════════════════════════════════════════
+  SCORE: 48.75% (1000 questions)
+════════════════════════════════════════════════════════════
+
+  Tier Breakdown:
+    T1   ███████████░░░░░░░░░ 53.2%
+    T2   ██████████░░░░░░░░░░ 51.3%
+    T3   █████████░░░░░░░░░░░ 47.3%
+    T4   █████████░░░░░░░░░░░ 42.6%
+
+  Weakest Categories:
+    multi_tool_chain       3.9%
+    pipeline               17.0%
+    research_and_code      27.3%
+    data_transform         30.9%
+    trick_questions        32.9%
+
+  Results → /Users/seifbenayed/claude-tool-loop/autoresearch/results/gen_004_cloclo.json
+  Scores  → /Users/seifbenayed/claude-tool-loop/autoresearch/results/gen_004_scores.json
+
+SCORE:48.75

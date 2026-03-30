@@ -8,7 +8,8 @@ import os from "node:os";
 import _http from "node:http";
 import _https from "node:https";
 
-import { log, sleep, EXIT, _VERSION, _httpGet } from "./utils.mjs";
+import { log, sleep, EXIT, _VERSION, _httpGet, getMemoryDir, ensureMemoryDir, getUserMemoryDir, ensureUserMemoryDir } from "./utils.mjs";
+import { appendMemoryMetric } from "./memory-metrics.mjs";
 import { detectProvider, PROVIDERS, isOpenAIModel } from "./providers.mjs";
 import { isDomainPreapproved, _checkFilePath } from "./security.mjs";
 
@@ -183,9 +184,45 @@ const TOOL_MANIFEST_PATH = path.join(os.homedir(), ".claude", "tools", ".cloclo-
 function _loadToolManifest() { try { const d = fs.readFileSync(TOOL_MANIFEST_PATH, "utf-8"); const m = JSON.parse(d); if (!m.tools || typeof m.tools !== "object") return { tools: {} }; return m; } catch { return { tools: {} }; } }
 function _saveToolManifest(manifest) { fs.mkdirSync(path.dirname(TOOL_MANIFEST_PATH), { recursive: true }); fs.writeFileSync(TOOL_MANIFEST_PATH, JSON.stringify(manifest, null, 2) + "\n"); }
 
+function _extractToolEnvRequirements(toolDef) {
+  const envReqs = new Set(toolDef._meta?.env_required || toolDef.env || []);
+  if (toolDef.headers) {
+    for (const value of Object.values(toolDef.headers)) {
+      for (const match of String(value).match(/\$\{([A-Z_][A-Z0-9_]*)\}/g) || []) {
+        envReqs.add(match.slice(2, -1));
+      }
+    }
+  }
+  if (toolDef.url) {
+    for (const match of String(toolDef.url).match(/\$\{([A-Z_][A-Z0-9_]*)\}/g) || []) {
+      envReqs.add(match.slice(2, -1));
+    }
+  }
+  return [...envReqs];
+}
+
+function _buildManifestEntry(toolDef, source, existing = {}, extras = {}) {
+  const disabled = extras.disabled ?? existing.disabled ?? false;
+  return {
+    name: toolDef.name,
+    type: toolDef.type,
+    source,
+    installSource: extras.installSource || existing.installSource || source,
+    installedAt: existing.installedAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+    disabled,
+    ...(disabled && existing.disabledAt ? { disabledAt: existing.disabledAt } : {}),
+    version: extras.version || toolDef.version || existing.version || null,
+    publisher: extras.publisher || toolDef._meta?.author || existing.publisher || null,
+    category: extras.category || toolDef._meta?.category || existing.category || null,
+    envRequired: _extractToolEnvRequirements(toolDef),
+    ...(toolDef.type === "ai" ? { backend: toolDef.backend || "provider", model: toolDef.model, task: toolDef.task, device: toolDef.device || null } : {}),
+  };
+}
+
 function _classifyToolType(name) {
   if (name.startsWith("mcp__")) return "connector";
-  if (["Bash","Read","Write","Edit","Glob","Grep","WebFetch","WebSearch","ToolSearch","NotebookEdit","AskUserQuestion","SendUserMessage","Agent","Browser"].includes(name)) return "builtin";
+  if (["Bash","Read","Write","Edit","Glob","Grep","WebFetch","WebSearch","ToolSearch","NotebookEdit","AskUserQuestion","SendUserMessage","TaskOutput","Agent","Browser","MemoryList","MemoryRead","MemorySave","MemoryForget"].includes(name)) return "builtin";
   if (name.startsWith("Task") || name.startsWith("Enter") || name.startsWith("Exit") || name.startsWith("ListMcp") || name.startsWith("ReadMcp")) return "builtin";
   return "custom";
 }
@@ -236,8 +273,12 @@ function toolInfo(cfg, registry, name) {
     }
   } catch { /* no TOOL.json on disk — skip type-specific fields */ }
   if (entry.source) process.stderr.write(`  Source:      ${entry.source}\n`);
+  if (entry.installSource && entry.installSource !== entry.source) process.stderr.write(`  Install via: ${entry.installSource}\n`);
+  if (entry.version) process.stderr.write(`  Version:     ${entry.version}\n`);
+  if (entry.publisher) process.stderr.write(`  Publisher:   ${entry.publisher}\n`);
   if (entry.backend) process.stderr.write(`  Backend:     ${entry.backend}\n`);
   if (entry.model) process.stderr.write(`  Model:       ${entry.model}\n`);
+  if (Array.isArray(entry.envRequired) && entry.envRequired.length > 0) process.stderr.write(`  Env req:     ${entry.envRequired.join(", ")}\n`);
   if (entry.installedAt) process.stderr.write(`  Installed:   ${entry.installedAt.slice(0, 10)}\n`);
   process.stderr.write(`\n`);
 }
@@ -589,7 +630,9 @@ async function toolInstall(cfg, source) {
   const targetDir = path.join(CUSTOM_TOOLS_DIR, toolDef.name); fs.mkdirSync(targetDir, { recursive: true });
   const srcDir = fs.statSync(resolved).isDirectory() ? resolved : path.dirname(resolved);
   for (const e of fs.readdirSync(srcDir)) { const src = path.join(srcDir, e); if (fs.statSync(src).isFile()) fs.copyFileSync(src, path.join(targetDir, e)); }
-  const manifest = _loadToolManifest(); manifest.tools[toolDef.name] = { name: toolDef.name, type: toolDef.type, source: resolved, installedAt: manifest.tools[toolDef.name]?.installedAt || new Date().toISOString(), updatedAt: new Date().toISOString(), disabled: false, ...(toolDef.type === "ai" ? { backend: toolDef.backend || "provider", model: toolDef.model, task: toolDef.task, device: toolDef.device || null } : {}) }; _saveToolManifest(manifest);
+  const manifest = _loadToolManifest();
+  manifest.tools[toolDef.name] = _buildManifestEntry(toolDef, resolved, manifest.tools[toolDef.name], { installSource: resolved });
+  _saveToolManifest(manifest);
   process.stderr.write(`\x1b[32mInstalled tool: ${toolDef.name}\x1b[0m (${toolDef.type})\n  Restart cloclo or use /tool list to see it.\n`);
 }
 
@@ -598,6 +641,38 @@ function toolRemove(cfg, name) {
   const toolDir = path.join(CUSTOM_TOOLS_DIR, name); if (!fs.existsSync(path.join(toolDir, "TOOL.json"))) { if (_classifyToolType(name) === "builtin") process.stderr.write(`Cannot remove ${name}: it's a built-in tool. Use 'tool disable' instead.\n`); else process.stderr.write(`Custom tool not found: ${name}\n`); return; }
   fs.rmSync(toolDir, { recursive: true, force: true }); const manifest = _loadToolManifest(); delete manifest.tools[name]; _saveToolManifest(manifest);
   process.stderr.write(`Removed tool: ${name}\n  Restart cloclo to fully unload.\n`);
+}
+
+async function toolUpdate(cfg, name) {
+  if (!name) { process.stderr.write("Usage: cloclo tool update <name|all>\n"); return; }
+  const manifest = _loadToolManifest();
+  const targets = name === "all"
+    ? Object.values(manifest.tools || {}).filter((entry) => entry.installSource || entry.source)
+    : [manifest.tools[name]].filter(Boolean);
+
+  if (targets.length === 0) {
+    process.stderr.write(name === "all" ? "No installed tools to update.\n" : `Tool not found in manifest: ${name}\n`);
+    return;
+  }
+
+  let updated = 0;
+  for (const entry of targets) {
+    const installSource = entry.installSource || entry.source;
+    if (!installSource) continue;
+    if (String(installSource).startsWith("official:")) {
+      const result = await _installOfficialTool(String(installSource).slice(9), { mode: "update" });
+      if (result?.updated) updated++;
+      continue;
+    }
+    const resolved = path.resolve(String(installSource));
+    if (!fs.existsSync(resolved)) {
+      process.stderr.write(`\x1b[33mSkipping ${entry.name}:\x1b[0m source missing at ${installSource}\n`);
+      continue;
+    }
+    await toolInstall(cfg, resolved);
+    updated++;
+  }
+  process.stderr.write(updated > 0 ? `Updated ${updated} tool(s).\n` : "All targeted tools are already up to date.\n");
 }
 
 // ── Official Tool Catalog ─────────────────────────────────────
@@ -749,6 +824,7 @@ async function toolCatalog(query) {
       process.stderr.write(`    \x1b[1m${t.name}\x1b[0m  ${typeBadge}${ro}${badge}\n`);
       process.stderr.write(`    \x1b[2m${(t.description || "").slice(0, w - 8)}\x1b[0m\n`);
       const details = [];
+      if (t.version) details.push(`v${t.version}`);
       if (t.binary) details.push(`binary: ${t.binary}`);
       if (t.url) details.push(`url: ${(t.url || "").slice(0, 40)}`);
       if (t._meta?.author && t._meta.author !== "cloclo") details.push(`by ${t._meta.author}`);
@@ -763,19 +839,35 @@ async function toolCatalog(query) {
   process.stderr.write(`  Publish:  \x1b[1mcloclo tool publish <name>\x1b[0m\n\n`);
 }
 
-async function _installOfficialTool(name) {
+async function _installOfficialTool(name, opts = {}) {
+  const mode = opts.mode || "install";
   let toolDef = null;
   let source = "official";
+  let version = null;
+  let publisher = "cloclo";
+  let category = null;
   // Try registry first
   try {
     const registryUrl = process.env.CLOCLO_REGISTRY_URL || "https://cloclo-registry-799190737906.europe-west1.run.app";
     process.stderr.write(`\x1b[2mFetching ${name} from ${registryUrl}...\x1b[0m\n`);
     const resp = await _httpGet(`${registryUrl}/api/tools/${name}`, { Accept: "application/json" });
     const pkg = JSON.parse(resp);
-    if (pkg.toolJson) { toolDef = typeof pkg.toolJson === "string" ? JSON.parse(pkg.toolJson) : pkg.toolJson; toolDef._meta = { category: pkg.category, author: pkg.author, env_required: toolDef.env || [], auth_note: toolDef._meta?.auth_note }; source = "registry"; }
+    if (pkg.toolJson) {
+      toolDef = typeof pkg.toolJson === "string" ? JSON.parse(pkg.toolJson) : pkg.toolJson;
+      toolDef._meta = { category: pkg.category, author: pkg.author, env_required: toolDef.env || [], auth_note: toolDef._meta?.auth_note };
+      source = "registry";
+      version = pkg.version || toolDef.version || "1.0.0";
+      publisher = pkg.author || toolDef._meta?.author || "registry";
+      category = pkg.category || toolDef._meta?.category || null;
+    }
   } catch { /* registry miss or unreachable */ }
   // Fallback to static catalog
-  if (!toolDef) { toolDef = _OFFICIAL_CATALOG[name]; }
+  if (!toolDef) {
+    toolDef = _OFFICIAL_CATALOG[name];
+    version = toolDef?.version || "1.0.0";
+    publisher = toolDef?._meta?.author || "cloclo";
+    category = toolDef?._meta?.category || null;
+  }
   if (!toolDef) {
     process.stderr.write(`\x1b[31mTool not found: ${name}\x1b[0m\n`);
     const suggestions = Object.keys(_OFFICIAL_CATALOG).filter(k => k.includes(name) || name.includes(k.split("-")[0]));
@@ -783,30 +875,39 @@ async function _installOfficialTool(name) {
     process.stderr.write(`  Run "cloclo tool catalog ${name}" to browse.\n`);
     return;
   }
+  const manifest = _loadToolManifest();
+  const existing = manifest.tools[toolDef.name] || {};
+  if (mode === "update" && existing.version && version && existing.version === version) {
+    process.stderr.write(`\x1b[2m${toolDef.name} is already up to date (${version}).\x1b[0m\n`);
+    return { updated: false, name: toolDef.name, version };
+  }
   // Show safety-relevant metadata
   process.stderr.write(`\n  \x1b[1m${toolDef.name}\x1b[0m — ${toolDef.description}\n`);
   process.stderr.write(`  Type:       ${toolDef.type}\n`);
   process.stderr.write(`  Read-only:  ${toolDef.read_only ? "\x1b[32myes\x1b[0m" : "\x1b[33mno (mutating)\x1b[0m"}\n`);
+  process.stderr.write(`  Version:    ${version}\n`);
   if (toolDef.type === "cli") process.stderr.write(`  Binary:     ${toolDef.binary}\n`);
   if (toolDef.type === "http") process.stderr.write(`  URL:        ${toolDef.url}\n`);
   // Show env requirements from _meta or by scanning headers/url for ${VAR}
-  const envReqs = toolDef._meta?.env_required || [];
-  if (envReqs.length === 0 && toolDef.headers) { for (const v of Object.values(toolDef.headers)) { const m = String(v).match(/\$\{([A-Z_][A-Z0-9_]*)\}/g) || []; for (const x of m) envReqs.push(x.slice(2, -1)); } }
-  if (envReqs.length === 0 && toolDef.url) { const m = String(toolDef.url).match(/\$\{([A-Z_][A-Z0-9_]*)\}/g) || []; for (const x of m) envReqs.push(x.slice(2, -1)); }
-  if (envReqs.length === 0 && Array.isArray(toolDef.env)) envReqs.push(...toolDef.env);
+  const envReqs = _extractToolEnvRequirements(toolDef);
   if (envReqs.length > 0) process.stderr.write(`  Env needed: ${envReqs.join(", ")}\n`);
   if (toolDef._meta?.auth_note) process.stderr.write(`  Auth:       ${toolDef._meta.auth_note}\n`);
-  process.stderr.write(`  Author:     ${toolDef._meta?.author || "cloclo"}\n`);
+  process.stderr.write(`  Author:     ${publisher}\n`);
   process.stderr.write(`  Source:     ${source}\n`);
   const targetDir = path.join(CUSTOM_TOOLS_DIR, toolDef.name);
   if (fs.existsSync(path.join(targetDir, "TOOL.json"))) process.stderr.write(`  \x1b[33mAlready installed — overwriting.\x1b[0m\n`);
   const cleanDef = { ...toolDef }; delete cleanDef._meta;
   fs.mkdirSync(targetDir, { recursive: true });
   fs.writeFileSync(path.join(targetDir, "TOOL.json"), JSON.stringify(cleanDef, null, 2));
-  const manifest = _loadToolManifest();
-  manifest.tools[toolDef.name] = { name: toolDef.name, type: toolDef.type, source, installedAt: manifest.tools[toolDef.name]?.installedAt || new Date().toISOString(), updatedAt: new Date().toISOString(), disabled: false };
+  manifest.tools[toolDef.name] = _buildManifestEntry(toolDef, source, existing, {
+    installSource: `official:${toolDef.name}`,
+    version,
+    publisher,
+    category,
+  });
   _saveToolManifest(manifest);
-  process.stderr.write(`\n  \x1b[32mInstalled: ${toolDef.name}\x1b[0m\n  Restart cloclo or use /tool list to see it.\n\n`);
+  process.stderr.write(`\n  \x1b[32m${mode === "update" ? "Updated" : "Installed"}: ${toolDef.name}\x1b[0m\n  Restart cloclo or use /tool list to see it.\n\n`);
+  return { updated: true, name: toolDef.name, version };
 }
 
 async function toolPublish(cfg, name) {
@@ -2307,9 +2408,287 @@ function registerAskUserQuestion(registry) {
   });
 }
 
+// ── Memory Tools ──────────────────────────────────────────────
+
+const MEMORY_INDEX_FILE = "MEMORY.md";
+const MEMORY_TYPES = ["user", "feedback", "project", "reference"];
+const MEMORY_SCOPES = ["user", "project", "all"];
+
+function _memoryDirForScope(scope, cwd) {
+  if (scope === "user") return ensureUserMemoryDir();
+  return ensureMemoryDir(cwd);
+}
+
+function _getScopedMemoryRoots(cwd, scope = "all") {
+  const roots = [];
+  if (scope === "user" || scope === "all") roots.push({ scope: "user", dir: getUserMemoryDir() });
+  if (scope === "project" || scope === "all") roots.push({ scope: "project", dir: getMemoryDir(cwd) });
+  return roots;
+}
+
+function _toolsRealpathOrResolve(targetPath) {
+  const resolved = path.resolve(String(targetPath || ""));
+  try {
+    return fs.realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+function _toolsPathWithinRoot(filePath, rootPath) {
+  const rel = path.relative(rootPath, filePath);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+function _resolveScopedMemoryFile(cwd, scope, filePath) {
+  const resolved = path.resolve(String(filePath || ""));
+  if (!fs.existsSync(resolved)) return { error: "Memory not found." };
+
+  const realFile = _toolsRealpathOrResolve(resolved);
+  if (path.extname(realFile).toLowerCase() !== ".md" || path.basename(realFile) === MEMORY_INDEX_FILE) {
+    return { error: "Memory file path must point to a markdown memory entry." };
+  }
+
+  for (const root of _getScopedMemoryRoots(cwd, scope || "all")) {
+    const realRoot = _toolsRealpathOrResolve(root.dir);
+    if (_toolsPathWithinRoot(realFile, realRoot)) {
+      return { file: realFile, scope: root.scope };
+    }
+  }
+
+  return { error: "Memory file path must be inside user or project memory directories." };
+}
+
+function _stripMemoryFrontmatter(raw) {
+  return String(raw || "").replace(/^---\n[\s\S]*?\n---\n?/, "").trim();
+}
+
+function _parseMemoryFrontmatter(raw) {
+  const text = String(raw || "");
+  const match = text.match(/^---\n([\s\S]*?)\n---\n?/);
+  const meta = {};
+  if (!match) return meta;
+  for (const line of match[1].split("\n")) {
+    const idx = line.indexOf(":");
+    if (idx === -1) continue;
+    const key = line.slice(0, idx).trim();
+    const value = line.slice(idx + 1).trim();
+    meta[key] = value;
+  }
+  return meta;
+}
+
+function _listMemoryEntries(cwd, scope = "all") {
+  const scopes = scope === "all" ? ["user", "project"] : [scope];
+  const entries = [];
+  for (const s of scopes) {
+    const dir = _memoryDirForScope(s, cwd);
+    try {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (!entry.isFile() || !entry.name.endsWith(".md") || entry.name === MEMORY_INDEX_FILE) continue;
+        const filePath = path.join(dir, entry.name);
+        const raw = fs.readFileSync(filePath, "utf-8");
+        const meta = _parseMemoryFrontmatter(raw);
+        entries.push({
+          scope: meta.scope || s,
+          type: meta.type || "reference",
+          name: meta.name || entry.name.replace(/\.md$/, ""),
+          description: meta.description || "",
+          file: filePath,
+          saved_at: meta.saved_at || null,
+        });
+      }
+    } catch { /* ignore missing scope dir */ }
+  }
+  entries.sort((a, b) => (a.scope + ":" + a.name).localeCompare(b.scope + ":" + b.name));
+  return entries;
+}
+
+function _rebuildMemoryIndex(dir) {
+  const lines = [];
+  try {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (!entry.isFile() || !entry.name.endsWith(".md") || entry.name === MEMORY_INDEX_FILE) continue;
+      const raw = fs.readFileSync(path.join(dir, entry.name), "utf-8");
+      const meta = _parseMemoryFrontmatter(raw);
+      lines.push(`- [${entry.name}](${entry.name}) — ${meta.description || meta.name || entry.name}`);
+    }
+  } catch { /* ignore */ }
+  lines.sort((a, b) => a.localeCompare(b));
+  fs.writeFileSync(path.join(dir, MEMORY_INDEX_FILE), lines.join("\n") + (lines.length ? "\n" : ""));
+}
+
+function _findMemoryEntry(cwd, scope, { name, file_path }) {
+  if (file_path) return _resolveScopedMemoryFile(cwd, scope || "all", file_path);
+  const entries = _listMemoryEntries(cwd, scope || "all");
+  const wanted = String(name || "").trim().toLowerCase();
+  if (!wanted) return null;
+  return entries.find((e) => e.name.toLowerCase() === wanted || path.basename(e.file).toLowerCase() === wanted || path.basename(e.file, ".md").toLowerCase() === wanted) || null;
+}
+
+function _saveMemoryEntry(cwd, scope, type, name, description, content) {
+  const dir = _memoryDirForScope(scope, cwd);
+  const slug = name.toLowerCase().replace(/[^a-z0-9\s-]/g, "").replace(/\s+/g, "-").replace(/-+/g, "-").slice(0, 50).replace(/-$/, "") || "memory";
+  const filename = `${type}_${slug}.md`;
+  const filePath = path.join(dir, filename);
+  const raw = `---
+name: ${name}
+description: ${description}
+scope: ${scope}
+type: ${type}
+saved_at: ${new Date().toISOString()}
+---
+
+${content.trim()}
+`;
+  fs.writeFileSync(filePath, raw);
+  _rebuildMemoryIndex(dir);
+  return filePath;
+}
+
+function _forgetMemoryEntry(cwd, scope, name, file_path) {
+  const found = _findMemoryEntry(cwd, scope, { name, file_path });
+  if (found?.error) return found;
+  if (!found) return null;
+  fs.rmSync(found.file, { force: true });
+  _rebuildMemoryIndex(_memoryDirForScope(found.scope, cwd));
+  return found;
+}
+
+function registerMemoryTools(registry) {
+  registry.register("MemoryList", {
+    description: "List stored memories. Use scope=user for cross-project preferences and feedback, scope=project for this project, or scope=all for both.",
+    input_schema: {
+      type: "object",
+      properties: {
+        scope: { type: "string", enum: MEMORY_SCOPES, description: "Memory scope: user, project, or all (default)." },
+        type: { type: "string", enum: MEMORY_TYPES, description: "Optional memory type filter." },
+        query: { type: "string", description: "Optional substring match on name/description/content filename." },
+      },
+    },
+  }, async (input) => {
+    const cwd = registry._cwd || process.cwd();
+    let entries = _listMemoryEntries(cwd, input.scope || "all");
+    if (input.type) entries = entries.filter((e) => e.type === input.type);
+    if (input.query) {
+      const q = String(input.query).toLowerCase();
+      entries = entries.filter((e) => `${e.name} ${e.description} ${e.file}`.toLowerCase().includes(q));
+    }
+    return { content: JSON.stringify({ count: entries.length, entries }, null, 2), is_error: false };
+  });
+
+  registry.register("MemoryRead", {
+    description: "Read a stored memory entry by name or file path.",
+    input_schema: {
+      type: "object",
+      properties: {
+        scope: { type: "string", enum: MEMORY_SCOPES, description: "Optional memory scope to search." },
+        name: { type: "string", description: "Memory name or filename stem." },
+        file_path: { type: "string", description: "Direct path to a memory file inside the memory directories." },
+      },
+    },
+  }, async (input) => {
+    const cwd = registry._cwd || process.cwd();
+    const found = _findMemoryEntry(cwd, input.scope || "all", input);
+    if (found?.error) return { content: found.error, is_error: true };
+    if (!found) return { content: "Memory not found.", is_error: true };
+    const raw = fs.readFileSync(found.file, "utf-8");
+    const meta = _parseMemoryFrontmatter(raw);
+    const memName = meta.name || path.basename(found.file, ".md");
+    // Emit memory_referenced metric
+    try {
+      appendMemoryMetric(cwd, found.scope || "project", {
+        type: "memory_referenced",
+        file: path.basename(found.file),
+        name: memName,
+      });
+    } catch { /* non-fatal */ }
+    return {
+      content: JSON.stringify({
+        scope: meta.scope || found.scope,
+        type: meta.type || "reference",
+        name: memName,
+        description: meta.description || "",
+        file: found.file,
+        content: _stripMemoryFrontmatter(raw),
+      }, null, 2),
+      is_error: false,
+    };
+  });
+
+  registry.register("MemorySave", {
+    description: "Persist a memory entry. Use scope=user for stable preferences/feedback and scope=project for project-specific context.",
+    input_schema: {
+      type: "object",
+      properties: {
+        scope: { type: "string", enum: ["user", "project"], description: "Memory scope." },
+        type: { type: "string", enum: MEMORY_TYPES, description: "Memory type." },
+        name: { type: "string", description: "Short memory title." },
+        description: { type: "string", description: "One-line description for the memory index." },
+        content: { type: "string", description: "Full memory content." },
+      },
+      required: ["scope", "type", "name", "description", "content"],
+    },
+  }, async (input) => {
+    const cwd = registry._cwd || process.cwd();
+    const file = _saveMemoryEntry(cwd, input.scope, input.type, input.name, input.description, input.content);
+    return { content: JSON.stringify({ saved: true, scope: input.scope, type: input.type, name: input.name, file }, null, 2), is_error: false };
+  });
+
+  registry.register("MemoryForget", {
+    description: "Delete a memory entry by name or file path.",
+    input_schema: {
+      type: "object",
+      properties: {
+        scope: { type: "string", enum: MEMORY_SCOPES, description: "Optional memory scope to search." },
+        name: { type: "string", description: "Memory name or filename stem." },
+        file_path: { type: "string", description: "Direct path to a memory file inside the memory directories." },
+      },
+    },
+  }, async (input) => {
+    const cwd = registry._cwd || process.cwd();
+    const forgotten = _forgetMemoryEntry(cwd, input.scope || "all", input.name, input.file_path);
+    if (forgotten?.error) return { content: forgotten.error, is_error: true };
+    if (!forgotten) return { content: "Memory not found.", is_error: true };
+    return { content: JSON.stringify({ forgotten: true, scope: forgotten.scope, file: forgotten.file }, null, 2), is_error: false };
+  });
+}
+
 // ── Brief Mode Tools ─────────────────────────────────────────
 
+function _resolveOutputAttachments(attachments) {
+  const resolved = [];
+  for (const filePath of attachments || []) {
+    try {
+      const stat = fs.statSync(filePath);
+      const ext = path.extname(filePath).toLowerCase();
+      const isImage = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"].includes(ext);
+      resolved.push({ path: filePath, size: stat.size, isImage });
+    } catch {
+      return { error: `Attachment not found: ${filePath}` };
+    }
+  }
+  return { attachments: resolved };
+}
+
 function registerBriefTools(registry, cfg) {
+  const resolveAttachments = typeof _resolveOutputAttachments === "function"
+    ? _resolveOutputAttachments
+    : (attachments) => {
+      const resolved = [];
+      for (const filePath of attachments || []) {
+        try {
+          const stat = fs.statSync(filePath);
+          const ext = path.extname(filePath).toLowerCase();
+          const isImage = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"].includes(ext);
+          resolved.push({ path: filePath, size: stat.size, isImage });
+        } catch {
+          return { error: `Attachment not found: ${filePath}` };
+        }
+      }
+      return { attachments: resolved };
+    };
+
   registry.register("SendUserMessage", {
     description: "Send a message the user will read. Text outside this tool is visible in the detail view, but most won't open it — the answer lives here.",
     input_schema: {
@@ -2330,22 +2709,56 @@ function registerBriefTools(registry, cfg) {
   }, async (input) => {
     const message = input.message;
     const status = input.status || "normal";
-    const attachments = [];
+    const attachmentResult = resolveAttachments(input.attachments);
+    if (attachmentResult.error) return { content: attachmentResult.error, is_error: true };
 
-    if (input.attachments) {
-      for (const filePath of input.attachments) {
-        try {
-          const stat = fs.statSync(filePath);
-          const ext = path.extname(filePath).toLowerCase();
-          const isImage = [".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".bmp"].includes(ext);
-          attachments.push({ path: filePath, size: stat.size, isImage });
-        } catch {
-          return { content: `Attachment not found: ${filePath}`, is_error: true };
-        }
-      }
-    }
+    const result = { kind: "user_message", message, attachments: attachmentResult.attachments, status, sentAt: new Date().toISOString() };
+    return { content: JSON.stringify(result), is_error: false };
+  });
 
-    const result = { message, attachments, status, sentAt: new Date().toISOString() };
+  registry.register("TaskOutput", {
+    description: "Send a structured task update the user will read. Use for background launches, progress checkpoints, remote launches, completions, failures, or blockers. This is the user-facing surface for async/proactive task status.",
+    input_schema: {
+      type: "object",
+      properties: {
+        task_id: { type: "string", description: "Task or agent identifier, if available." },
+        status: {
+          type: "string",
+          enum: ["queued", "running", "async_launched", "remote_launched", "completed", "failed", "blocked", "cancelled"],
+          description: "Current task lifecycle state.",
+        },
+        message: { type: "string", description: "User-visible task update. Supports markdown." },
+        summary: { type: "string", description: "Optional compact summary or outcome." },
+        prompt: { type: "string", description: "Optional original prompt or task description." },
+        output_file: { type: "string", description: "Optional output file path for async work." },
+        session_url: { type: "string", description: "Optional remote session URL." },
+        attachments: {
+          type: "array", items: { type: "string" },
+          description: "Optional file paths to attach (images, logs, diffs).",
+        },
+        metadata: {
+          type: "object",
+          description: "Optional structured metadata for downstream renderers.",
+        },
+      },
+      required: ["status", "message"],
+    },
+  }, async (input) => {
+    const attachmentResult = resolveAttachments(input.attachments);
+    if (attachmentResult.error) return { content: attachmentResult.error, is_error: true };
+    const result = {
+      kind: "task_output",
+      task_id: input.task_id || null,
+      status: input.status,
+      message: input.message,
+      summary: input.summary || null,
+      prompt: input.prompt || null,
+      output_file: input.output_file || null,
+      session_url: input.session_url || null,
+      attachments: attachmentResult.attachments,
+      metadata: input.metadata || null,
+      sentAt: new Date().toISOString(),
+    };
     return { content: JSON.stringify(result), is_error: false };
   });
 }
@@ -2625,6 +3038,7 @@ export {
   toolDisable,
   toolTest,
   toolInstall,
+  toolUpdate,
   toolRemove,
   toolCatalog,
   toolPublish,
@@ -2632,6 +3046,7 @@ export {
   scanCustomTools,
   _registerCustomTool,
   registerBuiltinTools,
+  registerMemoryTools,
   registerSpreadsheetTools,
   registerPdfTools,
   registerDocumentTools,

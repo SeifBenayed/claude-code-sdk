@@ -1,0 +1,126 @@
+diff -ru /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_before/auto-memory.mjs /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_after/auto-memory.mjs
+--- /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_before/auto-memory.mjs	2026-03-29 17:52:19
++++ /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_after/auto-memory.mjs	2026-03-29 18:56:11
+@@ -148,7 +148,7 @@
+   }
+ 
+   markSaved(type, name) {
+-    this._lastSave.set(type + ":" + name, Date.now());
++    this._lastSave.set(this._key(type, name), Date.now());
+   }
+ 
+   markClassified() {
+diff -ru /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_before/config.mjs /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_after/config.mjs
+--- /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_before/config.mjs	2026-03-29 17:52:19
++++ /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_after/config.mjs	2026-03-29 18:56:11
+@@ -65,11 +65,12 @@
+ 
+   // Helper: require next argv value or die
+   function needValue(flag, i) {
+-    if (i >= argv.length) {
++    const v = argv[i];
++    if (i >= argv.length || (typeof v === "string" && v.startsWith("-"))) {
+       process.stderr.write(`Error: ${flag} requires a value\n  cloclo ${flag} <value>\n`);
+       process.exit(EXIT.BAD_ARGS);
+     }
+-    return argv[i];
++    return v;
+   }
+ 
+   // Valid values for enum-style flags
+diff -ru /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_before/engine.mjs /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_after/engine.mjs
+--- /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_before/engine.mjs	2026-03-29 17:52:19
++++ /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_after/engine.mjs	2026-03-29 18:56:11
+@@ -846,13 +846,30 @@
+   const dir = scope === "user" ? getUserMemoryDir() : getMemoryDir(cwd);
+   const indexPath = path.join(dir, MEMORY_INDEX);
+   try {
+-    const content = fs.readFileSync(indexPath, "utf-8");
++    let content = fs.readFileSync(indexPath, "utf-8");
++    const linkRegex = /\[[^\]]+\]\(([^)]+)\)/g;
++    const warnings = [];
++    content = content.replace(linkRegex, (match, target) => {
++      const trimmedTarget = target.trim();
++      if (!trimmedTarget || /^(?:[a-z]+:|#)/i.test(trimmedTarget)) return match;
++      const resolvedPath = path.resolve(dir, trimmedTarget);
++      if (!resolvedPath.startsWith(dir + path.sep) && resolvedPath !== dir) return match;
++      if (fs.existsSync(resolvedPath)) return match;
++      const warning = `> WARNING: Ignored broken memory link \`${trimmedTarget}\` in ${scope} ${MEMORY_INDEX}.`;
++      warnings.push(warning);
++      console.warn(warning.replace(/^> WARNING: /, "WARNING: "));
++      return match.replace(`(${target})`, "(missing-memory-file)");
++    });
+     const lines = content.split("\n");
++    let finalContent = content;
+     if (lines.length > MEMORY_MAX_LINES) {
+-      return lines.slice(0, MEMORY_MAX_LINES).join("\n")
++      finalContent = lines.slice(0, MEMORY_MAX_LINES).join("\n")
+         + `\n\n> WARNING: MEMORY.md is ${lines.length} lines (limit: ${MEMORY_MAX_LINES}). Only the first ${MEMORY_MAX_LINES} lines were loaded. Move detailed content into separate topic files.`;
+     }
+-    return content;
++    if (warnings.length) {
++      finalContent += `\n\n${warnings.join("\n")}`;
++    }
++    return finalContent;
+   } catch { return ""; }
+ }
+ 
+diff -ru /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_before/index.mjs /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_after/index.mjs
+--- /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_before/index.mjs	2026-03-29 17:52:19
++++ /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_after/index.mjs	2026-03-29 18:56:11
+@@ -10,7 +10,7 @@
+ import path from "node:path";
+ import os from "node:os";
+ 
+-import { log, sleep, EXIT, _VERSION, setVerbose, _verbose } from "./utils.mjs";
++import { log, sleep, memoize, EXIT, _VERSION, setVerbose, _verbose } from "./utils.mjs";
+ import { parseArgs, resolveModel, resolveModelForWorkload } from "./config.mjs";
+ import { detectProvider, PROVIDERS, AnthropicClient, OpenAIClient, OpenAIResponsesClient } from "./providers.mjs";
+ import { getOAuthAccessToken, getOpenAIAccessToken } from "./auth.mjs";
+@@ -41,7 +41,7 @@
+ 
+ // ── McpManager ──────────────────────────────────────────────────
+ 
+-function flattenUserFacingOutputs(outputs, fallbackText = "") {
++const flattenUserFacingOutputs = memoize(function flattenUserFacingOutputs(outputs, fallbackText = "") {
+   if (!Array.isArray(outputs) || outputs.length === 0) return fallbackText || "";
+   const parts = outputs.map((output) => {
+     if (!output || typeof output !== "object") return "";
+@@ -49,7 +49,9 @@
+     return output.message || "";
+   }).filter(Boolean);
+   return parts.length > 0 ? parts.join("\n") : (fallbackText || "");
+-}
++}, {
++  key: (outputs, fallbackText = "") => JSON.stringify([outputs, fallbackText]),
++});
+ 
+ class McpManager {
+   constructor() {
+diff -ru /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_before/utils.mjs /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_after/utils.mjs
+--- /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_before/utils.mjs	2026-03-29 17:52:19
++++ /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_003/src_after/utils.mjs	2026-03-29 18:56:11
+@@ -32,7 +32,22 @@
+ 
+ export function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+ 
+-const CASE_FOLD_COLLATOR = new Intl.Collator("und", { sensitivity: "base", usage: "search" });
++export function memoize(fn, { key = (...args) => JSON.stringify(args) } = {}) {
++  const cache = new Map();
++  const memoized = (...args) => {
++    const cacheKey = key(...args);
++    if (cache.has(cacheKey)) return cache.get(cacheKey);
++    const value = fn(...args);
++    cache.set(cacheKey, value);
++    return value;
++  };
++  memoized.cache = cache;
++  memoized.clear = () => cache.clear();
++  memoized.delete = (...args) => cache.delete(key(...args));
++  return memoized;
++}
++
++const CASE_FOLD_COLLATOR = new Intl.Collator("tr", { sensitivity: "base", usage: "search" });
+ 
+ export function caseInsensitiveIncludes(haystack, needle) {
+   const text = String(haystack);

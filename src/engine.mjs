@@ -10,6 +10,7 @@ import _http from "node:http";
 import _https from "node:https";
 
 import { log, sleep, EXIT, _VERSION, _httpGet, _getGitHubHeaders, _ghGet, getMemoryDir, ensureMemoryDir, getUserMemoryDir, ensureUserMemoryDir } from "./utils.mjs";
+import { appendMemoryMetric } from "./memory-metrics.mjs";
 import { resolveModel, MODEL_ALIASES, MODEL_PROFILES, MODEL_TIERS, resolveModelForWorkload, _hasProviderAuth } from "./config.mjs";
 import { detectProvider, PROVIDERS, getInstructionPlacement, isOpenAIModel, isResponsesAPIModel, AnthropicClient, OpenAIClient, OpenAIResponsesClient } from "./providers.mjs";
 import { ToolRegistry, registerBuiltinTools, registerDeferredBuiltinTools, registerBriefTools, registerToolSearch, registerAskUserQuestion, registerMcpResourceTools, registerDesktopTools, registerSpreadsheetTools, registerPdfTools, registerDocumentTools, registerPresentationTools, scanCustomTools, globToRegex, _loadToolManifest, _OFFICIAL_CATALOG } from "./tools.mjs";
@@ -328,6 +329,16 @@ VERDICT: SAFE
 VERDICT: WARN
 VERDICT: BLOCK
 Reason: <one-line explanation>`,
+  },
+
+  "memory-dream": {
+    agentType: "memory-dream",
+    description: "Memory consolidation — merges, prunes, re-indexes",
+    model: null,
+    workload: "exploration",  // fast-tier
+    readOnly: false,
+    disallowedTools: ["Agent", "WebFetch", "WebSearch", "Browser", "AskUserQuestion", "SendUserMessage", "TaskOutput"],
+    getSystemPrompt: () => `You are a memory consolidation agent. Your job is to clean up, merge, and prune the user's persistent memory files. Only modify files within the memory directories. Be conservative — only delete memories you're confident are stale or superseded.`,
   },
 };
 
@@ -846,15 +857,60 @@ function loadMemoryIndex(cwd, scope = "project") {
   const dir = scope === "user" ? getUserMemoryDir() : getMemoryDir(cwd);
   const indexPath = path.join(dir, MEMORY_INDEX);
   try {
-    const content = fs.readFileSync(indexPath, "utf-8");
+    let content = fs.readFileSync(indexPath, "utf-8");
+    const linkRegex = /\[[^\]]+\]\(([^)]+)\)/g;
+    const warnings = [];
+    content = content.replace(linkRegex, (match, target) => {
+      const trimmedTarget = target.trim();
+      if (!trimmedTarget || /^(?:[a-z]+:|#)/i.test(trimmedTarget)) return match;
+      const resolvedPath = path.resolve(dir, trimmedTarget);
+      if (!resolvedPath.startsWith(dir + path.sep) && resolvedPath !== dir) return match;
+      if (fs.existsSync(resolvedPath)) return match;
+      const warning = `> WARNING: Ignored broken memory link \`${trimmedTarget}\` in ${scope} ${MEMORY_INDEX}.`;
+      warnings.push(warning);
+      console.warn(warning.replace(/^> WARNING: /, "WARNING: "));
+      return match.replace(`(${target})`, "(missing-memory-file)");
+    });
+    // Enrich index entries with timestamps (display-only, not written to disk)
+    // and emit memory_loaded metrics for each linked file
+    const enrichLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    content = content.replace(enrichLinkRegex, (match, label, target) => {
+      const trimmedTarget = target.trim();
+      if (!trimmedTarget || trimmedTarget === "missing-memory-file") return match;
+      if (/^(?:[a-z]+:|#)/i.test(trimmedTarget)) return match;
+      const resolvedPath = path.resolve(dir, trimmedTarget);
+      if (!fs.existsSync(resolvedPath)) return match;
+      try {
+        const raw = fs.readFileSync(resolvedPath, "utf-8");
+        // Extract saved_at or last_verified from frontmatter
+        const savedMatch = raw.match(/^saved_at:\s*(.+)$/m);
+        const verifiedMatch = raw.match(/^last_verified:\s*(.+)$/m);
+        const nameMatch = raw.match(/^name:\s*(.+)$/m);
+        const dateStr = verifiedMatch ? verifiedMatch[1].trim().slice(0, 10) : savedMatch ? savedMatch[1].trim().slice(0, 10) : null;
+        const dateLabel = verifiedMatch ? "verified" : "saved";
+        const suffix = dateStr ? ` (${dateLabel}: ${dateStr})` : "";
+        // Emit memory_loaded metric
+        if (typeof appendMemoryMetric === "function") appendMemoryMetric(cwd, scope, { type: "memory_loaded", file: trimmedTarget, name: nameMatch?.[1]?.trim() || label });
+        // Only append if not already present
+        if (match.includes("(saved:") || match.includes("(verified:")) return match;
+        return `${match}${suffix}`;
+      } catch (e) { log(`[memory-enrich] Error: ${e.message}`); return match; }
+    });
+
     const lines = content.split("\n");
+    let finalContent = content;
     if (lines.length > MEMORY_MAX_LINES) {
-      return lines.slice(0, MEMORY_MAX_LINES).join("\n")
+      finalContent = lines.slice(0, MEMORY_MAX_LINES).join("\n")
         + `\n\n> WARNING: MEMORY.md is ${lines.length} lines (limit: ${MEMORY_MAX_LINES}). Only the first ${MEMORY_MAX_LINES} lines were loaded. Move detailed content into separate topic files.`;
     }
-    return content;
+    if (warnings.length) {
+      finalContent += `\n\n${warnings.join("\n")}`;
+    }
+    return finalContent;
   } catch { return ""; }
 }
+
+const MEMORY_TOKEN_BUDGET = 8000;
 
 function buildMemoryPrompt(cwd) {
   const projectMemDir = ensureMemoryDir(cwd);
@@ -862,7 +918,7 @@ function buildMemoryPrompt(cwd) {
   const projectMemContent = loadMemoryIndex(cwd, "project");
   const userMemContent = loadMemoryIndex(cwd, "user");
 
-  return `# Memory
+  let prompt = `# Memory
 
 You have a persistent, file-based memory system with two explicit scopes:
 
@@ -935,16 +991,28 @@ Each scope has its own \`${MEMORY_INDEX}\`. The index should contain only links 
 - Do not write duplicate memories — check if one exists to update first
 
 ## Staleness warning
-Memory records are point-in-time observations, not live state. Before asserting facts from memory, verify: if a memory names a file path, check it exists; if it names a function, grep for it.
+Memory records are point-in-time observations, not live state. Each entry shows when it was saved or last verified. Memories not verified in 30+ days are more likely outdated. Before asserting facts from memory: if it names a file path, check it exists; if it names a function, grep for it.
 ${userMemContent ? `\n## Current User Memory Index (${MEMORY_INDEX})\n\n${userMemContent}` : ""}
 ${projectMemContent ? `\n## Current Project Memory Index (${MEMORY_INDEX})\n\n${projectMemContent}` : ""}`;
+
+  // Enforce memory token budget
+  const estimatedTokens = Math.ceil(prompt.length / 3.5);
+  if (estimatedTokens > MEMORY_TOKEN_BUDGET) {
+    const maxChars = Math.floor(MEMORY_TOKEN_BUDGET * 3.5);
+    prompt = prompt.slice(0, maxChars) + `\n\n> Memory section truncated (${estimatedTokens} tokens > ${MEMORY_TOKEN_BUDGET} budget). Use MemoryRead for full content.`;
+  }
+  return prompt;
 }
 
-// ── Settings Loader (.claude/settings.json) ─────────────────────
+// ── Settings Loader ─────────────────────────────────────────────
+// Priority (later wins): ~/.claude/settings.json (CC compat fallback)
+//   → ~/.claude-native/settings.json (cloclo primary)
+//   → <project>/.claude/settings.json → <project>/.claude/settings.local.json
 
 function loadSettings(cwd) {
   const locations = [
-    path.join(os.homedir(), ".claude", "settings.json"),       // user-level
+    path.join(os.homedir(), ".claude", "settings.json"),       // CC compat fallback
+    path.join(os.homedir(), ".claude-native", "settings.json"),// cloclo primary (wins over CC)
     path.join(cwd, ".claude", "settings.json"),                // project-level (shared)
     path.join(cwd, ".claude", "settings.local.json"),          // project-level (gitignored)
   ];
@@ -983,6 +1051,11 @@ function applySettings(cfg, settings) {
     cfg.model = resolveModel(settings.model);
   }
 
+  // Permission mode from settings (CLI flags still win)
+  if (settings.permissions?.defaultMode && !process.argv.includes("--permission-mode") && !process.argv.includes("-y") && !process.argv.includes("--yes")) {
+    cfg.permissionMode = settings.permissions.defaultMode;
+  }
+
   // Permission rules from settings
   if (settings.permissions) {
     if (settings.permissions.allow) {
@@ -1008,6 +1081,10 @@ function applySettings(cfg, settings) {
   if (settings.mcpServers) {
     cfg._settingsMcpServers = settings.mcpServers;
   }
+
+  // Nudge intervals from settings
+  if (settings.skillNudgeInterval !== undefined) cfg._skillNudgeInterval = settings.skillNudgeInterval;
+  if (settings.memoryNudgeInterval !== undefined) cfg._memoryNudgeInterval = settings.memoryNudgeInterval;
 
   return cfg;
 }
@@ -2553,6 +2630,7 @@ When you encounter an obstacle, do not use destructive actions as a shortcut. Tr
  - For simple, directed codebase searches (e.g. for a specific file/class/function) use Glob or Grep directly.
  - For broader codebase exploration and deep research, use the Agent tool with subagent_type=Explore. This is slower than Glob or Grep directly, so use this only when a simple, directed search proves insufficient or when your task will clearly require more than 3 queries.
  - When the user asks to search the web, look something up online, or find information on the internet, use WebSearch for general queries or WebFetch to read a specific URL. Do NOT use Bash with curl for web requests when WebFetch is available.
+ - You have a Browser tool that controls a real Chrome browser on the user's machine with their existing cookies and login sessions. When the user asks you to visit a website (LinkedIn, Gmail, etc.), use the Browser tool — you HAVE permission and access. Navigate, click, read page content, fill forms. The user has explicitly authorized this. Do NOT refuse or say you cannot access websites — use the Browser tool.
  - Use WebFetch to read documentation pages, GitHub READMEs, API references, or any URL the user provides. Use WebSearch when no specific URL is known and the user wants to find information.
  - You can call multiple tools in a single response. If you intend to call multiple tools and there are no dependencies between them, make all independent tool calls in parallel. Maximize use of parallel tool calls where possible to increase efficiency. However, if some tool calls depend on previous calls, call them sequentially.
  - /<skill-name> (e.g., /commit) is shorthand for users to invoke a skill. When executed, the skill gets expanded to a full prompt. Use the Skill tool to execute them. IMPORTANT: Only use Skill for skills listed in the available skills section — do not guess or use built-in CLI commands.
@@ -2680,17 +2758,24 @@ Rules:
 
   const blocks = [
     ...billingBlock,
+    // Block 1: Static base prompt (rarely changes) — cache aggressively
     {
       type: "text",
       text: cfg.systemPrompt || staticPrompt,
       cache_control: { type: "ephemeral" },
     },
+    // Block 2: Semi-stable (CLAUDE.md, rules, skills) — cache with shorter TTL
+    {
+      type: "text",
+      text: (claudeMd ? `\n\n# Project Instructions (${conventionFile})\n${claudeMd}` : "")
+        + (globalRules ? `\n\n# Project Rules\n${globalRules}` : "")
+        + (skillIndex ? `\n\n${skillIndex}` : ""),
+      cache_control: { type: "ephemeral" },
+    },
+    // Block 3: Session-specific (env, memory, output) — no cache (changes every turn)
     {
       type: "text",
       text: dynamicPrompt
-        + (claudeMd ? `\n\n# Project Instructions (${conventionFile})\n${claudeMd}` : "")
-        + (globalRules ? `\n\n# Project Rules\n${globalRules}` : "")
-        + (skillIndex ? `\n\n${skillIndex}` : "")
         + (memoryPrompt ? `\n\n${memoryPrompt}` : "")
         + outputSection
         + briefSection,
@@ -2712,6 +2797,7 @@ class AgentLoop {
     this.skillContext = cfg._skillContext || null; // Active SkillExecutionContext
     this.totalUsage = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
     this.toolUseCount = 0; // Progress tracking (CC baseline: tokenCount + toolUseCount)
+    this._compactFailures = 0; // CC: yY7 = 3 max consecutive compact failures
     this.userFacingOutputs = [];
     // Provider is stored on cfg.provider (the provider object, not the string name)
     this.provider = cfg._provider || detectProvider(cfg.model);
@@ -2769,28 +2855,268 @@ class AgentLoop {
     }];
   }
 
-  // Context window limits by model family (tokens)
-  static _contextLimits = {
-    "claude-opus": 1000000, "claude-sonnet": 1000000, "claude-haiku": 200000,
-    "gpt-5": 1000000, "gpt-4o": 128000, "gpt-4": 128000, "gpt-3.5": 16385,
-    "o3": 200000, "o4": 200000,
-    "gemini": 1000000, "deepseek": 64000, "mistral": 128000,
-    "codex": 192000,
-    _default: 128000,
+  // Context limit from provider capabilities (set in providers.mjs)
+  // Per-model overrides for families where one provider serves multiple context sizes
+  static _contextOverrides = {
+    "claude-haiku": 200000,
+    "gpt-5": 1000000, "o3": 200000, "o4": 200000,
   };
 
   _getContextLimit() {
     const model = this.cfg.model || "";
-    for (const [prefix, limit] of Object.entries(AgentLoop._contextLimits)) {
-      if (prefix !== "_default" && model.includes(prefix)) return limit;
+    // Check per-model overrides first
+    for (const [prefix, limit] of Object.entries(AgentLoop._contextOverrides)) {
+      if (model.includes(prefix)) return limit;
     }
-    return AgentLoop._contextLimits._default;
+    // Use provider capability
+    return this.provider?.capabilities?.contextWindow || 128000;
+  }
+
+  // Effective window = context limit minus output token reserve (CC: lB = kD - S_R)
+  // This is what's actually available for input tokens (system + messages + tools)
+  _getEffectiveWindow() {
+    const contextLimit = this._getContextLimit();
+    const outputReserve = Math.min(20000, Math.floor(contextLimit * 0.1));
+    // Env override (like CC's CLAUDE_CODE_AUTO_COMPACT_WINDOW)
+    const envOverride = parseInt(process.env.CLOCLO_CONTEXT_WINDOW, 10);
+    if (envOverride > 0) return Math.min(envOverride, contextLimit) - outputReserve;
+    return contextLimit - outputReserve;
+  }
+
+  // ── Token Estimation (lightweight, no tiktoken) ──────────────
+  _estimateTokens(text) {
+    if (!text) return 0;
+    const str = typeof text === "string" ? text : JSON.stringify(text);
+    return Math.ceil(str.length / 3.5);
+  }
+
+  _estimateMessageTokens(messages) {
+    let total = 0;
+    for (const msg of messages) {
+      total += 4; // message overhead
+      total += this._estimateTokens(msg.content);
+    }
+    return total;
+  }
+
+  _estimateSystemTokens(systemBlocks) {
+    let total = 0;
+    for (const block of systemBlocks) {
+      total += this._estimateTokens(block.text || block);
+    }
+    return total;
+  }
+
+  _estimateToolTokens() {
+    const defs = this.registry.getDefinitions();
+    return defs.reduce((sum, d) => sum + this._estimateTokens(d), 0);
+  }
+
+  // ── Micro-Compact (runs before every API call) ───────────────
+  _microCompact(messages) {
+    for (const msg of messages) {
+      if (typeof msg.content === "string") {
+        msg.content = msg.content.replace(/\n{3,}/g, "\n\n");
+        msg.content = msg.content.replace(/  +/g, " ");
+      }
+      if (Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if (block.type === "text" && typeof block.text === "string") {
+            block.text = block.text.replace(/\n{3,}/g, "\n\n");
+          }
+          if (block.type === "tool_result" && typeof block.content === "string" && block.content.length > 10000) {
+            block.content = block.content.slice(0, 5000) + `\n... (truncated from ${block.content.length} chars)`;
+          }
+        }
+      }
+    }
+  }
+
+  // ── Post-Compact File Restoration (CC: vf7=5 max, $_R=5000 tokens each) ──
+  // Extract file paths from tool_use blocks (Read, Edit, Write) in recent messages
+  _extractRecentFiles(messages) {
+    const fileTools = new Set(["Read", "Edit", "Write"]);
+    const seen = new Map(); // path → last index
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      if (msg.role !== "assistant" || !Array.isArray(msg.content)) continue;
+      for (const block of msg.content) {
+        if (block.type === "tool_use" && fileTools.has(block.name)) {
+          const p = block.input?.file_path;
+          if (p) seen.set(p, i);
+        }
+      }
+    }
+    // Sort by recency (last touched), take top 5
+    return [...seen.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([p]) => p);
+  }
+
+  // Re-read files and build a context message (max 5000 tokens each)
+  _restoreFiles(filePaths) {
+    if (filePaths.length === 0) return null;
+    const maxTokensPerFile = 5000;
+    const maxCharsPerFile = maxTokensPerFile * 4; // ~4 chars/token
+    const parts = [];
+    for (const fp of filePaths) {
+      try {
+        if (!fs.existsSync(fp)) continue;
+        const stat = fs.statSync(fp);
+        if (!stat.isFile() || stat.size > 500000) continue; // skip huge files
+        let content = fs.readFileSync(fp, "utf-8");
+        if (content.length > maxCharsPerFile) {
+          content = content.slice(0, maxCharsPerFile) + `\n... (truncated to ${maxTokensPerFile} tokens)`;
+        }
+        parts.push(`## ${fp}\n\`\`\`\n${content}\n\`\`\``);
+      } catch { /* skip unreadable files */ }
+    }
+    if (parts.length === 0) return null;
+    return `[Post-compact file restoration — ${parts.length} recently active files re-loaded for context]\n\n${parts.join("\n\n")}`;
+  }
+
+  // ── Message Windowing (token-aware with dependency tracking) ──
+  // CC: V_R() scans backwards from end, respects tool_use/tool_result pairs
+  // via QCq() which walks back to find referenced tool calls.
+  _windowMessages(messages) {
+    const effectiveWindow = this._getEffectiveWindow();
+    const totalTokens = this._estimateMessageTokens(messages);
+
+    if (totalTokens < effectiveWindow * 0.6 || messages.length < 20) return false;
+
+    // Token budget for kept messages (CC: minTokens=10000, maxTokens=40000)
+    const minTokens = 10000;
+    const maxTokens = 40000;
+    const minTextMessages = 5;
+
+    // Scan backwards from end, accumulating tokens until budget met
+    let keptTokens = 0;
+    let textMsgCount = 0;
+    let cutPoint = messages.length;
+
+    for (let i = messages.length - 1; i >= 2; i--) { // keep at least first 2
+      const msgTokens = this._estimateTokens(messages[i].content);
+      keptTokens += msgTokens;
+      if (typeof messages[i].content === "string" && messages[i].content.length > 0) textMsgCount++;
+      cutPoint = i;
+      if (keptTokens >= maxTokens) break;
+      if (keptTokens >= minTokens && textMsgCount >= minTextMessages) break;
+    }
+
+    // Dependency tracking: walk back to include any assistant tool_use blocks
+    // that are referenced by tool_result blocks in the kept range (CC: QCq)
+    const keptToolResultIds = new Set();
+    for (let i = cutPoint; i < messages.length; i++) {
+      const msg = messages[i];
+      if (msg.role === "user" && Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if (block.type === "tool_result" && block.tool_use_id) {
+            keptToolResultIds.add(block.tool_use_id);
+          }
+        }
+      }
+    }
+
+    // Find tool_use IDs already in kept range
+    const keptToolUseIds = new Set();
+    for (let i = cutPoint; i < messages.length; i++) {
+      const msg = messages[i];
+      if (msg.role === "assistant" && Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if (block.type === "tool_use" && block.id) keptToolUseIds.add(block.id);
+        }
+      }
+    }
+
+    // Walk backwards from cutPoint to include messages with orphaned tool_use refs
+    const orphanedIds = new Set([...keptToolResultIds].filter(id => !keptToolUseIds.has(id)));
+    for (let i = cutPoint - 1; i >= 2 && orphanedIds.size > 0; i--) {
+      const msg = messages[i];
+      if (msg.role === "assistant" && Array.isArray(msg.content)) {
+        let found = false;
+        for (const block of msg.content) {
+          if (block.type === "tool_use" && orphanedIds.has(block.id)) {
+            orphanedIds.delete(block.id);
+            found = true;
+          }
+        }
+        if (found) cutPoint = i;
+      }
+    }
+
+    if (cutPoint <= 2) return false; // nothing to drop
+
+    const dropped = cutPoint - 2; // keep first 2 + everything from cutPoint
+    if (dropped < 4) return false; // not worth it
+
+    messages.splice(2, dropped);
+
+    messages.splice(2, 0, {
+      role: "user",
+      content: `[${dropped} older messages removed to manage context. Key earlier context preserved in system prompt and memory.]`,
+    });
+
+    log(`Message windowing: dropped ${dropped} messages, kept ${messages.length} (token-aware, ${keptToolResultIds.size} tool deps tracked)`);
+    // Notify session to persist windowed state
+    this.cb.onCompact?.(messages);
+    return true;
+  }
+
+  // ── Graceful Degradation Ladder ──────────────────────────────
+  async _manageContext(messages, systemBlocks) {
+    const effectiveWindow = this._getEffectiveWindow();
+    const estimated = this._estimateMessageTokens(messages) + this._estimateSystemTokens(systemBlocks) + this._estimateToolTokens();
+    const pct = estimated / effectiveWindow;
+
+    // Env override for compact threshold (like CC's CLAUDE_AUTOCOMPACT_PCT_OVERRIDE)
+    const pctOverride = parseFloat(process.env.CLOCLO_AUTOCOMPACT_PCT);
+    const compactThreshold = (pctOverride > 0 && pctOverride <= 100) ? pctOverride / 100 : 0.75;
+
+    // Level 1 (60%): Disable deferred tool promotion
+    if (pct > 0.6) {
+      this.registry._blockPromotions = true;
+      log(`[context] ${Math.round(pct * 100)}% — blocking deferred tool promotions`);
+    } else {
+      this.registry._blockPromotions = false;
+    }
+
+    // Level 2 (65%): Message windowing
+    if (pct > 0.65) {
+      this._windowMessages(messages);
+    }
+
+    // Level 3 (configurable, default 75%): Auto-compact
+    if (pct > compactThreshold) {
+      await this._autoCompact(messages, systemBlocks);
+    }
+
+    // Level 4 (90%): Emergency warning
+    if (pct > 0.9) {
+      log(`[context] ${Math.round(pct * 100)}% — emergency context reduction`);
+      this.cb.onText?.("\x1b[31m[context critical — reducing memory and tool definitions]\x1b[0m\n");
+    }
+
+    // Level 5: Hard block — refuse API call to prevent 400 errors (CC: isAtBlockingLimit)
+    const blockingOverride = parseInt(process.env.CLOCLO_BLOCKING_LIMIT, 10);
+    const blockingLimit = (blockingOverride > 0) ? blockingOverride : (effectiveWindow - 3000);
+    if (estimated > blockingLimit) {
+      log(`[context] ${Math.round(pct * 100)}% — at blocking limit (${estimated}/${blockingLimit}), refusing API call`);
+      this.cb.onText?.("\x1b[31m[context limit reached — use /compact to free space]\x1b[0m\n");
+      return "blocked";
+    }
   }
 
   async _autoCompact(messages, systemBlocks) {
-    const inputTokens = this.totalUsage.input_tokens;
-    const contextLimit = this._getContextLimit();
-    const threshold = Math.floor(contextLimit * 0.80);
+    // Env override to disable compaction (CC: DISABLE_COMPACT / DISABLE_AUTO_COMPACT)
+    if (process.env.CLOCLO_DISABLE_COMPACT || process.env.DISABLE_AUTO_COMPACT) return false;
+    // Failure counter — stop after 3 consecutive failures (CC: yY7 = 3)
+    if (this._compactFailures >= 3) return false;
+
+    // Use real API usage if available, fall back to estimation
+    const inputTokens = this.totalUsage.input_tokens || this._estimateMessageTokens(messages);
+    const effectiveWindow = this._getEffectiveWindow();
+    const threshold = Math.floor(effectiveWindow * 0.75);
 
     if (inputTokens < threshold || messages.length < 6) return false;
 
@@ -2855,6 +3181,9 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
       }
 
       if (summaryText.length > 50) {
+        // Collect recently touched file paths from the conversation (for post-compact restoration)
+        const touchedFiles = this._extractRecentFiles(messages);
+
         // Replace messages with compact summary
         const originalCount = messages.length;
         messages.length = 0;
@@ -2862,8 +3191,19 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
           { role: "user", content: `[Auto-compacted from ${originalCount} messages]\n\nConversation summary:\n${summaryText}` },
           { role: "assistant", content: "I've reviewed the conversation summary and I'm ready to continue. What would you like to do next?" },
         );
-        log(`Auto-compact: ${originalCount} → 2 messages, summary ${summaryText.length} chars`);
-        this.cb.onText?.(`\x1b[2m[compacted ${originalCount} → 2 messages]\x1b[0m\n`);
+
+        // Post-compact file restoration (CC: vf7=5 files, $_R=5000 tokens each)
+        // Re-read the most recently touched files so the model has fresh context
+        const restored = this._restoreFiles(touchedFiles);
+        if (restored) {
+          messages.push({ role: "user", content: restored });
+        }
+
+        log(`Auto-compact: ${originalCount} → ${messages.length} messages, summary ${summaryText.length} chars${touchedFiles.length > 0 ? `, restored ${Math.min(touchedFiles.length, 5)} files` : ""}`);
+        this.cb.onText?.(`\x1b[2m[compacted ${originalCount} → ${messages.length} messages]\x1b[0m\n`);
+        this._compactFailures = 0; // Reset on success
+        // Notify session to persist compacted state
+        this.cb.onCompact?.(messages);
 
         // PostCompact hook
         if (this.cfg._hookRunner?.hasHooksFor("PostCompact")) {
@@ -2876,7 +3216,11 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
         return true;
       }
     } catch (e) {
-      log(`Auto-compact failed: ${e.message}`);
+      this._compactFailures++;
+      log(`Auto-compact failed (${this._compactFailures}/3): ${e.message}`);
+      if (this._compactFailures >= 3) {
+        this.cb.onText?.("\x1b[31m[compaction failed 3 times — disabling auto-compact for this session]\x1b[0m\n");
+      }
     }
     return false;
   }
@@ -2923,6 +3267,20 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
         log(`Deferred tools delta: +${delta.added.length} -${delta.removed.length} (${delta.all.length} total)`);
       }
 
+      // Micro-compact: lightweight whitespace/size reduction before every API call
+      this._microCompact(messages);
+
+      // Graduated context management (windowing, compact, degradation, hard block)
+      const contextStatus = await this._manageContext(messages, systemBlocks);
+      if (contextStatus === "blocked") {
+        return {
+          text: "Context window full. Use /compact to free space.",
+          usage: this.totalUsage, turns: turnCount,
+          toolUseCount: this.toolUseCount, stopReason: "context_limit",
+          userFacingOutputs: this._finalizeUserFacingOutputs("Context window full. Use /compact to free space."),
+        };
+      }
+
       // Strip non-API fields (messageId) from messages before sending
       const apiMessages = messages.map(({ messageId, ...rest }) => rest);
 
@@ -2944,7 +3302,9 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
       let currentBlock = null;
       let stopReason = null;
       let usage = null;
+      this._hasAttemptedReactiveCompact = false;
 
+      try {
       for await (const { event, data } of this.client.stream(body, { signal: this.cfg.abortSignal })) {
         switch (event) {
           case "message_start":
@@ -2994,6 +3354,19 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
           case "message_stop":
             break;
         }
+      }
+      } catch (e) {
+        // Reactive compact: handle prompt-too-long errors mid-turn
+        if (!this._hasAttemptedReactiveCompact &&
+            (e.message?.includes("prompt is too long") || e.message?.includes("too many tokens") ||
+             (e.message?.includes("API error 400") && e.message?.includes("token")))) {
+          this._hasAttemptedReactiveCompact = true;
+          log("[context] Reactive compact — prompt too long");
+          this.cb.onText?.("\x1b[33m[prompt too long — compacting...]\x1b[0m\n");
+          await this._autoCompact(messages, systemBlocks);
+          continue; // retry the turn
+        }
+        throw e;
       }
 
       // Accumulate usage
@@ -3182,8 +3555,16 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
       // Append tool results as user message
       messages.push({ role: "user", content: toolResults });
 
-      // Auto-compact if context is getting full
-      await this._autoCompact(messages, systemBlocks);
+      // Context management after tool execution (graduated: window → compact → emergency → block)
+      const postToolContextStatus = await this._manageContext(messages, systemBlocks);
+      if (postToolContextStatus === "blocked") {
+        return {
+          text: "Context window full. Use /compact to free space.",
+          usage: this.totalUsage, turns: turnCount,
+          toolUseCount: this.toolUseCount, stopReason: "context_limit",
+          userFacingOutputs: this._finalizeUserFacingOutputs("Context window full. Use /compact to free space."),
+        };
+      }
     }
 
     return { text: "(max turns reached)", usage: this.totalUsage, turns: turnCount, toolUseCount: this.toolUseCount, stopReason: "max_turns", userFacingOutputs: this._finalizeUserFacingOutputs("(max turns reached)") };

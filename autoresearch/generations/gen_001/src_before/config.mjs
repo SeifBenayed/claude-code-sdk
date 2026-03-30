@@ -36,7 +36,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
     permissionMode: "auto",  // auto|default|plan|acceptEdits|bypassPermissions|dontAsk
     permissionRules: [],        // [{tool, pattern, behavior: "allow"|"deny"}]
     permissionCallbacks: false, // forward permission requests to NDJSON agent
-    briefMode: false,           // brief mode: route user-facing output through SendUserMessage
+    briefMode: false,           // brief mode: stricter terse guidance for the user-facing output surface
     outputFormat: "text",       // "text" (default) or "json" for structured output
     timeout: 0,                 // global timeout in seconds (0 = no limit)
     jsonSchema: null,            // JSON Schema for structured output validation
@@ -65,11 +65,12 @@ async function parseArgs(argv = process.argv.slice(2)) {
 
   // Helper: require next argv value or die
   function needValue(flag, i) {
-    if (i >= argv.length || argv[i].startsWith("-")) {
+    const v = argv[i];
+    if (i >= argv.length || (typeof v === "string" && v.startsWith("-"))) {
       process.stderr.write(`Error: ${flag} requires a value\n  cloclo ${flag} <value>\n`);
       process.exit(EXIT.BAD_ARGS);
     }
-    return argv[i];
+    return v;
   }
 
   // Valid values for enum-style flags
@@ -121,10 +122,11 @@ async function parseArgs(argv = process.argv.slice(2)) {
     else if (sub === "disable") { cfg._subcommand = "tool-disable"; cfg._toolDisableName = argv[2]; if (!cfg._toolDisableName) { process.stderr.write("Error: tool disable requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
     else if (sub === "test") { cfg._subcommand = "tool-test"; cfg._toolTestName = argv[2]; if (!cfg._toolTestName) { process.stderr.write("Error: tool test requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
     else if (sub === "install") { cfg._subcommand = "tool-install"; cfg._toolInstallSource = argv[2]; if (!cfg._toolInstallSource) { process.stderr.write("Error: tool install requires a path\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
+    else if (sub === "update") { cfg._subcommand = "tool-update"; cfg._toolUpdateName = argv[2]; if (!cfg._toolUpdateName) { process.stderr.write("Error: tool update requires a tool name or 'all'\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
     else if (sub === "remove") { cfg._subcommand = "tool-remove"; cfg._toolRemoveName = argv[2]; if (!cfg._toolRemoveName) { process.stderr.write("Error: tool remove requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
     else if (sub === "catalog") { cfg._subcommand = "tool-catalog"; cfg._toolCatalogQuery = argv.slice(2).join(" ") || "*"; cfg.interactive = false; return cfg; }
     else if (sub === "publish") { cfg._subcommand = "tool-publish"; cfg._toolPublishName = argv[2]; if (!cfg._toolPublishName) { process.stderr.write("Error: tool publish requires a tool name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
-    else { process.stderr.write(`Error: Unknown tool subcommand "${sub || ""}"\n  Available: list, info, enable, disable, test, install, remove, catalog, publish\n`); process.exit(EXIT.BAD_ARGS); }
+    else { process.stderr.write(`Error: Unknown tool subcommand "${sub || ""}"\n  Available: list, info, enable, disable, test, install, update, remove, catalog, publish\n`); process.exit(EXIT.BAD_ARGS); }
   }
 
   for (let i = 0; i < argv.length; i++) {
@@ -145,7 +147,16 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "--openai-api-url": cfg.openaiApiUrl = needValue(a, ++i); break;
       case "--provider": cfg.provider = needValue(a, ++i); break;
       case "--ndjson": cfg.ndjson = true; cfg.interactive = false; break;
-      case "-p": case "--print": cfg.prompt = needValue(a, ++i); cfg.interactive = false; break;
+      case "-p": case "--print": {
+        const v = needValue(a, ++i);
+        if (v.startsWith("-")) {
+          process.stderr.write(`Error: ${a} requires a prompt value; got another flag "${v}"\n  Use ${a} "your prompt"\n`);
+          process.exit(EXIT.BAD_ARGS);
+        }
+        cfg.prompt = v;
+        cfg.interactive = false;
+        break;
+      }
       case "--resume": cfg.resume = true; break;
       case "--session-id": {
         const v = needValue(a, ++i);

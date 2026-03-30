@@ -1,0 +1,148 @@
+{
+  "gen": "gen_007",
+  "score": 19.77140179090461,
+  "avgScore": 0.19771401790904608,
+  "count": 1000,
+  "catScores": {
+    "factual": {
+      "sum": 18.031716787916395,
+      "count": 25
+    },
+    "math": {
+      "sum": 11.93292750395618,
+      "count": 25
+    },
+    "cs_theory": {
+      "sum": 15.968252620681485,
+      "count": 25
+    },
+    "language": {
+      "sum": 14.836860086003172,
+      "count": 25
+    },
+    "coding_trivia": {
+      "sum": 9.111559982833175,
+      "count": 25
+    },
+    "logic_puzzles": {
+      "sum": 11.80564523628223,
+      "count": 25
+    },
+    "api_knowledge": {
+      "sum": 13.078617216000396,
+      "count": 25
+    },
+    "devops": {
+      "sum": 12.596227746983114,
+      "count": 25
+    },
+    "code_js": {
+      "sum": 23.038984010817654,
+      "count": 40
+    },
+    "code_python": {
+      "sum": 3.903287602436105,
+      "count": 40
+    },
+    "bash_tasks": {
+      "sum": 0,
+      "count": 40
+    },
+    "file_ops": {
+      "sum": 0,
+      "count": 30
+    },
+    "regex": {
+      "sum": 0,
+      "count": 25
+    },
+    "sql": {
+      "sum": 0,
+      "count": 25
+    },
+    "data_transform": {
+      "sum": 0,
+      "count": 25
+    },
+    "git_ops": {
+      "sum": 0,
+      "count": 25
+    },
+    "debug": {
+      "sum": 0,
+      "count": 25
+    },
+    "web_fetch": {
+      "sum": 0,
+      "count": 25
+    },
+    "build_and_test": {
+      "sum": 0,
+      "count": 50
+    },
+    "research_and_code": {
+      "sum": 0,
+      "count": 50
+    },
+    "refactor": {
+      "sum": 0,
+      "count": 50
+    },
+    "system_design": {
+      "sum": 0,
+      "count": 50
+    },
+    "pipeline": {
+      "sum": 0,
+      "count": 50
+    },
+    "explain_and_implement": {
+      "sum": 0,
+      "count": 50
+    },
+    "edge_cases": {
+      "sum": 0,
+      "count": 40
+    },
+    "error_recovery": {
+      "sum": 20.623712694719757,
+      "count": 40
+    },
+    "security": {
+      "sum": 16.153281722878482,
+      "count": 30
+    },
+    "trick_questions": {
+      "sum": 9.890872541176222,
+      "count": 30
+    },
+    "performance": {
+      "sum": 16.2080885834665,
+      "count": 30
+    },
+    "multi_tool_chain": {
+      "sum": 0.5339835728952773,
+      "count": 30
+    }
+  },
+  "tierScores": {
+    "T1": {
+      "sum": 107.36180718065621,
+      "count": 200
+    },
+    "T2": {
+      "sum": 26.942271613253755,
+      "count": 300
+    },
+    "T3": {
+      "sum": 0,
+      "count": 300
+    },
+    "T4": {
+      "sum": 63.409939115136275,
+      "count": 200
+    }
+  },
+  "timestamp": "2026-03-29T20:54:15.627Z",
+  "weakest": "bash_tasks"
+}

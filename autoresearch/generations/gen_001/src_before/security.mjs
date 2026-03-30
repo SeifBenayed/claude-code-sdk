@@ -2,7 +2,7 @@ import fs from "fs";
 import path from "path";
 import os from "os";
 import { createInterface } from "readline";
-import { log, EXIT, getMemoryDir } from "./utils.mjs";
+import { log, EXIT, getMemoryDir, getUserMemoryDir } from "./utils.mjs";
 import { DEFAULT_BLOCK_RULES, DEFAULT_ALLOW_RULES } from "./security-rules.mjs";
 
 // ── Rule Compiler ────────────────────────────────────────────────
@@ -374,7 +374,49 @@ const SENSITIVE_FILES = new Set([
   ".mcp.json", ".claude.json", ".env",
 ]);
 
-// getMemoryDir imported from utils.mjs
+// Memory helpers imported from utils.mjs
+
+function _securityRealpathOrResolve(targetPath) {
+  const resolved = path.resolve(String(targetPath || ""));
+  try {
+    return fs.realpathSync(resolved);
+  } catch {
+    return resolved;
+  }
+}
+
+function _securityPathWithinRoot(filePath, rootPath) {
+  const rel = path.relative(rootPath, filePath);
+  return rel === "" || (!rel.startsWith("..") && !path.isAbsolute(rel));
+}
+
+function _checkScopedMemoryFilePath(filePath, cwd) {
+  if (!filePath) return { behavior: "passthrough" };
+
+  const realFile = _securityRealpathOrResolve(filePath);
+  if (path.extname(realFile).toLowerCase() !== ".md" || path.basename(realFile) === "MEMORY.md") {
+    return {
+      behavior: "deny",
+      reason: "invalid_memory_file",
+      message: "Memory file path must point to a markdown memory entry.",
+    };
+  }
+
+  const roots = [
+    _securityRealpathOrResolve(getUserMemoryDir()),
+    _securityRealpathOrResolve(getMemoryDir(cwd || process.cwd())),
+  ];
+
+  for (const root of roots) {
+    if (_securityPathWithinRoot(realFile, root)) return { behavior: "passthrough" };
+  }
+
+  return {
+    behavior: "deny",
+    reason: "outside_memory_scope",
+    message: "Memory file path must stay inside the user or project memory directories.",
+  };
+}
 
 const toolPermissionChecks = {
   // Bash: check if command writes outside workspace, uses pipes to external
@@ -465,6 +507,24 @@ const toolPermissionChecks = {
   Agent(_input, _cwd) {
     return { behavior: "allow", reason: "agent_self_enforcing" };
   },
+
+  // MemoryRead: name-based lookup is fine; direct file paths must stay inside memory dirs
+  MemoryRead(input, cwd) {
+    return _checkScopedMemoryFilePath(input.file_path, cwd);
+  },
+
+  // MemorySave: only explicit user/project scopes are valid
+  MemorySave(input, _cwd) {
+    if (!input?.scope || (input.scope !== "user" && input.scope !== "project")) {
+      return { behavior: "deny", reason: "invalid_memory_scope", message: "MemorySave requires scope=user or scope=project." };
+    }
+    return { behavior: "passthrough" };
+  },
+
+  // MemoryForget: name-based lookup is fine; direct file paths must stay inside memory dirs
+  MemoryForget(input, cwd) {
+    return _checkScopedMemoryFilePath(input.file_path, cwd);
+  },
 };
 
 function _checkFilePath(filePath, cwd, op) {
@@ -516,8 +576,8 @@ function _checkFilePath(filePath, cwd, op) {
 // - dontAsk:           deny anything that would normally ask
 // - auto:              allow safe ops, block dangerous, ask for ambiguous
 
-const READ_ONLY_TOOLS = new Set(["Read", "Glob", "Grep", "WebFetch", "WebSearch", "SendUserMessage", "ToolSearch", "TaskCreate", "TaskUpdate", "TaskGet", "TaskList", "EnterPlanMode", "ExitPlanMode", "ListMcpResources", "ReadMcpResource", "AskUserQuestion"]);
-const WRITE_TOOLS = new Set(["Write", "Edit", "NotebookEdit"]);
+const READ_ONLY_TOOLS = new Set(["Read", "Glob", "Grep", "WebFetch", "WebSearch", "SendUserMessage", "TaskOutput", "ToolSearch", "TaskCreate", "TaskUpdate", "TaskGet", "TaskList", "EnterPlanMode", "ExitPlanMode", "ListMcpResources", "ReadMcpResource", "AskUserQuestion", "MemoryList", "MemoryRead"]);
+const WRITE_TOOLS = new Set(["Write", "Edit", "NotebookEdit", "MemorySave", "MemoryForget"]);
 
 // Generate a permission suggestion for a blocked action
 function _suggestPattern(toolName, input) {

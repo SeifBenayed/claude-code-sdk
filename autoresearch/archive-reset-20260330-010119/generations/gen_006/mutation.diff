@@ -1,0 +1,33 @@
+diff -ru /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_006/src_before/config.mjs /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_006/src_after/config.mjs
+--- /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_006/src_before/config.mjs	2026-03-29 21:17:27
++++ /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_006/src_after/config.mjs	2026-03-29 22:20:29
+@@ -67,7 +67,8 @@
+   function needValue(flag, i) {
+     const v = argv[i];
+     if (i >= argv.length || (typeof v === "string" && v.startsWith("-"))) {
+-      process.stderr.write(`Error: ${flag} requires a value\n  cloclo ${flag} <value>\n`);
++      const example = (flag === "-p" || flag === "--print") ? `  Use ${flag} "your prompt"\n` : `  cloclo ${flag} <value>\n`;
++      process.stderr.write(`Error: ${flag} requires a value\n${example}`);
+       process.exit(EXIT.BAD_ARGS);
+     }
+     return v;
+diff -ru /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_006/src_before/providers.mjs /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_006/src_after/providers.mjs
+--- /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_006/src_before/providers.mjs	2026-03-29 21:17:27
++++ /Users/seifbenayed/claude-tool-loop/autoresearch/generations/gen_006/src_after/providers.mjs	2026-03-29 22:20:29
+@@ -306,7 +306,6 @@
+ }
+ 
+ function detectProvider(model, explicitProvider) {
+-  const normalizedModel = typeof model === "string" ? model.trim() : "";
+   if (explicitProvider) {
+     if (PROVIDERS[explicitProvider]) return PROVIDERS[explicitProvider];
+     const valid = Object.keys(PROVIDERS).join(", ");
+@@ -314,7 +313,7 @@
+     process.exit(EXIT.BAD_ARGS);
+   }
+   for (const p of Object.values(PROVIDERS)) {
+-    if (p.detect(normalizedModel)) return p;
++    if (p.detect(model)) return p;
+   }
+   // Fallback: treat as OpenAI-compatible
+   return {

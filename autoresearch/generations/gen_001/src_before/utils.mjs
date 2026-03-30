@@ -32,6 +32,33 @@ export function log(...args) {
 
 export function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
+export function memoize(fn, { key = (...args) => JSON.stringify(args) } = {}) {
+  const cache = new Map();
+  const memoized = (...args) => {
+    const cacheKey = key(...args);
+    if (cache.has(cacheKey)) return cache.get(cacheKey);
+    const value = fn(...args);
+    cache.set(cacheKey, value);
+    return value;
+  };
+  memoized.cache = cache;
+  memoized.clear = () => cache.clear();
+  memoized.delete = (...args) => cache.delete(key(...args));
+  return memoized;
+}
+
+const CASE_FOLD_COLLATOR = new Intl.Collator("tr", { sensitivity: "base", usage: "search" });
+
+export function caseInsensitiveIncludes(haystack, needle) {
+  const text = String(haystack);
+  const query = String(needle);
+  if (!query) return true;
+  for (let i = 0; i <= text.length - query.length; i++) {
+    if (CASE_FOLD_COLLATOR.compare(text.slice(i, i + query.length), query) === 0) return true;
+  }
+  return false;
+}
+
 // ── HTTP helpers ────────────────────────────────────────────────
 
 export function _httpGet(url, extraHeaders) {
@@ -75,6 +102,16 @@ export function ensureMemoryDir(cwd) {
   return dir;
 }
 
+export function getUserMemoryDir() {
+  return path.join(os.homedir(), ".claude-native", "user-memory");
+}
+
+export function ensureUserMemoryDir() {
+  const dir = getUserMemoryDir();
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 // ── Help ────────────────────────────────────────────────────────
 
 export function printHelp() {
@@ -99,6 +136,7 @@ Usage:
   cloclo tool disable <name>            Disable a tool
   cloclo tool test <name>               Test a tool
   cloclo tool install <path>            Install custom tool from TOOL.json
+  cloclo tool update <name|all>         Update an installed tool from its source
   cloclo tool remove <name>             Remove installed custom tool
 
 Examples:
@@ -151,7 +189,7 @@ Options:
   --allowed-tools <list>      Comma-separated tool allowlist
   --disallowed-tools <list>   Comma-separated tool denylist
   --permission-mode <mode>    auto|default|plan|acceptEdits|bypassPermissions|dontAsk
-  --brief                     Enable brief mode (output via SendUserMessage tool)
+  --brief                     Enable brief mode (stricter terse user-facing output guidance)
   --verbose                   Debug logging to stderr
   -h, --help                  Show this help
 

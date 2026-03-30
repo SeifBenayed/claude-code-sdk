@@ -10,18 +10,20 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 
-import { log, sleep, EXIT, _VERSION, setVerbose, _verbose } from "./utils.mjs";
+import { log, sleep, memoize, EXIT, _VERSION, setVerbose, _verbose } from "./utils.mjs";
 import { parseArgs, resolveModel, resolveModelForWorkload } from "./config.mjs";
 import { detectProvider, PROVIDERS, AnthropicClient, OpenAIClient, OpenAIResponsesClient } from "./providers.mjs";
 import { getOAuthAccessToken, getOpenAIAccessToken } from "./auth.mjs";
+import { incrementDreamSessionCount } from "./memory-dream.mjs";
 import {
   ToolRegistry, registerBuiltinTools, registerAskUserQuestion,
+  registerMemoryTools,
   registerDeferredBuiltinTools, registerSpreadsheetTools,
   registerPdfTools, registerDocumentTools, registerPresentationTools,
   registerDesktopTools, scanCustomTools, registerBriefTools,
   registerToolSearch, registerMcpResourceTools, _OFFICIAL_CATALOG,
   _loadToolManifest, toolList, toolInfo, toolEnable, toolDisable,
-  toolTest, toolInstall, toolRemove, toolCatalog, toolPublish,
+  toolTest, toolInstall, toolUpdate, toolRemove, toolCatalog, toolPublish,
 } from "./tools.mjs";
 import { registerBrowserTools } from "./browser.mjs";
 import { PermissionManager } from "./security.mjs";
@@ -39,6 +41,18 @@ import { SandboxRunner, createSandboxedBashExecutor, resolveSandboxConfig } from
 import { handleCronCommand } from "./cron.mjs";
 
 // ── McpManager ──────────────────────────────────────────────────
+
+const flattenUserFacingOutputs = memoize(function flattenUserFacingOutputs(outputs, fallbackText = "") {
+  if (!Array.isArray(outputs) || outputs.length === 0) return fallbackText || "";
+  const parts = outputs.map((output) => {
+    if (!output || typeof output !== "object") return "";
+    if (output.kind === "task_output") return output.message || output.summary || "";
+    return output.message || "";
+  }).filter(Boolean);
+  return parts.length > 0 ? parts.join("\n") : (fallbackText || "");
+}, {
+  key: (outputs, fallbackText = "") => JSON.stringify([outputs, fallbackText]),
+});
 
 class McpManager {
   constructor() {
@@ -246,6 +260,7 @@ async function main() {
   registry._currentModel = cfg.model; // Used by WebFetch to pick summary model
   registry._provider = provider; // Used by WebFetch for summary model selection
   registerBuiltinTools(registry);
+  registerMemoryTools(registry);
 
   // Sandbox: replace Bash executor with sandboxed version
   cfg._sandboxSettings = { mode: cfg.sandboxMode || "auto" };
@@ -276,7 +291,7 @@ async function main() {
   registerDesktopTools(registry);
   scanCustomTools(registry, cfg);
   cfg._officialToolCatalog = _OFFICIAL_CATALOG; // expose for ink-ui
-  if (cfg.briefMode) registerBriefTools(registry, cfg);
+  registerBriefTools(registry, cfg);
 
   if (cfg.allowedTools || cfg.disallowedTools) {
     registry.setFilter(cfg.allowedTools, cfg.disallowedTools);
@@ -467,6 +482,7 @@ Important:
   if (cfg._subcommand === "tool-disable") { toolDisable(cfg, registry, cfg._toolDisableName); mcpManager.shutdown(); process.exit(0); }
   if (cfg._subcommand === "tool-test") { await toolTest(cfg, registry, cfg._toolTestName); mcpManager.shutdown(); process.exit(0); }
   if (cfg._subcommand === "tool-install") { await toolInstall(cfg, cfg._toolInstallSource); process.exit(0); }
+  if (cfg._subcommand === "tool-update") { await toolUpdate(cfg, cfg._toolUpdateName); process.exit(0); }
   if (cfg._subcommand === "tool-remove") { toolRemove(cfg, cfg._toolRemoveName); process.exit(0); }
   if (cfg._subcommand === "tool-catalog") { await toolCatalog(cfg._toolCatalogQuery); process.exit(0); }
   if (cfg._subcommand === "tool-publish") { await toolPublish(cfg, cfg._toolPublishName); process.exit(0); }
@@ -501,20 +517,21 @@ Important:
     const isJsonOutput = cfg.outputFormat === "json";
 
     const loop = new AgentLoop(client, registry, cfg, {
-      onText: isJsonOutput ? () => {} : (delta) => process.stdout.write(delta),
+      onText: () => {},
       onToolUse: (block) => {
         if (_verbose) process.stderr.write(`\x1b[2m[${block.name}]\x1b[0m\n`);
       },
     }, permissions);
 
     const result = await loop.run(messages, systemBlocks);
+    const assistantVisibleText = flattenUserFacingOutputs(result.userFacingOutputs, result.text);
 
     // If --json-schema, validate output against schema
     let schemaResult = null;
-    if (cfg.jsonSchema && result.text) {
+    if (cfg.jsonSchema && assistantVisibleText) {
       try {
         // Extract JSON from response (strip markdown fences if model adds them)
-        let raw = result.text.trim();
+        let raw = assistantVisibleText.trim();
         if (raw.startsWith("```")) raw = raw.replace(/^```(?:json)?\n?/, "").replace(/\n?```$/, "").trim();
         schemaResult = JSON.parse(raw);
 
@@ -550,6 +567,8 @@ Important:
       const jsonOutput = {
         version: cfg.outputVersion || "1",
         message: result.text,
+        user_facing_message: assistantVisibleText,
+        user_facing_outputs: result.userFacingOutputs || [],
         result: schemaResult,  // parsed+validated object (null if no schema or parse failed)
         model: cfg.model,
         provider: provider.name,
@@ -566,12 +585,16 @@ Important:
       if (cfg.jsonSchema) jsonOutput.schema_valid = schemaResult !== null;
       process.stdout.write(JSON.stringify(jsonOutput) + "\n");
     } else {
+      if (assistantVisibleText) process.stdout.write(assistantVisibleText);
       process.stdout.write("\n");
     }
 
     if (_verbose && !isJsonOutput) {
       process.stderr.write(`\x1b[2m(${result.usage.input_tokens} in / ${result.usage.output_tokens} out | ${result.turns} turns)\x1b[0m\n`);
     }
+
+    // Increment dream session counter (one-shot counts as a session)
+    try { incrementDreamSessionCount(); } catch { /* non-fatal */ }
   } else {
     // Interactive REPL
     const repl = new InteractiveMode(cfg, registry, client, mcpManager, permissions);

@@ -60,16 +60,17 @@ async function parseArgs(argv = process.argv.slice(2)) {
   const FLAGS_BOOLEAN = new Set([
     "--oauth", "--ndjson", "--resume", "--verbose", "--permission-callbacks",
     "--brief", "--json", "--yes", "-y", "--openai", "--login", "--logout",
-    "--openai-login", "--openai-logout", "--help", "-h",
+    "--openai-login", "--openai-logout", "--onboarding", "--help", "-h",
   ]);
 
   // Helper: require next argv value or die
   function needValue(flag, i) {
-    if (i >= argv.length) {
+    const v = argv[i];
+    if (i >= argv.length || (typeof v === "string" && v.startsWith("-"))) {
       process.stderr.write(`Error: ${flag} requires a value\n  cloclo ${flag} <value>\n`);
       process.exit(EXIT.BAD_ARGS);
     }
-    return argv[i];
+    return v;
   }
 
   // Valid values for enum-style flags
@@ -147,9 +148,10 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "--provider": cfg.provider = needValue(a, ++i); break;
       case "--ndjson": cfg.ndjson = true; cfg.interactive = false; break;
       case "-p": case "--print": {
-        const v = needValue(a, ++i);
-        if (v.startsWith("-")) {
-          process.stderr.write(`Error: ${a} requires a prompt value; got another flag "${v}"\n  Use ${a} "your prompt"\n`);
+        i++;
+        const v = argv[i];
+        if (i >= argv.length || v === undefined || (typeof v === "string" && (v.startsWith("-") || v === ","))) {
+          process.stderr.write(`Error: ${a} requires a value\n  ${a} requires a prompt value. Use ${a} "your prompt"\n`);
           process.exit(EXIT.BAD_ARGS);
         }
         cfg.prompt = v;
@@ -229,6 +231,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "--yes": case "-y": cfg.permissionMode = "bypassPermissions"; break;
       case "--login": await oauthLogin(); process.exit(0);
       case "--logout": oauthLogout(); process.exit(0);
+      case "--onboarding": cfg._subcommand = "onboarding"; cfg.interactive = false; break;
       case "--openai-login": await openaiOAuthLogin(); process.exit(0);
       case "--openai-logout": openaiOAuthLogout(); process.exit(0);
       case "--openai": cfg.useOpenAIOAuth = true; break;

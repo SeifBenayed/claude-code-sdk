@@ -1,4 +1,5 @@
 // ── Browser Tool Pack (CDP-native, enterprise) ────────────────────────────
+// Note: --disable-blink-features=AutomationControlled removed (deprecated by Chrome, caused warning banner)
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import path from "node:path";
@@ -67,7 +68,6 @@ class BrowserSession {
       `--remote-debugging-port=${port}`,
       `--user-data-dir=${profileDir}`,
       "--no-first-run",
-      "--disable-blink-features=AutomationControlled",
     ];
 
     // Check if user wants headless (default: no, for login state)
@@ -96,17 +96,62 @@ class BrowserSession {
 
   async _launchBrowser() {
     this._mode = "launch";
+
+    // Check if a cloclo Chrome is already running — reuse it instead of launching a new one
+    try {
+      const existing = execSync("ps aux | grep 'Chrome.*remote-debugging-port' | grep -v grep | head -1", { encoding: "utf-8", stdio: "pipe" }).trim();
+      if (existing) {
+        const portMatch = existing.match(/--remote-debugging-port=(\d+)/);
+        if (portMatch) {
+          const port = parseInt(portMatch[1], 10);
+          try {
+            const resp = await _httpGet(`http://127.0.0.1:${port}/json/version`);
+            const info = JSON.parse(resp);
+            if (info.webSocketDebuggerUrl) {
+              log(`[browser] Reusing existing Chrome on port ${port}`);
+              this._debugPort = port;
+              await this._connectWs(info.webSocketDebuggerUrl);
+              await this._send("Target.setDiscoverTargets", { discover: true });
+              this._setupTargetListeners();
+              const targetsResp = await this._send("Target.getTargets");
+              const pages = (targetsResp?.targetInfos || []).filter(t => t.type === "page");
+              for (const page of pages) await this._attachToTarget(page.targetId);
+              return;
+            }
+          } catch { /* CDP not reachable, launch new */ }
+        }
+      }
+    } catch { /* ps failed, proceed with launch */ }
+
     const paths = [process.env.CHROME_PATH, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/Applications/Chromium.app/Contents/MacOS/Chromium", "/opt/homebrew/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/chromium", "/usr/bin/google-chrome-stable", "/usr/bin/google-chrome"].filter(Boolean);
     let cp = null; for (const p of paths) { if (fs.existsSync(p)) { cp = p; break; } } if (!cp) throw new Error("Chrome/Chromium not found.\n  Install Chrome or set CHROME_PATH=/path/to/chrome\n  macOS: brew install --cask google-chrome\n  Linux: apt install chromium-browser");
+    const headless = process.env.BROWSER_HEADLESS === "1";
+
+    // Resolve user data dir
     let dataDir = this._userDataDir;
     if (!dataDir) {
-      if (this._profileName) { dataDir = path.join(os.homedir(), ".claude", "browser-profiles", this._profileName); fs.mkdirSync(dataDir, { recursive: true }); }
-      else { dataDir = path.join(os.tmpdir(), "cloclo-browser-" + this._debugPort); }
+      if (this._profileName) {
+        dataDir = path.join(os.homedir(), ".claude", "browser-profiles", this._profileName);
+        fs.mkdirSync(dataDir, { recursive: true });
+      } else if (headless) {
+        dataDir = path.join(os.tmpdir(), "cloclo-browser-" + this._debugPort);
+      } else {
+        // Use the user's real Chrome profile for visible mode (keeps cookies/sessions)
+        dataDir = this._detectChromeUserDataDir();
+      }
     }
-    const args = [`--remote-debugging-port=${this._debugPort}`, "--headless=new", "--disable-gpu", "--no-first-run", `--user-data-dir=${dataDir}`, "--window-size=1280,720", "--disable-blink-features=AutomationControlled", "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"];
+
+    // No need to close existing Chrome — we use a separate user-data-dir
+    // that syncs cookies from the real profile
+
+    const args = [`--remote-debugging-port=${this._debugPort}`, "--no-first-run", `--user-data-dir=${dataDir}`, "--window-size=1280,720"];
+    if (headless) {
+      args.push("--headless=new", "--disable-gpu", "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+    }
     if (this._profileDir) args.push(`--profile-directory=${this._profileDir}`);
     args.push("about:blank");
-    this._proc = spawn(cp, args, { stdio: "pipe" });
+    this._proc = spawn(cp, args, { stdio: "pipe", detached: !headless });
+    if (!headless) this._proc.unref();
     this._proc.on("error", () => {}); this._proc.stderr?.on("data", () => {});
     // Connect to browser-level WS via /json/version
     let browserWsUrl = null;
@@ -119,6 +164,129 @@ class BrowserSession {
     const resp = await this._send("Target.getTargets");
     const pages = (resp?.targetInfos || []).filter(t => t.type === "page");
     for (const page of pages) await this._attachToTarget(page.targetId);
+  }
+
+  _detectChromeUserDataDir() {
+    // Chrome requires a non-default user-data-dir for remote debugging.
+    // We use a cloclo-specific dir but sync cookies/login state from the real Chrome profile.
+    const clocloDir = path.join(os.homedir(), ".claude", "browser-profiles", "default");
+    fs.mkdirSync(path.join(clocloDir, "Default"), { recursive: true });
+
+    // Find the user's real Chrome profile to copy login state from
+    let realDir = null;
+    if (process.platform === "darwin") {
+      realDir = path.join(os.homedir(), "Library", "Application Support", "Google", "Chrome");
+    } else if (process.platform === "linux") {
+      realDir = path.join(os.homedir(), ".config", "google-chrome");
+      if (!fs.existsSync(realDir)) realDir = path.join(os.homedir(), ".config", "chromium");
+    } else if (process.platform === "win32") {
+      realDir = path.join(os.homedir(), "AppData", "Local", "Google", "Chrome", "User Data");
+    }
+
+    // Sync key files that carry login state (cookies, local storage, extensions)
+    if (realDir && fs.existsSync(realDir)) {
+      const filesToSync = [
+        "Default/Cookies",
+        "Default/Login Data",
+        "Default/Web Data",
+        "Default/Preferences",
+        "Default/Secure Preferences",
+        "Default/Local Storage",
+        "Default/Session Storage",
+        "Default/Extension Cookies",
+        "Local State",
+      ];
+      for (const rel of filesToSync) {
+        const src = path.join(realDir, rel);
+        const dst = path.join(clocloDir, rel);
+        try {
+          if (!fs.existsSync(src)) continue;
+          const srcStat = fs.statSync(src);
+          if (srcStat.isDirectory()) {
+            // Copy directory recursively
+            fs.cpSync(src, dst, { recursive: true, force: true });
+          } else {
+            // Only copy if source is newer
+            const dstExists = fs.existsSync(dst);
+            if (!dstExists || fs.statSync(dst).mtimeMs < srcStat.mtimeMs) {
+              fs.mkdirSync(path.dirname(dst), { recursive: true });
+              fs.copyFileSync(src, dst);
+            }
+          }
+        } catch (e) { log(`[browser] Sync ${rel}: ${e.message}`); }
+      }
+      // Also sync extensions so the same extensions are available
+      const extSrc = path.join(realDir, "Default", "Extensions");
+      const extDst = path.join(clocloDir, "Default", "Extensions");
+      try {
+        if (fs.existsSync(extSrc) && !fs.existsSync(extDst)) {
+          fs.cpSync(extSrc, extDst, { recursive: true });
+          log("[browser] Synced extensions from real Chrome profile");
+        }
+      } catch { /* ignore */ }
+      log("[browser] Synced login state from real Chrome profile");
+    }
+
+    return clocloDir;
+  }
+
+  async _closeExistingChrome() {
+    // Check if Chrome is actually running first
+    try {
+      const check = execSync("pgrep -x 'Google Chrome' 2>/dev/null || true", { encoding: "utf-8", stdio: "pipe" }).trim();
+      if (!check) { log("[browser] Chrome not running, skipping close"); return; }
+    } catch { return; }
+
+    log("[browser] Closing Chrome to reopen with CDP...");
+    try {
+      // Step 1: Try graceful quit via AppleScript
+      if (process.platform === "darwin") {
+        execSync('osascript -e \'tell application "Google Chrome" to quit\' 2>/dev/null', { timeout: 3000, stdio: "pipe" });
+      } else {
+        execSync("pkill -TERM -f 'google-chrome|chromium' 2>/dev/null || true", { timeout: 3000, stdio: "pipe" });
+      }
+
+      // Step 2: Wait up to 5s for graceful exit
+      for (let i = 0; i < 10; i++) {
+        await sleep(500);
+        try {
+          const result = execSync("pgrep -x 'Google Chrome' 2>/dev/null || true", { encoding: "utf-8", stdio: "pipe" }).trim();
+          if (!result) { log("[browser] Chrome closed gracefully"); return; }
+        } catch { return; }
+      }
+
+      // Step 3: Force kill if graceful quit didn't work (confirmation dialog, etc.)
+      log("[browser] Graceful quit timed out, force closing...");
+      if (process.platform === "darwin") {
+        execSync("pkill -9 'Google Chrome' 2>/dev/null || true", { timeout: 3000, stdio: "pipe" });
+      } else {
+        execSync("pkill -9 -f 'google-chrome|chromium' 2>/dev/null || true", { timeout: 3000, stdio: "pipe" });
+      }
+
+      // Step 4: Wait for force kill to take effect
+      for (let i = 0; i < 6; i++) {
+        await sleep(500);
+        try {
+          const result = execSync("pgrep -x 'Google Chrome' 2>/dev/null || true", { encoding: "utf-8", stdio: "pipe" }).trim();
+          if (!result) { log("[browser] Chrome force-closed"); return; }
+        } catch { return; }
+      }
+      log("[browser] Chrome still running after force kill, proceeding anyway");
+    } catch (e) {
+      log(`[browser] Could not close Chrome: ${e.message}`);
+    }
+
+    // Clean up stale lock files left by killed Chrome
+    try {
+      const profileDir = this._detectChromeUserDataDir();
+      for (const lockFile of ["SingletonLock", "SingletonSocket", "SingletonCookie"]) {
+        const lockPath = path.join(profileDir, lockFile);
+        if (fs.existsSync(lockPath)) {
+          fs.unlinkSync(lockPath);
+          log(`[browser] Removed stale ${lockFile}`);
+        }
+      }
+    } catch { /* ignore lock cleanup errors */ }
   }
 
   async _attachRemote(cdpUrl) {

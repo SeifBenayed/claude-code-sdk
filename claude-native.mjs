@@ -48,7 +48,66 @@ function log(...args) {
 
 function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
 
-const CASE_FOLD_COLLATOR = new Intl.Collator("und", { sensitivity: "base", usage: "search" });
+function throttle(fn, wait) {
+  let lastCallAt = 0;
+  let timer = null;
+  let lastResult;
+  let lastArgs = [];
+  let lastThis = null;
+
+  const invoke = (context, args) => {
+    lastCallAt = Date.now();
+    lastResult = fn.apply(context, args);
+    return lastResult;
+  };
+
+  const throttled = function (...args) {
+    const now = Date.now();
+    if (!lastCallAt || now - lastCallAt >= wait) {
+      if (timer) {
+        clearTimeout(timer);
+        timer = null;
+      }
+      return invoke(this, args);
+    }
+
+    lastArgs = args;
+    lastThis = this;
+    if (!timer) {
+      timer = setTimeout(() => {
+        timer = null;
+        invoke(lastThis, lastArgs);
+      }, wait - (now - lastCallAt));
+    }
+    return lastResult;
+  };
+
+  throttled.cancel = () => {
+    if (timer) clearTimeout(timer);
+    timer = null;
+    lastArgs = [];
+    lastThis = null;
+  };
+
+  return throttled;
+}
+
+function memoize(fn, { key = (...args) => JSON.stringify(args) } = {}) {
+  const cache = new Map();
+  const memoized = (...args) => {
+    const cacheKey = key(...args);
+    if (cache.has(cacheKey)) return cache.get(cacheKey);
+    const value = fn(...args);
+    cache.set(cacheKey, value);
+    return value;
+  };
+  memoized.cache = cache;
+  memoized.clear = () => cache.clear();
+  memoized.delete = (...args) => cache.delete(key(...args));
+  return memoized;
+}
+
+const CASE_FOLD_COLLATOR = new Intl.Collator("tr", { sensitivity: "base", usage: "search" });
 
 function caseInsensitiveIncludes(haystack, needle) {
   const text = String(haystack);
@@ -174,6 +233,7 @@ Options:
   --logout                    Remove Anthropic credentials
   --oauth                     Use Anthropic Pro/Max subscription (keychain)
   --openai-login              Login to OpenAI via browser (OAuth)
+  --onboarding                First-time setup wizard
   --openai-logout             Remove OpenAI credentials
   --openai                    Use OpenAI subscription (keychain)
   --api-key <key>             Anthropic API key (or ANTHROPIC_API_KEY env)
@@ -306,16 +366,17 @@ async function parseArgs(argv = process.argv.slice(2)) {
   const FLAGS_BOOLEAN = new Set([
     "--oauth", "--ndjson", "--resume", "--verbose", "--permission-callbacks",
     "--brief", "--json", "--yes", "-y", "--openai", "--login", "--logout",
-    "--openai-login", "--openai-logout", "--help", "-h",
+    "--openai-login", "--openai-logout", "--onboarding", "--help", "-h",
   ]);
 
   // Helper: require next argv value or die
   function needValue(flag, i) {
-    if (i >= argv.length) {
+    const v = argv[i];
+    if (i >= argv.length || (typeof v === "string" && v.startsWith("-"))) {
       process.stderr.write(`Error: ${flag} requires a value\n  cloclo ${flag} <value>\n`);
       process.exit(EXIT.BAD_ARGS);
     }
-    return argv[i];
+    return v;
   }
 
   // Valid values for enum-style flags
@@ -393,9 +454,10 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "--provider": cfg.provider = needValue(a, ++i); break;
       case "--ndjson": cfg.ndjson = true; cfg.interactive = false; break;
       case "-p": case "--print": {
-        const v = needValue(a, ++i);
-        if (v.startsWith("-")) {
-          process.stderr.write(`Error: ${a} requires a prompt value; got another flag "${v}"\n  Use ${a} "your prompt"\n`);
+        i++;
+        const v = argv[i];
+        if (i >= argv.length || v === undefined || (typeof v === "string" && (v.startsWith("-") || v === ","))) {
+          process.stderr.write(`Error: ${a} requires a value\n  ${a} requires a prompt value. Use ${a} "your prompt"\n`);
           process.exit(EXIT.BAD_ARGS);
         }
         cfg.prompt = v;
@@ -475,6 +537,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "--yes": case "-y": cfg.permissionMode = "bypassPermissions"; break;
       case "--login": await oauthLogin(); process.exit(0);
       case "--logout": oauthLogout(); process.exit(0);
+      case "--onboarding": cfg._subcommand = "onboarding"; cfg.interactive = false; break;
       case "--openai-login": await openaiOAuthLogin(); process.exit(0);
       case "--openai-logout": openaiOAuthLogout(); process.exit(0);
       case "--openai": cfg.useOpenAIOAuth = true; break;
@@ -693,6 +756,7 @@ const PROVIDERS = {
       supportsThinking: true,
       supportsHostedWebSearch: true,
       summaryModel: "claude-haiku-4-5-20251001",
+      contextWindow: 1000000, // claude-opus/sonnet; haiku is 200000 but resolved per-model in _getContextLimit
     },
   },
   openai: {
@@ -715,6 +779,7 @@ const PROVIDERS = {
       summaryModel: "gpt-4o-mini",
       // Reasoning models (o1, o3, etc.) use "developer-message" — resolved per-model via reasoningModelPattern
       reasoningModelPattern: "^o[1-9]",
+      contextWindow: 128000, // gpt-4o/4.1 default; gpt-5=1000000, o3/o4=200000 resolved per-model
     },
   },
   "openai-responses": {
@@ -735,6 +800,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: "gpt-4o-mini",
+      contextWindow: 192000,
     },
   },
   google: {
@@ -754,6 +820,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: "gemini-2.5-flash",
+      contextWindow: 1000000,
     },
   },
   deepseek: {
@@ -773,6 +840,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: "deepseek-chat",
+      contextWindow: 64000,
     },
   },
   mistral: {
@@ -792,6 +860,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: "mistral-small-latest",
+      contextWindow: 128000,
     },
   },
   groq: {
@@ -811,6 +880,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: "llama-3.3-70b-versatile",
+      contextWindow: 128000,
     },
   },
   ollama: {
@@ -830,6 +900,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: null,
+      contextWindow: 128000,
     },
   },
   lmstudio: {
@@ -849,6 +920,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: null,
+      contextWindow: 128000,
     },
   },
   vllm: {
@@ -868,6 +940,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: null,
+      contextWindow: 128000,
     },
   },
   jan: {
@@ -887,6 +960,27 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: null,
+      contextWindow: 128000,
+    },
+  },
+  minimax: {
+    name: "MiniMax",
+    detect: (m) => m.startsWith("minimax/") || m.startsWith("MiniMax-"),
+    envKey: "MINIMAX_API_KEY",
+    defaultUrl: "https://api.minimaxi.chat",
+    createClient: (cfg) => new OpenAIClient({ apiKey: cfg.providerKey, apiUrl: cfg.providerUrl }),
+    resolveAuth: (cfg) => process.env.MINIMAX_API_KEY || null,
+    resolveBaseUrl: () => process.env.MINIMAX_API_URL || "https://api.minimaxi.chat",
+    transformModel: (m) => m.replace(/^minimax\//, ""),
+    capabilities: {
+      apiStyle: "openai-chat",
+      toolCallStyle: "openai-chat",
+      instructionPlacement: "system-message",
+      supportsToolCalling: true,
+      supportsThinking: false,
+      supportsHostedWebSearch: false,
+      summaryModel: null,
+      contextWindow: 1000000,
     },
   },
   llamacpp: {
@@ -906,6 +1000,7 @@ const PROVIDERS = {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: null,
+      contextWindow: 128000,
     },
   },
 };
@@ -997,6 +1092,7 @@ function detectProvider(model, explicitProvider) {
       supportsThinking: false,
       supportsHostedWebSearch: false,
       summaryModel: "gpt-4o-mini",
+      contextWindow: 128000,
     },
   };
 }
@@ -2913,11 +3009,8 @@ const toolPermissionChecks = {
     } catch {
       return { behavior: "deny", reason: "invalid_url", message: "Invalid URL" };
     }
-    if (isDomainPreapproved(url)) {
-      return { behavior: "allow", reason: "preapproved_domain" };
-    }
-    // Unknown domain: ask (user decides)
-    return { behavior: "ask", reason: "unknown_domain", message: `WebFetch to unknown domain: ${new URL(url).hostname}` };
+    // Allow all domains — the user trusts their agent to fetch what it needs
+    return { behavior: "allow", reason: "all_domains_allowed" };
   },
 
   // WebSearch: always safe (server-side, read-only)
@@ -3192,6 +3285,7 @@ function _pathMatchesGlob(filePath, pattern) {
 
 
 // ── Browser Tool Pack (CDP-native, enterprise) ────────────────────────────
+// Note: --disable-blink-features=AutomationControlled removed (deprecated by Chrome, caused warning banner)
 
 const BROWSER_READ_ONLY_ACTIONS = new Set(["get_state","get_text","screenshot","pdf","cookies_get","list_tabs","list_sessions","list_frames","get_events","dropdown_options","extract","switch_tab","get_network_log"]);
 const BROWSER_MUTATING_ACTIONS = new Set(["navigate","click_element","type_element","click","fill","send_keys","upload_file","select_dropdown","cookies_set","cookies_clear","new_tab","close_tab","new_session","close_session","back","forward","reload","close","set_dialog_auto_dismiss","inject_script","enable_network_log"]);
@@ -3253,7 +3347,6 @@ class BrowserSession {
       `--remote-debugging-port=${port}`,
       `--user-data-dir=${profileDir}`,
       "--no-first-run",
-      "--disable-blink-features=AutomationControlled",
     ];
 
     // Check if user wants headless (default: no, for login state)
@@ -3282,17 +3375,62 @@ class BrowserSession {
 
   async _launchBrowser() {
     this._mode = "launch";
+
+    // Check if a cloclo Chrome is already running — reuse it instead of launching a new one
+    try {
+      const existing = execSync("ps aux | grep 'Chrome.*remote-debugging-port' | grep -v grep | head -1", { encoding: "utf-8", stdio: "pipe" }).trim();
+      if (existing) {
+        const portMatch = existing.match(/--remote-debugging-port=(\d+)/);
+        if (portMatch) {
+          const port = parseInt(portMatch[1], 10);
+          try {
+            const resp = await _httpGet(`http://127.0.0.1:${port}/json/version`);
+            const info = JSON.parse(resp);
+            if (info.webSocketDebuggerUrl) {
+              log(`[browser] Reusing existing Chrome on port ${port}`);
+              this._debugPort = port;
+              await this._connectWs(info.webSocketDebuggerUrl);
+              await this._send("Target.setDiscoverTargets", { discover: true });
+              this._setupTargetListeners();
+              const targetsResp = await this._send("Target.getTargets");
+              const pages = (targetsResp?.targetInfos || []).filter(t => t.type === "page");
+              for (const page of pages) await this._attachToTarget(page.targetId);
+              return;
+            }
+          } catch { /* CDP not reachable, launch new */ }
+        }
+      }
+    } catch { /* ps failed, proceed with launch */ }
+
     const paths = [process.env.CHROME_PATH, "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome", "/Applications/Chromium.app/Contents/MacOS/Chromium", "/opt/homebrew/bin/chromium", "/usr/bin/chromium-browser", "/usr/bin/chromium", "/usr/bin/google-chrome-stable", "/usr/bin/google-chrome"].filter(Boolean);
     let cp = null; for (const p of paths) { if (fs.existsSync(p)) { cp = p; break; } } if (!cp) throw new Error("Chrome/Chromium not found.\n  Install Chrome or set CHROME_PATH=/path/to/chrome\n  macOS: brew install --cask google-chrome\n  Linux: apt install chromium-browser");
+    const headless = process.env.BROWSER_HEADLESS === "1";
+
+    // Resolve user data dir
     let dataDir = this._userDataDir;
     if (!dataDir) {
-      if (this._profileName) { dataDir = path.join(os.homedir(), ".claude", "browser-profiles", this._profileName); fs.mkdirSync(dataDir, { recursive: true }); }
-      else { dataDir = path.join(os.tmpdir(), "cloclo-browser-" + this._debugPort); }
+      if (this._profileName) {
+        dataDir = path.join(os.homedir(), ".claude", "browser-profiles", this._profileName);
+        fs.mkdirSync(dataDir, { recursive: true });
+      } else if (headless) {
+        dataDir = path.join(os.tmpdir(), "cloclo-browser-" + this._debugPort);
+      } else {
+        // Use the user's real Chrome profile for visible mode (keeps cookies/sessions)
+        dataDir = this._detectChromeUserDataDir();
+      }
     }
-    const args = [`--remote-debugging-port=${this._debugPort}`, "--headless=new", "--disable-gpu", "--no-first-run", `--user-data-dir=${dataDir}`, "--window-size=1280,720", "--disable-blink-features=AutomationControlled", "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"];
+
+    // No need to close existing Chrome — we use a separate user-data-dir
+    // that syncs cookies from the real profile
+
+    const args = [`--remote-debugging-port=${this._debugPort}`, "--no-first-run", `--user-data-dir=${dataDir}`, "--window-size=1280,720"];
+    if (headless) {
+      args.push("--headless=new", "--disable-gpu", "--user-agent=Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36");
+    }
     if (this._profileDir) args.push(`--profile-directory=${this._profileDir}`);
     args.push("about:blank");
-    this._proc = spawn(cp, args, { stdio: "pipe" });
+    this._proc = spawn(cp, args, { stdio: "pipe", detached: !headless });
+    if (!headless) this._proc.unref();
     this._proc.on("error", () => {}); this._proc.stderr?.on("data", () => {});
     // Connect to browser-level WS via /json/version
     let browserWsUrl = null;
@@ -3305,6 +3443,129 @@ class BrowserSession {
     const resp = await this._send("Target.getTargets");
     const pages = (resp?.targetInfos || []).filter(t => t.type === "page");
     for (const page of pages) await this._attachToTarget(page.targetId);
+  }
+
+  _detectChromeUserDataDir() {
+    // Chrome requires a non-default user-data-dir for remote debugging.
+    // We use a cloclo-specific dir but sync cookies/login state from the real Chrome profile.
+    const clocloDir = path.join(os.homedir(), ".claude", "browser-profiles", "default");
+    fs.mkdirSync(path.join(clocloDir, "Default"), { recursive: true });
+
+    // Find the user's real Chrome profile to copy login state from
+    let realDir = null;
+    if (process.platform === "darwin") {
+      realDir = path.join(os.homedir(), "Library", "Application Support", "Google", "Chrome");
+    } else if (process.platform === "linux") {
+      realDir = path.join(os.homedir(), ".config", "google-chrome");
+      if (!fs.existsSync(realDir)) realDir = path.join(os.homedir(), ".config", "chromium");
+    } else if (process.platform === "win32") {
+      realDir = path.join(os.homedir(), "AppData", "Local", "Google", "Chrome", "User Data");
+    }
+
+    // Sync key files that carry login state (cookies, local storage, extensions)
+    if (realDir && fs.existsSync(realDir)) {
+      const filesToSync = [
+        "Default/Cookies",
+        "Default/Login Data",
+        "Default/Web Data",
+        "Default/Preferences",
+        "Default/Secure Preferences",
+        "Default/Local Storage",
+        "Default/Session Storage",
+        "Default/Extension Cookies",
+        "Local State",
+      ];
+      for (const rel of filesToSync) {
+        const src = path.join(realDir, rel);
+        const dst = path.join(clocloDir, rel);
+        try {
+          if (!fs.existsSync(src)) continue;
+          const srcStat = fs.statSync(src);
+          if (srcStat.isDirectory()) {
+            // Copy directory recursively
+            fs.cpSync(src, dst, { recursive: true, force: true });
+          } else {
+            // Only copy if source is newer
+            const dstExists = fs.existsSync(dst);
+            if (!dstExists || fs.statSync(dst).mtimeMs < srcStat.mtimeMs) {
+              fs.mkdirSync(path.dirname(dst), { recursive: true });
+              fs.copyFileSync(src, dst);
+            }
+          }
+        } catch (e) { log(`[browser] Sync ${rel}: ${e.message}`); }
+      }
+      // Also sync extensions so the same extensions are available
+      const extSrc = path.join(realDir, "Default", "Extensions");
+      const extDst = path.join(clocloDir, "Default", "Extensions");
+      try {
+        if (fs.existsSync(extSrc) && !fs.existsSync(extDst)) {
+          fs.cpSync(extSrc, extDst, { recursive: true });
+          log("[browser] Synced extensions from real Chrome profile");
+        }
+      } catch { /* ignore */ }
+      log("[browser] Synced login state from real Chrome profile");
+    }
+
+    return clocloDir;
+  }
+
+  async _closeExistingChrome() {
+    // Check if Chrome is actually running first
+    try {
+      const check = execSync("pgrep -x 'Google Chrome' 2>/dev/null || true", { encoding: "utf-8", stdio: "pipe" }).trim();
+      if (!check) { log("[browser] Chrome not running, skipping close"); return; }
+    } catch { return; }
+
+    log("[browser] Closing Chrome to reopen with CDP...");
+    try {
+      // Step 1: Try graceful quit via AppleScript
+      if (process.platform === "darwin") {
+        execSync('osascript -e \'tell application "Google Chrome" to quit\' 2>/dev/null', { timeout: 3000, stdio: "pipe" });
+      } else {
+        execSync("pkill -TERM -f 'google-chrome|chromium' 2>/dev/null || true", { timeout: 3000, stdio: "pipe" });
+      }
+
+      // Step 2: Wait up to 5s for graceful exit
+      for (let i = 0; i < 10; i++) {
+        await sleep(500);
+        try {
+          const result = execSync("pgrep -x 'Google Chrome' 2>/dev/null || true", { encoding: "utf-8", stdio: "pipe" }).trim();
+          if (!result) { log("[browser] Chrome closed gracefully"); return; }
+        } catch { return; }
+      }
+
+      // Step 3: Force kill if graceful quit didn't work (confirmation dialog, etc.)
+      log("[browser] Graceful quit timed out, force closing...");
+      if (process.platform === "darwin") {
+        execSync("pkill -9 'Google Chrome' 2>/dev/null || true", { timeout: 3000, stdio: "pipe" });
+      } else {
+        execSync("pkill -9 -f 'google-chrome|chromium' 2>/dev/null || true", { timeout: 3000, stdio: "pipe" });
+      }
+
+      // Step 4: Wait for force kill to take effect
+      for (let i = 0; i < 6; i++) {
+        await sleep(500);
+        try {
+          const result = execSync("pgrep -x 'Google Chrome' 2>/dev/null || true", { encoding: "utf-8", stdio: "pipe" }).trim();
+          if (!result) { log("[browser] Chrome force-closed"); return; }
+        } catch { return; }
+      }
+      log("[browser] Chrome still running after force kill, proceeding anyway");
+    } catch (e) {
+      log(`[browser] Could not close Chrome: ${e.message}`);
+    }
+
+    // Clean up stale lock files left by killed Chrome
+    try {
+      const profileDir = this._detectChromeUserDataDir();
+      for (const lockFile of ["SingletonLock", "SingletonSocket", "SingletonCookie"]) {
+        const lockPath = path.join(profileDir, lockFile);
+        if (fs.existsSync(lockPath)) {
+          fs.unlinkSync(lockPath);
+          log(`[browser] Removed stale ${lockFile}`);
+        }
+      }
+    } catch { /* ignore lock cleanup errors */ }
   }
 
   async _attachRemote(cdpUrl) {
@@ -6434,11 +6695,20 @@ function registerMemoryTools(registry) {
     if (!found) return { content: "Memory not found.", is_error: true };
     const raw = fs.readFileSync(found.file, "utf-8");
     const meta = _parseMemoryFrontmatter(raw);
+    const memName = meta.name || path.basename(found.file, ".md");
+    // Emit memory_referenced metric
+    try {
+      appendMemoryMetric(cwd, found.scope || "project", {
+        type: "memory_referenced",
+        file: path.basename(found.file),
+        name: memName,
+      });
+    } catch { /* non-fatal */ }
     return {
       content: JSON.stringify({
         scope: meta.scope || found.scope,
         type: meta.type || "reference",
-        name: meta.name || path.basename(found.file, ".md"),
+        name: memName,
         description: meta.description || "",
         file: found.file,
         content: _stripMemoryFrontmatter(raw),
@@ -7617,16 +7887,26 @@ Respond with EXACTLY one JSON object (no markdown, no explanation):
 or
 {"save":true,"scope":"user","type":"feedback","name":"short slug","description":"one-line description for index","content":"the actual memory content to persist"}
 
+Recent conversation context (for understanding the flow):
+{HISTORY}
+
 User message:
 {MESSAGE}
 
 Context (last assistant response, for understanding corrections):
 {CONTEXT}`;
 
-async function classifyWithLLM(client, provider, userMessage, assistantContext) {
+async function classifyWithLLM(client, provider, userMessage, assistantContext, exchangeHistory = []) {
   const today = new Date().toISOString().split("T")[0];
+  // Build history string from last 4 exchanges (skip current), ~150 chars each
+  const historyStr = exchangeHistory.slice(0, -1).slice(-4).map((ex, i) => {
+    const u = (ex.user || "").slice(0, 150);
+    const a = (ex.assistant || "").slice(0, 150);
+    return `[${i + 1}] User: ${u}${u.length >= 150 ? "…" : ""}\n    Assistant: ${a}${a.length >= 150 ? "…" : ""}`;
+  }).join("\n") || "(no prior context)";
   const prompt = CLASSIFY_PROMPT
     .replace("{TODAY}", today)
+    .replace("{HISTORY}", historyStr)
     .replace("{MESSAGE}", userMessage.slice(0, 2000))
     .replace("{CONTEXT}", (assistantContext || "").slice(0, 500));
 
@@ -7708,7 +7988,7 @@ class AutoMemoryTracker {
   }
 
   markSaved(type, name) {
-    this._lastSave.set(type + ":" + name, Date.now());
+    this._lastSave.set(this._key(type, name), Date.now());
   }
 
   markClassified() {
@@ -7793,7 +8073,7 @@ class AutoMemory {
   }
 
   // Called after each user↔assistant exchange
-  async processExchange(userMessage, assistantResponse) {
+  async processExchange(userMessage, assistantResponse, exchangeHistory = []) {
     this._lastAssistant = assistantResponse || "";
 
     // Tier 1: cheap pre-filter
@@ -7807,7 +8087,8 @@ class AutoMemory {
       this._client,
       this._provider,
       userMessage,
-      this._lastAssistant
+      this._lastAssistant,
+      exchangeHistory
     );
 
     if (!result) return [];
@@ -7829,6 +8110,287 @@ class AutoMemory {
 }
 
 // ── Exports ──────────────────────────────────────────────────
+
+
+// src/memory-metrics.mjs — JSONL tracking of memory loads and references
+//
+// Same rotation pattern as skill-metrics.mjs.
+// Storage: getMemoryDir(cwd)/memory-metrics.jsonl  (project)
+//          getUserMemoryDir()/memory-metrics.jsonl  (user)
+
+
+const METRICS_FILE = "memory-metrics.jsonl";
+const MAX_LINES = 5000;
+const TRIM_TO = 3000;
+
+function _metricsPath(cwd, scope) {
+  const dir = scope === "user" ? ensureUserMemoryDir() : ensureMemoryDir(cwd);
+  return path.join(dir, METRICS_FILE);
+}
+
+function appendMemoryMetric(cwd, scope, event) {
+  const line = JSON.stringify({
+    ...event,
+    scope,
+    ts: new Date().toISOString(),
+  });
+  const fp = _metricsPath(cwd, scope);
+  try {
+    fs.appendFileSync(fp, line + "\n");
+    // Rotation check
+    _rotateIfNeeded(fp);
+  } catch (e) {
+    log(`[memory-metrics] append error: ${e.message}`);
+  }
+}
+
+function _rotateIfNeeded(fp) {
+  try {
+    const content = fs.readFileSync(fp, "utf-8");
+    const lines = content.split("\n").filter(Boolean);
+    if (lines.length > MAX_LINES) {
+      const trimmed = lines.slice(lines.length - TRIM_TO);
+      fs.writeFileSync(fp, trimmed.join("\n") + "\n");
+      log(`[memory-metrics] rotated ${lines.length} → ${TRIM_TO} lines`);
+    }
+  } catch { /* ignore */ }
+}
+
+function readMemoryMetrics(cwd, scope, opts) {
+  const type = opts?.type;
+  const since = opts?.since;
+  const fp = _metricsPath(cwd, scope);
+  try {
+    const content = fs.readFileSync(fp, "utf-8");
+    let events = content.split("\n").filter(Boolean).map(line => {
+      try { return JSON.parse(line); } catch { return null; }
+    }).filter(Boolean);
+    if (type) events = events.filter(e => e.type === type);
+    if (since) {
+      const sinceDate = new Date(since);
+      events = events.filter(e => new Date(e.ts) >= sinceDate);
+    }
+    return events;
+  } catch {
+    return [];
+  }
+}
+
+function summarizeMemoryMetrics(cwd, scope) {
+  const events = readMemoryMetrics(cwd, scope);
+  const byFile = new Map();
+  for (const e of events) {
+    const key = e.file || e.name || "unknown";
+    if (!byFile.has(key)) {
+      byFile.set(key, { file: e.file, name: e.name, load_count: 0, last_loaded: null, ref_count: 0, last_referenced: null });
+    }
+    const entry = byFile.get(key);
+    if (e.type === "memory_loaded") {
+      entry.load_count++;
+      entry.last_loaded = e.ts;
+    } else if (e.type === "memory_referenced") {
+      entry.ref_count++;
+      entry.last_referenced = e.ts;
+    }
+  }
+  return Array.from(byFile.values());
+}
+
+
+// src/memory-dream.mjs — Dream consolidation engine
+//
+// Periodic background LLM agent that cleans up memories.
+// Follows CC's 4-phase Dream pattern: Orient → Gather Signal → Consolidate → Prune & Index
+
+
+// ── Configuration ──────────────────────────────────────────────
+
+const DREAM_MIN_SESSIONS = 5;   // sessions since last dream
+const DREAM_MIN_HOURS = 24;     // hours since last dream
+const DREAM_STATE_FILE = "dream-state.json";
+const DREAM_LOCK_FILE = "dream.lock";
+const LOCK_STALE_MS = 10 * 60 * 1000; // 10 minutes — consider lock stale after this
+
+// ── Dream State ────────────────────────────────────────────────
+
+function _dreamStatePath() {
+  return path.join(os.homedir(), ".claude-native", DREAM_STATE_FILE);
+}
+
+function loadDreamState() {
+  try {
+    return JSON.parse(fs.readFileSync(_dreamStatePath(), "utf-8"));
+  } catch {
+    return { last_dream_at: null, session_count_since: 0, memories_at_last_dream: 0 };
+  }
+}
+
+function saveDreamState(state) {
+  const dir = path.dirname(_dreamStatePath());
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(_dreamStatePath(), JSON.stringify(state, null, 2));
+}
+
+function incrementDreamSessionCount() {
+  const state = loadDreamState();
+  state.session_count_since = (state.session_count_since || 0) + 1;
+  saveDreamState(state);
+}
+
+// ── Memory Counting ────────────────────────────────────────────
+
+function countMemories(cwd) {
+  let count = 0;
+  for (const dir of [getMemoryDir(cwd), getUserMemoryDir()]) {
+    try {
+      for (const entry of fs.readdirSync(dir)) {
+        if (entry.endsWith(".md") && entry !== "MEMORY.md") count++;
+      }
+    } catch { /* dir may not exist */ }
+  }
+  return count;
+}
+
+// ── Should Dream? ──────────────────────────────────────────────
+
+function shouldDream(cwd) {
+  const state = loadDreamState();
+
+  // Condition 1: enough sessions
+  if ((state.session_count_since || 0) < DREAM_MIN_SESSIONS) return false;
+
+  // Condition 2: enough time elapsed
+  if (state.last_dream_at) {
+    const hoursSince = (Date.now() - new Date(state.last_dream_at).getTime()) / (1000 * 60 * 60);
+    if (hoursSince < DREAM_MIN_HOURS) return false;
+  }
+
+  // Condition 3: new memories exist since last dream
+  const currentCount = countMemories(cwd);
+  if (currentCount <= (state.memories_at_last_dream || 0)) return false;
+
+  return true;
+}
+
+// ── Lockfile ───────────────────────────────────────────────────
+
+function _lockPath(cwd) {
+  return path.join(ensureMemoryDir(cwd), DREAM_LOCK_FILE);
+}
+
+function _acquireLock(cwd) {
+  const lockPath = _lockPath(cwd);
+  try {
+    // Check for stale lock
+    if (fs.existsSync(lockPath)) {
+      const lockData = JSON.parse(fs.readFileSync(lockPath, "utf-8"));
+      const age = Date.now() - new Date(lockData.ts).getTime();
+      if (age < LOCK_STALE_MS) {
+        log(`[dream] Lock held by PID ${lockData.pid} (${Math.round(age / 1000)}s ago), skipping`);
+        return false;
+      }
+      log(`[dream] Stale lock (${Math.round(age / 1000)}s), overriding`);
+    }
+    fs.writeFileSync(lockPath, JSON.stringify({ pid: process.pid, ts: new Date().toISOString() }));
+    return true;
+  } catch (e) {
+    log(`[dream] Lock acquire failed: ${e.message}`);
+    return false;
+  }
+}
+
+function _releaseLock(cwd) {
+  try { fs.unlinkSync(_lockPath(cwd)); } catch { /* ignore */ }
+}
+
+// ── Dream Prompt ───────────────────────────────────────────────
+
+function buildDreamPrompt(cwd, metricsSummary) {
+  const projectDir = getMemoryDir(cwd);
+  const userDir = getUserMemoryDir();
+  const today = new Date().toISOString().split("T")[0];
+
+  const metricsBlock = metricsSummary.length > 0
+    ? metricsSummary.map(m =>
+        `  ${m.file || m.name}: loads=${m.load_count} refs=${m.ref_count} last_loaded=${m.last_loaded || "never"} last_ref=${m.last_referenced || "never"}`
+      ).join("\n")
+    : "  (no metrics data yet)";
+
+  return `Today is ${today}. You are running a memory consolidation pass ("Dream").
+
+## Phase 1 — Orient
+List the contents of both memory directories:
+- Project memory: ${projectDir}
+- User memory: ${userDir}
+Read both MEMORY.md index files. Count all .md entries (excluding MEMORY.md itself).
+
+## Phase 2 — Gather Signal
+Here are the memory usage metrics:
+${metricsBlock}
+
+Identify:
+- Never-loaded memories (0 loads → candidate for pruning)
+- Never-referenced memories (loaded but never used by the model → noise)
+- Stale entries (not loaded in 30+ days)
+- Duplicate topics across files (similar names, overlapping content)
+
+## Phase 3 — Consolidate
+For any issues found:
+- Merge duplicate memories into one file (keep the more complete version, combine unique info)
+- Resolve contradictions: if two memories conflict, the one with the more recent saved_at date wins
+- Update drifted content (e.g., dates that have passed, references to things that no longer exist)
+- Convert any relative dates to absolute dates (today is ${today})
+
+## Phase 4 — Prune & Index
+- Delete memories that are superseded (merged into another) or confirmed stale (never loaded, 30+ days old)
+- Rebuild MEMORY.md for each scope — keep each index under 200 lines
+- Add \`last_verified: ${today}\` to the frontmatter of confirmed/updated entries
+- Do NOT delete memories you're uncertain about — err on the side of keeping
+
+Use MemoryList, MemoryRead, MemorySave, and MemoryForget tools. Also use Read/Write for direct file manipulation when needed.
+Report what you changed at the end.`;
+}
+
+// ── Run Dream ──────────────────────────────────────────────────
+
+async function runDream(cwd, client, registry, permissions, backgroundManager) {
+  if (!_acquireLock(cwd)) return;
+
+  log("[dream] Starting memory consolidation...");
+
+  try {
+    // Gather metrics from both scopes
+    const projectMetrics = summarizeMemoryMetrics(cwd, "project");
+    const userMetrics = summarizeMemoryMetrics(cwd, "user");
+    const allMetrics = [...projectMetrics, ...userMetrics];
+
+    const prompt = buildDreamPrompt(cwd, allMetrics);
+
+    // Run as background agent using the Agent tool
+    const result = await registry.execute("Agent", {
+      prompt,
+      subagent_type: "memory-dream",
+      description: "Memory consolidation (Dream)",
+      run_in_background: true,
+    });
+
+    // Update dream state
+    const state = loadDreamState();
+    state.last_dream_at = new Date().toISOString();
+    state.session_count_since = 0;
+    state.memories_at_last_dream = countMemories(cwd);
+    saveDreamState(state);
+
+    log("[dream] Consolidation complete");
+    return result;
+  } catch (e) {
+    log(`[dream] Error: ${e.message}`);
+  } finally {
+    _releaseLock(cwd);
+  }
+}
+
+// ── Exports ────────────────────────────────────────────────────
 
 
 // src/audit.mjs — Persistent audit trail for all agent actions
@@ -9436,6 +9998,80 @@ function routeModel(text, cfg) {
 // ── Exports ──────────────────────────────────────────────────
 
 
+// src/skill-metrics.mjs — JSONL tracking of Skill tool invocations
+//
+// Same rotation pattern as memory-metrics.mjs.
+// Storage: ensureMemoryDir(cwd)/skill-metrics.jsonl (project-scoped)
+
+
+const SKILL_METRICS_FILE = "skill-metrics.jsonl";
+const SKILL_MAX_LINES = 5000;
+const SKILL_TRIM_TO = 3000;
+
+function _metricsDir(cwd) {
+  return ensureMemoryDir(cwd);
+}
+
+function _skillRotateIfNeeded(fp) {
+  try {
+    const content = fs.readFileSync(fp, "utf-8");
+    const lines = content.split("\n").filter(Boolean);
+    if (lines.length > SKILL_MAX_LINES) {
+      const trimmed = lines.slice(lines.length - SKILL_TRIM_TO);
+      fs.writeFileSync(fp, trimmed.join("\n") + "\n");
+      log(`[skill-metrics] rotated ${lines.length} → ${SKILL_TRIM_TO} lines`);
+    }
+  } catch { /* ignore */ }
+}
+
+function appendSkillMetric(cwd, event) {
+  const line = JSON.stringify({
+    ...event,
+    ts: new Date().toISOString(),
+  });
+  const fp = path.join(_metricsDir(cwd), SKILL_METRICS_FILE);
+  try {
+    fs.appendFileSync(fp, line + "\n");
+    _skillRotateIfNeeded(fp);
+  } catch (e) {
+    log(`[skill-metrics] append error: ${e.message}`);
+  }
+}
+
+function readSkillMetrics(cwd, opts) {
+  const since = opts?.since;
+  const fp = path.join(_metricsDir(cwd), SKILL_METRICS_FILE);
+  try {
+    const content = fs.readFileSync(fp, "utf-8");
+    let events = content.split("\n").filter(Boolean).map(line => {
+      try { return JSON.parse(line); } catch { return null; }
+    }).filter(Boolean);
+    if (since) {
+      const sinceDate = new Date(since);
+      events = events.filter(e => new Date(e.ts) >= sinceDate);
+    }
+    return events;
+  } catch {
+    return [];
+  }
+}
+
+function summarizeSkillMetrics(events) {
+  const bySkill = new Map();
+  for (const e of events) {
+    const key = e.skill_name || "unknown";
+    if (!bySkill.has(key)) {
+      bySkill.set(key, { skill: key, uses: 0, not_found: 0, errors: 0 });
+    }
+    const entry = bySkill.get(key);
+    entry.uses++;
+    if (e.found === false) entry.not_found++;
+    if (e.is_error === true) entry.errors++;
+  }
+  return [...bySkill.entries()].map(([, v]) => v).sort((a, b) => b.uses - a.uses);
+}
+
+
 // src/cron.mjs — Scheduled task execution for cloclo
 //
 // Usage:
@@ -10091,6 +10727,16 @@ VERDICT: WARN
 VERDICT: BLOCK
 Reason: <one-line explanation>`,
   },
+
+  "memory-dream": {
+    agentType: "memory-dream",
+    description: "Memory consolidation — merges, prunes, re-indexes",
+    model: null,
+    workload: "exploration",  // fast-tier
+    readOnly: false,
+    disallowedTools: ["Agent", "WebFetch", "WebSearch", "Browser", "AskUserQuestion", "SendUserMessage", "TaskOutput"],
+    getSystemPrompt: () => `You are a memory consolidation agent. Your job is to clean up, merge, and prune the user's persistent memory files. Only modify files within the memory directories. Be conservative — only delete memories you're confident are stale or superseded.`,
+  },
 };
 
 // ── Background Agent Manager ────────────────────────────────────
@@ -10607,15 +11253,60 @@ function loadMemoryIndex(cwd, scope = "project") {
   const dir = scope === "user" ? getUserMemoryDir() : getMemoryDir(cwd);
   const indexPath = path.join(dir, MEMORY_INDEX);
   try {
-    const content = fs.readFileSync(indexPath, "utf-8");
+    let content = fs.readFileSync(indexPath, "utf-8");
+    const linkRegex = /\[[^\]]+\]\(([^)]+)\)/g;
+    const warnings = [];
+    content = content.replace(linkRegex, (match, target) => {
+      const trimmedTarget = target.trim();
+      if (!trimmedTarget || /^(?:[a-z]+:|#)/i.test(trimmedTarget)) return match;
+      const resolvedPath = path.resolve(dir, trimmedTarget);
+      if (!resolvedPath.startsWith(dir + path.sep) && resolvedPath !== dir) return match;
+      if (fs.existsSync(resolvedPath)) return match;
+      const warning = `> WARNING: Ignored broken memory link \`${trimmedTarget}\` in ${scope} ${MEMORY_INDEX}.`;
+      warnings.push(warning);
+      console.warn(warning.replace(/^> WARNING: /, "WARNING: "));
+      return match.replace(`(${target})`, "(missing-memory-file)");
+    });
+    // Enrich index entries with timestamps (display-only, not written to disk)
+    // and emit memory_loaded metrics for each linked file
+    const enrichLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    content = content.replace(enrichLinkRegex, (match, label, target) => {
+      const trimmedTarget = target.trim();
+      if (!trimmedTarget || trimmedTarget === "missing-memory-file") return match;
+      if (/^(?:[a-z]+:|#)/i.test(trimmedTarget)) return match;
+      const resolvedPath = path.resolve(dir, trimmedTarget);
+      if (!fs.existsSync(resolvedPath)) return match;
+      try {
+        const raw = fs.readFileSync(resolvedPath, "utf-8");
+        // Extract saved_at or last_verified from frontmatter
+        const savedMatch = raw.match(/^saved_at:\s*(.+)$/m);
+        const verifiedMatch = raw.match(/^last_verified:\s*(.+)$/m);
+        const nameMatch = raw.match(/^name:\s*(.+)$/m);
+        const dateStr = verifiedMatch ? verifiedMatch[1].trim().slice(0, 10) : savedMatch ? savedMatch[1].trim().slice(0, 10) : null;
+        const dateLabel = verifiedMatch ? "verified" : "saved";
+        const suffix = dateStr ? ` (${dateLabel}: ${dateStr})` : "";
+        // Emit memory_loaded metric
+        if (typeof appendMemoryMetric === "function") appendMemoryMetric(cwd, scope, { type: "memory_loaded", file: trimmedTarget, name: nameMatch?.[1]?.trim() || label });
+        // Only append if not already present
+        if (match.includes("(saved:") || match.includes("(verified:")) return match;
+        return `${match}${suffix}`;
+      } catch (e) { log(`[memory-enrich] Error: ${e.message}`); return match; }
+    });
+
     const lines = content.split("\n");
+    let finalContent = content;
     if (lines.length > MEMORY_MAX_LINES) {
-      return lines.slice(0, MEMORY_MAX_LINES).join("\n")
+      finalContent = lines.slice(0, MEMORY_MAX_LINES).join("\n")
         + `\n\n> WARNING: MEMORY.md is ${lines.length} lines (limit: ${MEMORY_MAX_LINES}). Only the first ${MEMORY_MAX_LINES} lines were loaded. Move detailed content into separate topic files.`;
     }
-    return content;
+    if (warnings.length) {
+      finalContent += `\n\n${warnings.join("\n")}`;
+    }
+    return finalContent;
   } catch { return ""; }
 }
+
+const MEMORY_TOKEN_BUDGET = 8000;
 
 function buildMemoryPrompt(cwd) {
   const projectMemDir = ensureMemoryDir(cwd);
@@ -10623,7 +11314,7 @@ function buildMemoryPrompt(cwd) {
   const projectMemContent = loadMemoryIndex(cwd, "project");
   const userMemContent = loadMemoryIndex(cwd, "user");
 
-  return `# Memory
+  let prompt = `# Memory
 
 You have a persistent, file-based memory system with two explicit scopes:
 
@@ -10696,16 +11387,28 @@ Each scope has its own \`${MEMORY_INDEX}\`. The index should contain only links 
 - Do not write duplicate memories — check if one exists to update first
 
 ## Staleness warning
-Memory records are point-in-time observations, not live state. Before asserting facts from memory, verify: if a memory names a file path, check it exists; if it names a function, grep for it.
+Memory records are point-in-time observations, not live state. Each entry shows when it was saved or last verified. Memories not verified in 30+ days are more likely outdated. Before asserting facts from memory: if it names a file path, check it exists; if it names a function, grep for it.
 ${userMemContent ? `\n## Current User Memory Index (${MEMORY_INDEX})\n\n${userMemContent}` : ""}
 ${projectMemContent ? `\n## Current Project Memory Index (${MEMORY_INDEX})\n\n${projectMemContent}` : ""}`;
+
+  // Enforce memory token budget
+  const estimatedTokens = Math.ceil(prompt.length / 3.5);
+  if (estimatedTokens > MEMORY_TOKEN_BUDGET) {
+    const maxChars = Math.floor(MEMORY_TOKEN_BUDGET * 3.5);
+    prompt = prompt.slice(0, maxChars) + `\n\n> Memory section truncated (${estimatedTokens} tokens > ${MEMORY_TOKEN_BUDGET} budget). Use MemoryRead for full content.`;
+  }
+  return prompt;
 }
 
-// ── Settings Loader (.claude/settings.json) ─────────────────────
+// ── Settings Loader ─────────────────────────────────────────────
+// Priority (later wins): ~/.claude/settings.json (CC compat fallback)
+//   → ~/.claude-native/settings.json (cloclo primary)
+//   → <project>/.claude/settings.json → <project>/.claude/settings.local.json
 
 function loadSettings(cwd) {
   const locations = [
-    path.join(os.homedir(), ".claude", "settings.json"),       // user-level
+    path.join(os.homedir(), ".claude", "settings.json"),       // CC compat fallback
+    path.join(os.homedir(), ".claude-native", "settings.json"),// cloclo primary (wins over CC)
     path.join(cwd, ".claude", "settings.json"),                // project-level (shared)
     path.join(cwd, ".claude", "settings.local.json"),          // project-level (gitignored)
   ];
@@ -10744,6 +11447,11 @@ function applySettings(cfg, settings) {
     cfg.model = resolveModel(settings.model);
   }
 
+  // Permission mode from settings (CLI flags still win)
+  if (settings.permissions?.defaultMode && !process.argv.includes("--permission-mode") && !process.argv.includes("-y") && !process.argv.includes("--yes")) {
+    cfg.permissionMode = settings.permissions.defaultMode;
+  }
+
   // Permission rules from settings
   if (settings.permissions) {
     if (settings.permissions.allow) {
@@ -10769,6 +11477,10 @@ function applySettings(cfg, settings) {
   if (settings.mcpServers) {
     cfg._settingsMcpServers = settings.mcpServers;
   }
+
+  // Nudge intervals from settings
+  if (settings.skillNudgeInterval !== undefined) cfg._skillNudgeInterval = settings.skillNudgeInterval;
+  if (settings.memoryNudgeInterval !== undefined) cfg._memoryNudgeInterval = settings.memoryNudgeInterval;
 
   return cfg;
 }
@@ -12313,6 +13025,7 @@ When you encounter an obstacle, do not use destructive actions as a shortcut. Tr
  - For simple, directed codebase searches (e.g. for a specific file/class/function) use Glob or Grep directly.
  - For broader codebase exploration and deep research, use the Agent tool with subagent_type=Explore. This is slower than Glob or Grep directly, so use this only when a simple, directed search proves insufficient or when your task will clearly require more than 3 queries.
  - When the user asks to search the web, look something up online, or find information on the internet, use WebSearch for general queries or WebFetch to read a specific URL. Do NOT use Bash with curl for web requests when WebFetch is available.
+ - You have a Browser tool that controls a real Chrome browser on the user's machine with their existing cookies and login sessions. When the user asks you to visit a website (LinkedIn, Gmail, etc.), use the Browser tool — you HAVE permission and access. Navigate, click, read page content, fill forms. The user has explicitly authorized this. Do NOT refuse or say you cannot access websites — use the Browser tool.
  - Use WebFetch to read documentation pages, GitHub READMEs, API references, or any URL the user provides. Use WebSearch when no specific URL is known and the user wants to find information.
  - You can call multiple tools in a single response. If you intend to call multiple tools and there are no dependencies between them, make all independent tool calls in parallel. Maximize use of parallel tool calls where possible to increase efficiency. However, if some tool calls depend on previous calls, call them sequentially.
  - /<skill-name> (e.g., /commit) is shorthand for users to invoke a skill. When executed, the skill gets expanded to a full prompt. Use the Skill tool to execute them. IMPORTANT: Only use Skill for skills listed in the available skills section — do not guess or use built-in CLI commands.
@@ -12440,17 +13153,24 @@ Rules:
 
   const blocks = [
     ...billingBlock,
+    // Block 1: Static base prompt (rarely changes) — cache aggressively
     {
       type: "text",
       text: cfg.systemPrompt || staticPrompt,
       cache_control: { type: "ephemeral" },
     },
+    // Block 2: Semi-stable (CLAUDE.md, rules, skills) — cache with shorter TTL
+    {
+      type: "text",
+      text: (claudeMd ? `\n\n# Project Instructions (${conventionFile})\n${claudeMd}` : "")
+        + (globalRules ? `\n\n# Project Rules\n${globalRules}` : "")
+        + (skillIndex ? `\n\n${skillIndex}` : ""),
+      cache_control: { type: "ephemeral" },
+    },
+    // Block 3: Session-specific (env, memory, output) — no cache (changes every turn)
     {
       type: "text",
       text: dynamicPrompt
-        + (claudeMd ? `\n\n# Project Instructions (${conventionFile})\n${claudeMd}` : "")
-        + (globalRules ? `\n\n# Project Rules\n${globalRules}` : "")
-        + (skillIndex ? `\n\n${skillIndex}` : "")
         + (memoryPrompt ? `\n\n${memoryPrompt}` : "")
         + outputSection
         + briefSection,
@@ -12472,6 +13192,7 @@ class AgentLoop {
     this.skillContext = cfg._skillContext || null; // Active SkillExecutionContext
     this.totalUsage = { input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 0, cache_read_input_tokens: 0 };
     this.toolUseCount = 0; // Progress tracking (CC baseline: tokenCount + toolUseCount)
+    this._compactFailures = 0; // CC: yY7 = 3 max consecutive compact failures
     this.userFacingOutputs = [];
     // Provider is stored on cfg.provider (the provider object, not the string name)
     this.provider = cfg._provider || detectProvider(cfg.model);
@@ -12529,28 +13250,268 @@ class AgentLoop {
     }];
   }
 
-  // Context window limits by model family (tokens)
-  static _contextLimits = {
-    "claude-opus": 1000000, "claude-sonnet": 1000000, "claude-haiku": 200000,
-    "gpt-5": 1000000, "gpt-4o": 128000, "gpt-4": 128000, "gpt-3.5": 16385,
-    "o3": 200000, "o4": 200000,
-    "gemini": 1000000, "deepseek": 64000, "mistral": 128000,
-    "codex": 192000,
-    _default: 128000,
+  // Context limit from provider capabilities (set in providers.mjs)
+  // Per-model overrides for families where one provider serves multiple context sizes
+  static _contextOverrides = {
+    "claude-haiku": 200000,
+    "gpt-5": 1000000, "o3": 200000, "o4": 200000,
   };
 
   _getContextLimit() {
     const model = this.cfg.model || "";
-    for (const [prefix, limit] of Object.entries(AgentLoop._contextLimits)) {
-      if (prefix !== "_default" && model.includes(prefix)) return limit;
+    // Check per-model overrides first
+    for (const [prefix, limit] of Object.entries(AgentLoop._contextOverrides)) {
+      if (model.includes(prefix)) return limit;
     }
-    return AgentLoop._contextLimits._default;
+    // Use provider capability
+    return this.provider?.capabilities?.contextWindow || 128000;
+  }
+
+  // Effective window = context limit minus output token reserve (CC: lB = kD - S_R)
+  // This is what's actually available for input tokens (system + messages + tools)
+  _getEffectiveWindow() {
+    const contextLimit = this._getContextLimit();
+    const outputReserve = Math.min(20000, Math.floor(contextLimit * 0.1));
+    // Env override (like CC's CLAUDE_CODE_AUTO_COMPACT_WINDOW)
+    const envOverride = parseInt(process.env.CLOCLO_CONTEXT_WINDOW, 10);
+    if (envOverride > 0) return Math.min(envOverride, contextLimit) - outputReserve;
+    return contextLimit - outputReserve;
+  }
+
+  // ── Token Estimation (lightweight, no tiktoken) ──────────────
+  _estimateTokens(text) {
+    if (!text) return 0;
+    const str = typeof text === "string" ? text : JSON.stringify(text);
+    return Math.ceil(str.length / 3.5);
+  }
+
+  _estimateMessageTokens(messages) {
+    let total = 0;
+    for (const msg of messages) {
+      total += 4; // message overhead
+      total += this._estimateTokens(msg.content);
+    }
+    return total;
+  }
+
+  _estimateSystemTokens(systemBlocks) {
+    let total = 0;
+    for (const block of systemBlocks) {
+      total += this._estimateTokens(block.text || block);
+    }
+    return total;
+  }
+
+  _estimateToolTokens() {
+    const defs = this.registry.getDefinitions();
+    return defs.reduce((sum, d) => sum + this._estimateTokens(d), 0);
+  }
+
+  // ── Micro-Compact (runs before every API call) ───────────────
+  _microCompact(messages) {
+    for (const msg of messages) {
+      if (typeof msg.content === "string") {
+        msg.content = msg.content.replace(/\n{3,}/g, "\n\n");
+        msg.content = msg.content.replace(/  +/g, " ");
+      }
+      if (Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if (block.type === "text" && typeof block.text === "string") {
+            block.text = block.text.replace(/\n{3,}/g, "\n\n");
+          }
+          if (block.type === "tool_result" && typeof block.content === "string" && block.content.length > 10000) {
+            block.content = block.content.slice(0, 5000) + `\n... (truncated from ${block.content.length} chars)`;
+          }
+        }
+      }
+    }
+  }
+
+  // ── Post-Compact File Restoration (CC: vf7=5 max, $_R=5000 tokens each) ──
+  // Extract file paths from tool_use blocks (Read, Edit, Write) in recent messages
+  _extractRecentFiles(messages) {
+    const fileTools = new Set(["Read", "Edit", "Write"]);
+    const seen = new Map(); // path → last index
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+      if (msg.role !== "assistant" || !Array.isArray(msg.content)) continue;
+      for (const block of msg.content) {
+        if (block.type === "tool_use" && fileTools.has(block.name)) {
+          const p = block.input?.file_path;
+          if (p) seen.set(p, i);
+        }
+      }
+    }
+    // Sort by recency (last touched), take top 5
+    return [...seen.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([p]) => p);
+  }
+
+  // Re-read files and build a context message (max 5000 tokens each)
+  _restoreFiles(filePaths) {
+    if (filePaths.length === 0) return null;
+    const maxTokensPerFile = 5000;
+    const maxCharsPerFile = maxTokensPerFile * 4; // ~4 chars/token
+    const parts = [];
+    for (const fp of filePaths) {
+      try {
+        if (!fs.existsSync(fp)) continue;
+        const stat = fs.statSync(fp);
+        if (!stat.isFile() || stat.size > 500000) continue; // skip huge files
+        let content = fs.readFileSync(fp, "utf-8");
+        if (content.length > maxCharsPerFile) {
+          content = content.slice(0, maxCharsPerFile) + `\n... (truncated to ${maxTokensPerFile} tokens)`;
+        }
+        parts.push(`## ${fp}\n\`\`\`\n${content}\n\`\`\``);
+      } catch { /* skip unreadable files */ }
+    }
+    if (parts.length === 0) return null;
+    return `[Post-compact file restoration — ${parts.length} recently active files re-loaded for context]\n\n${parts.join("\n\n")}`;
+  }
+
+  // ── Message Windowing (token-aware with dependency tracking) ──
+  // CC: V_R() scans backwards from end, respects tool_use/tool_result pairs
+  // via QCq() which walks back to find referenced tool calls.
+  _windowMessages(messages) {
+    const effectiveWindow = this._getEffectiveWindow();
+    const totalTokens = this._estimateMessageTokens(messages);
+
+    if (totalTokens < effectiveWindow * 0.6 || messages.length < 20) return false;
+
+    // Token budget for kept messages (CC: minTokens=10000, maxTokens=40000)
+    const minTokens = 10000;
+    const maxTokens = 40000;
+    const minTextMessages = 5;
+
+    // Scan backwards from end, accumulating tokens until budget met
+    let keptTokens = 0;
+    let textMsgCount = 0;
+    let cutPoint = messages.length;
+
+    for (let i = messages.length - 1; i >= 2; i--) { // keep at least first 2
+      const msgTokens = this._estimateTokens(messages[i].content);
+      keptTokens += msgTokens;
+      if (typeof messages[i].content === "string" && messages[i].content.length > 0) textMsgCount++;
+      cutPoint = i;
+      if (keptTokens >= maxTokens) break;
+      if (keptTokens >= minTokens && textMsgCount >= minTextMessages) break;
+    }
+
+    // Dependency tracking: walk back to include any assistant tool_use blocks
+    // that are referenced by tool_result blocks in the kept range (CC: QCq)
+    const keptToolResultIds = new Set();
+    for (let i = cutPoint; i < messages.length; i++) {
+      const msg = messages[i];
+      if (msg.role === "user" && Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if (block.type === "tool_result" && block.tool_use_id) {
+            keptToolResultIds.add(block.tool_use_id);
+          }
+        }
+      }
+    }
+
+    // Find tool_use IDs already in kept range
+    const keptToolUseIds = new Set();
+    for (let i = cutPoint; i < messages.length; i++) {
+      const msg = messages[i];
+      if (msg.role === "assistant" && Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if (block.type === "tool_use" && block.id) keptToolUseIds.add(block.id);
+        }
+      }
+    }
+
+    // Walk backwards from cutPoint to include messages with orphaned tool_use refs
+    const orphanedIds = new Set([...keptToolResultIds].filter(id => !keptToolUseIds.has(id)));
+    for (let i = cutPoint - 1; i >= 2 && orphanedIds.size > 0; i--) {
+      const msg = messages[i];
+      if (msg.role === "assistant" && Array.isArray(msg.content)) {
+        let found = false;
+        for (const block of msg.content) {
+          if (block.type === "tool_use" && orphanedIds.has(block.id)) {
+            orphanedIds.delete(block.id);
+            found = true;
+          }
+        }
+        if (found) cutPoint = i;
+      }
+    }
+
+    if (cutPoint <= 2) return false; // nothing to drop
+
+    const dropped = cutPoint - 2; // keep first 2 + everything from cutPoint
+    if (dropped < 4) return false; // not worth it
+
+    messages.splice(2, dropped);
+
+    messages.splice(2, 0, {
+      role: "user",
+      content: `[${dropped} older messages removed to manage context. Key earlier context preserved in system prompt and memory.]`,
+    });
+
+    log(`Message windowing: dropped ${dropped} messages, kept ${messages.length} (token-aware, ${keptToolResultIds.size} tool deps tracked)`);
+    // Notify session to persist windowed state
+    this.cb.onCompact?.(messages);
+    return true;
+  }
+
+  // ── Graceful Degradation Ladder ──────────────────────────────
+  async _manageContext(messages, systemBlocks) {
+    const effectiveWindow = this._getEffectiveWindow();
+    const estimated = this._estimateMessageTokens(messages) + this._estimateSystemTokens(systemBlocks) + this._estimateToolTokens();
+    const pct = estimated / effectiveWindow;
+
+    // Env override for compact threshold (like CC's CLAUDE_AUTOCOMPACT_PCT_OVERRIDE)
+    const pctOverride = parseFloat(process.env.CLOCLO_AUTOCOMPACT_PCT);
+    const compactThreshold = (pctOverride > 0 && pctOverride <= 100) ? pctOverride / 100 : 0.75;
+
+    // Level 1 (60%): Disable deferred tool promotion
+    if (pct > 0.6) {
+      this.registry._blockPromotions = true;
+      log(`[context] ${Math.round(pct * 100)}% — blocking deferred tool promotions`);
+    } else {
+      this.registry._blockPromotions = false;
+    }
+
+    // Level 2 (65%): Message windowing
+    if (pct > 0.65) {
+      this._windowMessages(messages);
+    }
+
+    // Level 3 (configurable, default 75%): Auto-compact
+    if (pct > compactThreshold) {
+      await this._autoCompact(messages, systemBlocks);
+    }
+
+    // Level 4 (90%): Emergency warning
+    if (pct > 0.9) {
+      log(`[context] ${Math.round(pct * 100)}% — emergency context reduction`);
+      this.cb.onText?.("\x1b[31m[context critical — reducing memory and tool definitions]\x1b[0m\n");
+    }
+
+    // Level 5: Hard block — refuse API call to prevent 400 errors (CC: isAtBlockingLimit)
+    const blockingOverride = parseInt(process.env.CLOCLO_BLOCKING_LIMIT, 10);
+    const blockingLimit = (blockingOverride > 0) ? blockingOverride : (effectiveWindow - 3000);
+    if (estimated > blockingLimit) {
+      log(`[context] ${Math.round(pct * 100)}% — at blocking limit (${estimated}/${blockingLimit}), refusing API call`);
+      this.cb.onText?.("\x1b[31m[context limit reached — use /compact to free space]\x1b[0m\n");
+      return "blocked";
+    }
   }
 
   async _autoCompact(messages, systemBlocks) {
-    const inputTokens = this.totalUsage.input_tokens;
-    const contextLimit = this._getContextLimit();
-    const threshold = Math.floor(contextLimit * 0.80);
+    // Env override to disable compaction (CC: DISABLE_COMPACT / DISABLE_AUTO_COMPACT)
+    if (process.env.CLOCLO_DISABLE_COMPACT || process.env.DISABLE_AUTO_COMPACT) return false;
+    // Failure counter — stop after 3 consecutive failures (CC: yY7 = 3)
+    if (this._compactFailures >= 3) return false;
+
+    // Use real API usage if available, fall back to estimation
+    const inputTokens = this.totalUsage.input_tokens || this._estimateMessageTokens(messages);
+    const effectiveWindow = this._getEffectiveWindow();
+    const threshold = Math.floor(effectiveWindow * 0.75);
 
     if (inputTokens < threshold || messages.length < 6) return false;
 
@@ -12615,6 +13576,9 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
       }
 
       if (summaryText.length > 50) {
+        // Collect recently touched file paths from the conversation (for post-compact restoration)
+        const touchedFiles = this._extractRecentFiles(messages);
+
         // Replace messages with compact summary
         const originalCount = messages.length;
         messages.length = 0;
@@ -12622,8 +13586,19 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
           { role: "user", content: `[Auto-compacted from ${originalCount} messages]\n\nConversation summary:\n${summaryText}` },
           { role: "assistant", content: "I've reviewed the conversation summary and I'm ready to continue. What would you like to do next?" },
         );
-        log(`Auto-compact: ${originalCount} → 2 messages, summary ${summaryText.length} chars`);
-        this.cb.onText?.(`\x1b[2m[compacted ${originalCount} → 2 messages]\x1b[0m\n`);
+
+        // Post-compact file restoration (CC: vf7=5 files, $_R=5000 tokens each)
+        // Re-read the most recently touched files so the model has fresh context
+        const restored = this._restoreFiles(touchedFiles);
+        if (restored) {
+          messages.push({ role: "user", content: restored });
+        }
+
+        log(`Auto-compact: ${originalCount} → ${messages.length} messages, summary ${summaryText.length} chars${touchedFiles.length > 0 ? `, restored ${Math.min(touchedFiles.length, 5)} files` : ""}`);
+        this.cb.onText?.(`\x1b[2m[compacted ${originalCount} → ${messages.length} messages]\x1b[0m\n`);
+        this._compactFailures = 0; // Reset on success
+        // Notify session to persist compacted state
+        this.cb.onCompact?.(messages);
 
         // PostCompact hook
         if (this.cfg._hookRunner?.hasHooksFor("PostCompact")) {
@@ -12636,7 +13611,11 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
         return true;
       }
     } catch (e) {
-      log(`Auto-compact failed: ${e.message}`);
+      this._compactFailures++;
+      log(`Auto-compact failed (${this._compactFailures}/3): ${e.message}`);
+      if (this._compactFailures >= 3) {
+        this.cb.onText?.("\x1b[31m[compaction failed 3 times — disabling auto-compact for this session]\x1b[0m\n");
+      }
     }
     return false;
   }
@@ -12683,6 +13662,20 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
         log(`Deferred tools delta: +${delta.added.length} -${delta.removed.length} (${delta.all.length} total)`);
       }
 
+      // Micro-compact: lightweight whitespace/size reduction before every API call
+      this._microCompact(messages);
+
+      // Graduated context management (windowing, compact, degradation, hard block)
+      const contextStatus = await this._manageContext(messages, systemBlocks);
+      if (contextStatus === "blocked") {
+        return {
+          text: "Context window full. Use /compact to free space.",
+          usage: this.totalUsage, turns: turnCount,
+          toolUseCount: this.toolUseCount, stopReason: "context_limit",
+          userFacingOutputs: this._finalizeUserFacingOutputs("Context window full. Use /compact to free space."),
+        };
+      }
+
       // Strip non-API fields (messageId) from messages before sending
       const apiMessages = messages.map(({ messageId, ...rest }) => rest);
 
@@ -12704,7 +13697,9 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
       let currentBlock = null;
       let stopReason = null;
       let usage = null;
+      this._hasAttemptedReactiveCompact = false;
 
+      try {
       for await (const { event, data } of this.client.stream(body, { signal: this.cfg.abortSignal })) {
         switch (event) {
           case "message_start":
@@ -12754,6 +13749,19 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
           case "message_stop":
             break;
         }
+      }
+      } catch (e) {
+        // Reactive compact: handle prompt-too-long errors mid-turn
+        if (!this._hasAttemptedReactiveCompact &&
+            (e.message?.includes("prompt is too long") || e.message?.includes("too many tokens") ||
+             (e.message?.includes("API error 400") && e.message?.includes("token")))) {
+          this._hasAttemptedReactiveCompact = true;
+          log("[context] Reactive compact — prompt too long");
+          this.cb.onText?.("\x1b[33m[prompt too long — compacting...]\x1b[0m\n");
+          await this._autoCompact(messages, systemBlocks);
+          continue; // retry the turn
+        }
+        throw e;
       }
 
       // Accumulate usage
@@ -12942,8 +13950,16 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
       // Append tool results as user message
       messages.push({ role: "user", content: toolResults });
 
-      // Auto-compact if context is getting full
-      await this._autoCompact(messages, systemBlocks);
+      // Context management after tool execution (graduated: window → compact → emergency → block)
+      const postToolContextStatus = await this._manageContext(messages, systemBlocks);
+      if (postToolContextStatus === "blocked") {
+        return {
+          text: "Context window full. Use /compact to free space.",
+          usage: this.totalUsage, turns: turnCount,
+          toolUseCount: this.toolUseCount, stopReason: "context_limit",
+          userFacingOutputs: this._finalizeUserFacingOutputs("Context window full. Use /compact to free space."),
+        };
+      }
     }
 
     return { text: "(max turns reached)", usage: this.totalUsage, turns: turnCount, toolUseCount: this.toolUseCount, stopReason: "max_turns", userFacingOutputs: this._finalizeUserFacingOutputs("(max turns reached)") };
@@ -12958,6 +13974,34 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
 // src/session.mjs — SessionManager, CheckpointStore, NdjsonBridge, SlashCommandRegistry, RemoteSessionManager, InteractiveMode
 
 
+
+// ── Background Review Nudge Constants ──────────────────────────
+
+const DEFAULT_SKILL_NUDGE_INTERVAL = 20;
+const DEFAULT_MEMORY_NUDGE_INTERVAL = 10;
+
+const _SKILL_REVIEW_PROMPT = `Review the conversation and consider if repetitive patterns could be automated. If you identify a pattern, create it using the skill-creator skill via the Skill tool.
+Skill performance metrics:
+{METRICS}
+Existing skills: {SKILLS}
+Guidance:
+- High error rate skills need fixing or replacing
+- Zero uses skills should be pruned
+- Don't create duplicates of existing skills`;
+
+const _MEMORY_REVIEW_PROMPT = `Review the conversation and identify important facts or decisions. If you find something worth remembering, save it using MemorySave.`;
+
+const _COMBINED_REVIEW_PROMPT = `Review the conversation for both skill automation and memory-worthy facts. Don't create duplicates. For skills use the skill-creator skill via the Skill tool. For memories use MemorySave.`;
+
+function _extractReviewActions(result) {
+  const text = result?.text || "";
+  if (!text) return [];
+  const actions = [];
+  if (text.includes("Skill created")) actions.push("Skill created");
+  if (text.includes("Skill updated")) actions.push("Skill updated");
+  if (text.includes("Memory saved")) actions.push("Memory saved");
+  return actions;
+}
 
 function _parseStructuredOutput(toolName, result) {
   if (result?.is_error) return null;
@@ -13017,6 +14061,28 @@ class SessionManager {
   append(id, message) {
     const filePath = path.join(this.dir, `${id}.jsonl`);
     fs.appendFileSync(filePath, JSON.stringify(message) + "\n");
+  }
+
+  // Rewrite session file with compacted messages (preserves metadata)
+  rewrite(id, messages) {
+    const filePath = this._findFile(id);
+    if (!filePath) return;
+    // Preserve metadata lines from the old file
+    const oldLines = fs.readFileSync(filePath, "utf-8").split("\n").filter(Boolean);
+    const metaLines = [];
+    for (const line of oldLines) {
+      try {
+        const obj = JSON.parse(line);
+        if (obj._meta) metaLines.push(line);
+      } catch { /* skip */ }
+    }
+    // Write compaction marker + compacted messages + preserved metadata
+    const lines = [
+      JSON.stringify({ _meta: "compacted", value: true, timestamp: new Date().toISOString() }),
+      ...messages.map(m => JSON.stringify(m)),
+      ...metaLines,
+    ];
+    fs.writeFileSync(filePath, lines.join("\n") + "\n");
   }
 
   // Save session metadata (title, summary, etc.)
@@ -13945,6 +15011,47 @@ class InteractiveMode {
     this.slashCommands = new SlashCommandRegistry();
     this._rl = null;
     this._statuslineScript = null;
+    this._exchangeBuffer = [];  // ring buffer of last 5 exchanges for auto-memory context
+    this._lastUsage = null;     // last API call usage (for /context)
+    this._sessionMetrics = null; // cumulative session metrics (written to disk on exit)
+    this._toolCallsSinceSkillReview = 0;
+    this._turnsSinceMemoryReview = 0;
+    this._nudgeEnabled = true;
+    this._skillNudgeInterval = this.cfg._skillNudgeInterval || DEFAULT_SKILL_NUDGE_INTERVAL;
+    this._memoryNudgeInterval = this.cfg._memoryNudgeInterval || DEFAULT_MEMORY_NUDGE_INTERVAL;
+  }
+
+  // ── Background Review Nudge ──────────────────────────────────
+  async _spawnBackgroundReview(type) {
+    if (!this._nudgeEnabled || this.cfg._isSubAgent) return;
+    let prompt = type === "skill" ? _SKILL_REVIEW_PROMPT
+      : type === "memory" ? _MEMORY_REVIEW_PROMPT
+      : _COMBINED_REVIEW_PROMPT;
+
+    // Inject skill metrics reinforcement
+    if (type === "skill" || type === "combined") {
+      try {
+        const events = readSkillMetrics(this.cfg.cwd);
+        const summary = summarizeSkillMetrics(events);
+        const metricsStr = summary.map(s =>
+          `${s.skill}: ${s.uses} uses, error rate ${s.uses ? ((s.errors / s.uses) * 100).toFixed(0) : 0}%`
+        ).join(", ");
+        prompt = prompt.replace("{METRICS}", metricsStr || "(none)");
+        const skillList = this.cfg._skillLoader?.list() || [];
+        prompt = prompt.replace("{SKILLS}", skillList.map(s => s.name).join(", ") || "(none)");
+      } catch { prompt = prompt.replace("{METRICS}", "(unavailable)").replace("{SKILLS}", "(unavailable)"); }
+    }
+
+    const messagesSnapshot = [...this.messages].slice(-10);
+    try {
+      await this.registry.execute("Agent", {
+        prompt, subagent_type: "general-purpose",
+        description: `Background ${type} review`,
+        run_in_background: true,
+        _isSubAgent: true,
+        conversationContext: messagesSnapshot,
+      });
+    } catch (e) { log(`[nudge] Error: ${e.message}`); }
   }
 
   // ── Command Registration ─────────────────────────────────────
@@ -14367,23 +15474,53 @@ class InteractiveMode {
         }
       } });
 
-    // Context — visualize context usage
-    s.register({ name: "context", description: "Show context window usage", immediate: true,
+    // Context — rich breakdown by category (CC-style)
+    s.register({ name: "context", description: "Show context window usage breakdown", immediate: true,
       handler: () => {
-        const totalIn = self.messages.reduce((acc, m) => acc + (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length), 0);
-        const estimatedTokens = Math.ceil(totalIn / 4); // rough char-to-token ratio
-        const maxContext = 200000; // typical context window
-        const pct = Math.min(100, Math.round((estimatedTokens / maxContext) * 100));
-        const barLen = 40;
-        const filled = Math.round(barLen * pct / 100);
-        const bar = "\x1b[32m" + "█".repeat(Math.min(filled, Math.round(barLen * 0.6)))
-          + "\x1b[33m" + "█".repeat(Math.max(0, Math.min(filled - Math.round(barLen * 0.6), Math.round(barLen * 0.2))))
-          + "\x1b[31m" + "█".repeat(Math.max(0, filled - Math.round(barLen * 0.8)))
-          + "\x1b[0m" + "░".repeat(barLen - filled);
-        process.stderr.write(`\x1b[1m  Context Usage\x1b[0m\n`);
-        process.stderr.write(`  [${bar}] ${pct}%\n`);
-        process.stderr.write(`\x1b[2m  ~${(estimatedTokens / 1000).toFixed(1)}k tokens | ${self.messages.length} messages | ${(totalIn / 1024).toFixed(1)}kb raw\x1b[0m\n`);
-        if (pct > 70) process.stderr.write(`\x1b[33m  Consider /compact to free context.\x1b[0m\n`);
+        const W = (s) => process.stderr.write(s);
+        const provider = self.cfg._provider || detectProvider(self.cfg.model);
+        const contextLimit = provider?.capabilities?.contextWindow || 128000;
+
+        // Estimate each category
+        const systemBlocks = buildSystemPrompt(self.cfg);
+        const systemTokens = Math.ceil(systemBlocks.reduce((s, b) => s + (b.text || "").length, 0) / 3.5);
+        const toolDefs = self.registry.getDefinitions();
+        const toolTokens = Math.ceil(JSON.stringify(toolDefs).length / 3.5);
+        const msgTokens = Math.ceil(self.messages.reduce((s, m) => s + (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length), 0) / 3.5);
+
+        // Memory: extract from system prompt
+        const memBlock = systemBlocks.find(b => b.text?.includes("# Memory"));
+        const memTokens = memBlock ? Math.ceil(memBlock.text.length / 3.5) : 0;
+
+        // Skills
+        const skills = self.cfg._skillLoader?.list() || [];
+        const skillTokens = Math.ceil(skills.reduce((s, sk) => s + (sk.body?.length || 100), 0) / 3.5);
+
+        const totalEstimated = systemTokens + toolTokens + msgTokens;
+        const pct = Math.min(100, Math.round((totalEstimated / contextLimit) * 100));
+        const free = contextLimit - totalEstimated;
+
+        // Real usage from API (if available)
+        const realIn = self._lastUsage?.input_tokens;
+        const realOut = self._lastUsage?.output_tokens;
+        const cacheRead = self._lastUsage?.cache_read_input_tokens || 0;
+        const cacheCreate = self._lastUsage?.cache_creation_input_tokens || 0;
+
+        W(`\x1b[1m  Context Usage\x1b[0m\n`);
+        W(`  ${self.cfg.model} · ~${(totalEstimated/1000).toFixed(1)}k/${(contextLimit/1000).toFixed(0)}k tokens (${pct}%)\n\n`);
+        W(`  \x1b[2mEstimated by category:\x1b[0m\n`);
+        W(`    System prompt: ~${(systemTokens/1000).toFixed(1)}k tokens\n`);
+        W(`    Tool definitions: ~${(toolTokens/1000).toFixed(1)}k tokens (${toolDefs.length} tools)\n`);
+        W(`    Memory: ~${(memTokens/1000).toFixed(1)}k tokens\n`);
+        W(`    Skills: ~${(skillTokens/1000).toFixed(1)}k tokens (${skills.length} skills)\n`);
+        W(`    Messages: ~${(msgTokens/1000).toFixed(1)}k tokens (${self.messages.length} messages)\n`);
+        W(`    Free: ~${(free/1000).toFixed(0)}k tokens (${100-pct}%)\n`);
+        if (realIn) {
+          W(`\n  \x1b[2mLast API call:\x1b[0m\n`);
+          W(`    Input: ${realIn} | Output: ${realOut}\n`);
+          if (cacheRead || cacheCreate) W(`    Cache: ${cacheRead} read, ${cacheCreate} created\n`);
+        }
+        if (pct > 70) W(`\n  \x1b[33mConsider /compact to free context.\x1b[0m\n`);
       } });
 
     // Tasks — list background tasks (from TaskList tool)
@@ -14754,6 +15891,13 @@ class InteractiveMode {
     const cost = this.totalCost > 0 ? `$${this.totalCost.toFixed(4)}` : "";
     const msgs = `${this.messages.length}msg`;
 
+    // Dynamic context usage % (like CC's inline indicator)
+    const contextLimit = (this.cfg._provider || detectProvider(this.cfg.model))?.capabilities?.contextWindow || 128000;
+    const realInput = this._lastUsage?.input_tokens || 0;
+    const ctxPct = realInput > 0 ? Math.min(100, Math.round((realInput / contextLimit) * 100)) : 0;
+    const ctxColor = ctxPct > 80 ? "\x1b[31m" : ctxPct > 60 ? "\x1b[33m" : "\x1b[2m";
+    const ctxStr = ctxPct > 0 ? `${ctxColor}${ctxPct}%ctx\x1b[0m` : "";
+
     const parts = [
       `\x1b[2m${provider}\x1b[0m`,
       `\x1b[36m${model}\x1b[0m`,
@@ -14763,6 +15907,7 @@ class InteractiveMode {
       `\x1b[2m${session}\x1b[0m`,
       `\x1b[2m${msgs}\x1b[0m`,
       cost ? `\x1b[2m${cost}\x1b[0m` : "",
+      ctxStr,
     ].filter(Boolean);
 
     let statusStr = parts.join(" \x1b[2m|\x1b[0m ");
@@ -15050,6 +16195,23 @@ class InteractiveMode {
       });
     }
 
+    // Increment dream session counter for consolidation trigger
+    try { incrementDreamSessionCount(); } catch { /* non-fatal */ }
+
+    // Write session metrics to disk
+    if (this._sessionMetrics) {
+      try {
+        const metricsDir = path.join(os.homedir(), ".claude-native", "session-metrics");
+        fs.mkdirSync(metricsDir, { recursive: true });
+        this._sessionMetrics.ended_at = new Date().toISOString();
+        this._sessionMetrics.total_cost = this.totalCost;
+        fs.writeFileSync(
+          path.join(metricsDir, `${this.sessionId}.json`),
+          JSON.stringify(this._sessionMetrics, null, 2)
+        );
+      } catch (e) { log(`[metrics] Write error: ${e.message}`); }
+    }
+
     this.mcpManager.shutdown();
   }
 
@@ -15217,6 +16379,11 @@ class InteractiveMode {
         }
         if (remote) remote.emit({ type: "tool_result", id, tool_name: toolName, is_error: result.is_error });
       },
+      onCompact: (compactedMessages) => {
+        // Persist compacted context to session file so resume loads the compact state
+        this.sessions.rewrite(this.sessionId, compactedMessages);
+        log(`[context] Session file rewritten with ${compactedMessages.length} compacted messages`);
+      },
       onPermissionDeny: (block, msg) => {
         process.stderr.write(`\x1b[33m[Denied: ${block.name}] ${msg}\x1b[0m\n`);
       },
@@ -15276,13 +16443,41 @@ class InteractiveMode {
       try {
         if (!this._autoMemory) this._autoMemory = new AutoMemory(this.cfg.cwd, this.client, this.cfg._provider);
         const userText = typeof input === "string" ? input : JSON.stringify(input);
+        // Maintain exchange buffer (rolling window of 5)
+        this._exchangeBuffer.push({ user: userText, assistant: assistantVisibleText || "" });
+        if (this._exchangeBuffer.length > 5) this._exchangeBuffer.shift();
         // Fire and forget — don't block the REPL on memory classification
-        this._autoMemory.processExchange(userText, assistantVisibleText || "").then(saved => {
+        this._autoMemory.processExchange(userText, assistantVisibleText || "", this._exchangeBuffer).then(saved => {
           for (const s of saved) log(`[auto-memory] Saved ${s.type}: ${s.name}`);
         }).catch(e => log(`[auto-memory] Error: ${e.message}`));
       } catch (e) { /* ignore: auto-memory is non-fatal */
         log(`[auto-memory] Error: ${e.message}`);
       }
+
+      // Dream trigger — consolidate memories if conditions are met
+      try {
+        if (shouldDream(this.cfg.cwd)) {
+          runDream(this.cfg.cwd, this.client, this.registry, this.permissions, new BackgroundAgentManager())
+            .catch(e => log(`[dream] Error: ${e.message}`));
+        }
+      } catch (e) { log(`[dream] Check error: ${e.message}`); }
+
+      // Background review nudge — skill creation + memory review
+      try {
+        this._turnsSinceMemoryReview++;
+        this._toolCallsSinceSkillReview += (result.toolUseCount || 0);
+        const cfg = this.cfg;
+        if (!cfg._isSubAgent && this._nudgeEnabled) {
+          if (this._toolCallsSinceSkillReview >= this._skillNudgeInterval) {
+            this._toolCallsSinceSkillReview = 0;
+            this._spawnBackgroundReview("skill").catch(e => log(`[nudge] ${e.message}`));
+          }
+          if (this._turnsSinceMemoryReview >= this._memoryNudgeInterval) {
+            this._turnsSinceMemoryReview = 0;
+            this._spawnBackgroundReview("memory").catch(e => log(`[nudge] ${e.message}`));
+          }
+        }
+      } catch (e) { log(`[nudge] Error: ${e.message}`); }
 
       // Auto-save session title on first exchange
       if (!this.sessions.getMeta(this.sessionId, "title") && this.messages.length >= 2) {
@@ -15294,6 +16489,23 @@ class InteractiveMode {
       const costIn = (result.usage.input_tokens / 1_000_000) * 3;
       const costOut = (result.usage.output_tokens / 1_000_000) * 15;
       this.totalCost += costIn + costOut;
+
+      // Track last usage for /context and session metrics
+      this._lastUsage = result.usage;
+      if (!this._sessionMetrics) {
+        this._sessionMetrics = {
+          session_id: this.sessionId, model: this.cfg.model,
+          turns: 0, total_input: 0, total_output: 0,
+          compactions: 0, cache_reads: 0, cache_creates: 0,
+          tool_calls: 0, started_at: new Date().toISOString(),
+        };
+      }
+      this._sessionMetrics.turns++;
+      this._sessionMetrics.total_input += result.usage.input_tokens || 0;
+      this._sessionMetrics.total_output += result.usage.output_tokens || 0;
+      this._sessionMetrics.cache_reads += result.usage.cache_read_input_tokens || 0;
+      this._sessionMetrics.cache_creates += result.usage.cache_creation_input_tokens || 0;
+      this._sessionMetrics.tool_calls += result.toolUseCount || 0;
 
       const inK = (result.usage.input_tokens / 1000).toFixed(1);
       const outK = (result.usage.output_tokens / 1000).toFixed(1);
@@ -15395,6 +16607,10 @@ class InteractiveMode {
           process.stderr.write(`\x1b[31m[Error]\x1b[0m\n`);
         }
       },
+      onCompact: (compactedMessages) => {
+        this.sessions.rewrite(this.sessionId, compactedMessages);
+        log(`[context] Session file rewritten with ${compactedMessages.length} compacted messages`);
+      },
       onPermissionDeny: (block, msg) => {
         process.stderr.write(`\x1b[33m[Denied: ${block.name}] ${msg}\x1b[0m\n`);
       },
@@ -15452,7 +16668,7 @@ class InteractiveMode {
 
 // ── McpManager ──────────────────────────────────────────────────
 
-function flattenUserFacingOutputs(outputs, fallbackText = "") {
+const flattenUserFacingOutputs = memoize(function flattenUserFacingOutputs(outputs, fallbackText = "") {
   if (!Array.isArray(outputs) || outputs.length === 0) return fallbackText || "";
   const parts = outputs.map((output) => {
     if (!output || typeof output !== "object") return "";
@@ -15460,7 +16676,9 @@ function flattenUserFacingOutputs(outputs, fallbackText = "") {
     return output.message || "";
   }).filter(Boolean);
   return parts.length > 0 ? parts.join("\n") : (fallbackText || "");
-}
+}, {
+  key: (outputs, fallbackText = "") => JSON.stringify([outputs, fallbackText]),
+});
 
 class McpManager {
   constructor() {
@@ -15582,6 +16800,198 @@ class McpManager {
   }
 }
 
+// ── Onboarding Wizard ────────────────────────────────────────────
+
+async function runOnboarding() {
+  const W = (s) => process.stderr.write(s);
+  // Buffer all stdin lines upfront (works with both TTY and piped input)
+  const _lines = [];
+  let _lineIdx = 0;
+  const _rl = createInterface({ input: process.stdin });
+  await new Promise((resolve) => {
+    _rl.on("line", (line) => _lines.push(line));
+    _rl.on("close", resolve);
+    // For TTY: don't wait for EOF, resolve after a short delay if lines come in
+    if (process.stdin.isTTY) _rl.close();
+  });
+  const _readLine = (prompt) => new Promise((resolve) => {
+    W(prompt);
+    if (_lineIdx < _lines.length) {
+      const line = _lines[_lineIdx++];
+      W(line + "\n");
+      resolve(line);
+    } else {
+      // Fallback to interactive readline for TTY
+      const rl2 = createInterface({ input: process.stdin, output: process.stderr });
+      rl2.question("", (answer) => { rl2.close(); resolve(answer); });
+    }
+  });
+  const ask = async (prompt, defaultVal = "") => {
+    const suffix = defaultVal ? ` (${defaultVal})` : "";
+    const answer = await _readLine(`${prompt}${suffix}: `);
+    return answer.trim() || defaultVal;
+  };
+  const choose = async (prompt, options) => {
+    W(`\n${prompt}\n`);
+    for (let i = 0; i < options.length; i++) {
+      W(`  \x1b[1m${i + 1}.\x1b[0m ${options[i].label}\n`);
+    }
+    const answer = await _readLine(`\nChoice (1-${options.length}): `);
+    const idx = parseInt(answer.trim(), 10) - 1;
+    return options[Math.max(0, Math.min(idx, options.length - 1))];
+  };
+
+  W("\x1b[1m\n  Welcome to cloclo\x1b[0m\n");
+  W("  One CLI to orchestrate them all\n\n");
+
+  // Step 1: Create directories
+  W("\x1b[2mSetting up directories...\x1b[0m\n");
+  const nativeDir = path.join(os.homedir(), ".claude-native");
+  const claudeDir = path.join(os.homedir(), ".claude");
+  fs.mkdirSync(nativeDir, { recursive: true });
+  fs.mkdirSync(claudeDir, { recursive: true });
+
+  // Step 2: Choose provider
+  const provider = await choose("Which AI provider do you want to use?", [
+    { label: "Anthropic (Claude) — recommended", value: "anthropic" },
+    { label: "OpenAI (GPT, o-series, Codex)", value: "openai" },
+    { label: "Google (Gemini)", value: "google" },
+    { label: "DeepSeek", value: "deepseek" },
+    { label: "Mistral", value: "mistral" },
+    { label: "Ollama (local, no auth needed)", value: "ollama" },
+    { label: "Other / I'll configure later", value: "skip" },
+  ]);
+
+  let model = null;
+  let authMethod = null;
+
+  // Step 3: Auth setup per provider
+  if (provider.value === "anthropic") {
+    const auth = await choose("How do you want to authenticate?", [
+      { label: "Browser login (OAuth) — Pro/Max subscription", value: "oauth" },
+      { label: "API key (ANTHROPIC_API_KEY)", value: "apikey" },
+    ]);
+    if (auth.value === "oauth") {
+      W("\n\x1b[2mLaunching browser for Anthropic login...\x1b[0m\n");
+      try {
+        const { oauthLogin: login } = await import("./auth.mjs");
+        await login();
+        authMethod = "oauth";
+      } catch (e) {
+        W(`\x1b[31mLogin failed: ${e.message}\x1b[0m\n`);
+        W("You can retry later with: cloclo --login\n");
+      }
+    } else {
+      const key = await ask("Enter your Anthropic API key");
+      if (key) {
+        W(`\n\x1b[2mTip: add to your shell profile:\x1b[0m\n`);
+        W(`  export ANTHROPIC_API_KEY="${key}"\n\n`);
+        authMethod = "apikey";
+      }
+    }
+    model = "claude-sonnet-4-6";
+
+  } else if (provider.value === "openai") {
+    const auth = await choose("How do you want to authenticate?", [
+      { label: "Browser login (OAuth) — ChatGPT Plus/Pro subscription", value: "oauth" },
+      { label: "API key (OPENAI_API_KEY)", value: "apikey" },
+    ]);
+    if (auth.value === "oauth") {
+      W("\n\x1b[2mLaunching browser for OpenAI login...\x1b[0m\n");
+      try {
+        const { openaiOAuthLogin: login } = await import("./auth.mjs");
+        await login();
+        authMethod = "oauth";
+      } catch (e) {
+        W(`\x1b[31mLogin failed: ${e.message}\x1b[0m\n`);
+        W("You can retry later with: cloclo --openai-login\n");
+      }
+    } else {
+      const key = await ask("Enter your OpenAI API key");
+      if (key) {
+        W(`\n\x1b[2mTip: add to your shell profile:\x1b[0m\n`);
+        W(`  export OPENAI_API_KEY="${key}"\n\n`);
+        authMethod = "apikey";
+      }
+    }
+    const m = await choose("Default model?", [
+      { label: "GPT-5.4 (latest, most capable)", value: "gpt-5.4" },
+      { label: "GPT-4o (fast, cheaper)", value: "gpt-4o" },
+      { label: "GPT-4o-mini (fastest, cheapest)", value: "gpt-4o-mini" },
+      { label: "Codex (code-optimized)", value: "gpt-5.3-codex" },
+    ]);
+    model = m.value;
+
+  } else if (provider.value === "google") {
+    const key = await ask("Enter your Google API key (GOOGLE_API_KEY)");
+    if (key) {
+      W(`\n\x1b[2mTip: add to your shell profile:\x1b[0m\n`);
+      W(`  export GOOGLE_API_KEY="${key}"\n\n`);
+    }
+    model = "gemini-2.5-pro";
+
+  } else if (provider.value === "deepseek") {
+    const key = await ask("Enter your DeepSeek API key (DEEPSEEK_API_KEY)");
+    if (key) {
+      W(`\n\x1b[2mTip: add to your shell profile:\x1b[0m\n`);
+      W(`  export DEEPSEEK_API_KEY="${key}"\n\n`);
+    }
+    model = "deepseek-chat";
+
+  } else if (provider.value === "mistral") {
+    const key = await ask("Enter your Mistral API key (MISTRAL_API_KEY)");
+    if (key) {
+      W(`\n\x1b[2mTip: add to your shell profile:\x1b[0m\n`);
+      W(`  export MISTRAL_API_KEY="${key}"\n\n`);
+    }
+    model = "mistral-large-latest";
+
+  } else if (provider.value === "ollama") {
+    W("\n\x1b[2mNo auth needed for Ollama.\x1b[0m\n");
+    const ollamaModel = await ask("Which model? (e.g. llama3.2, codellama, mistral)", "llama3.2");
+    model = `ollama/${ollamaModel}`;
+    authMethod = "none";
+  }
+
+  // Step 4: Permissions
+  const perms = await choose("Browser & Desktop tool permissions?", [
+    { label: "Auto-allow (recommended — no prompts for Browser/Desktop)", value: "allow" },
+    { label: "Ask each time (safer, but more prompts)", value: "ask" },
+  ]);
+
+  // Step 5: Write settings.json (cloclo primary: ~/.claude-native/)
+  const settingsPath = path.join(nativeDir, "settings.json");
+  let settings = {};
+  try { settings = JSON.parse(fs.readFileSync(settingsPath, "utf-8")); } catch { /* new file */ }
+
+  if (model) settings.model = model;
+  if (perms.value === "allow") {
+    settings.permissions = settings.permissions || {};
+    settings.permissions.allow = [...new Set([...(settings.permissions?.allow || []), "Browser", "Desktop"])];
+  }
+
+  fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
+  W(`\n\x1b[2mSettings saved to ${settingsPath}\x1b[0m\n`);
+
+  // Step 6: Summary
+  W("\n\x1b[1m  Setup complete!\x1b[0m\n\n");
+  W(`  Provider:    ${provider.label}\n`);
+  if (model) W(`  Model:       ${model}\n`);
+  if (authMethod === "oauth") W(`  Auth:        OAuth (saved in keychain)\n`);
+  else if (authMethod === "apikey") W(`  Auth:        API key (set it in your shell profile)\n`);
+  else if (authMethod === "none") W(`  Auth:        None needed\n`);
+  if (perms.value === "allow") W(`  Permissions: Browser & Desktop auto-allowed\n`);
+  W(`\n  Run \x1b[1mcloclo\x1b[0m to start!\n\n`);
+
+  W("\x1b[2mUseful commands:\n");
+  W("  cloclo                          Interactive REPL\n");
+  W("  cloclo -p \"explain this code\"    One-shot mode\n");
+  W("  cloclo --login                  Re-authenticate Anthropic\n");
+  W("  cloclo --openai-login           Re-authenticate OpenAI\n");
+  W("  cloclo --help                   Full help\x1b[0m\n\n");
+
+}
+
 // ── Main ────────────────────────────────────────────────────────
 
 async function main() {
@@ -15590,6 +17000,21 @@ async function main() {
 
   // Early dispatch: cron doesn't need auth/provider/tools
   if (cfg._subcommand === "cron") { handleCronCommand(cfg._cronArgs || []); return; }
+
+  // Onboarding wizard
+  if (cfg._subcommand === "onboarding") { await runOnboarding(); return; }
+
+  // Auto-trigger onboarding on first launch if no auth is found
+  const hasAnyAuth = cfg.apiKey || cfg.authToken || cfg.openaiApiKey
+    || process.env.ANTHROPIC_API_KEY || process.env.OPENAI_API_KEY
+    || process.env.GOOGLE_API_KEY || process.env.DEEPSEEK_API_KEY;
+  const nativeDir = path.join(os.homedir(), ".claude-native");
+  const settingsFile = path.join(os.homedir(), ".claude", "settings.json");
+  if (!hasAnyAuth && !fs.existsSync(nativeDir) && !fs.existsSync(settingsFile) && cfg.interactive && !cfg.ndjson) {
+    process.stderr.write("\x1b[33mFirst time? Running onboarding...\x1b[0m\n\n");
+    await runOnboarding();
+    return;
+  }
 
   // Resolve auth: --oauth (keychain) > --auth-token > --api-key > ANTHROPIC_API_KEY
   if (cfg.useOAuth || (!cfg.apiKey && !cfg.authToken)) {
@@ -15778,6 +17203,11 @@ Important:
     }, async (input) => {
       const skillName = input.skill.replace(/^\//, ""); // strip leading / if present
       const invoked = cfg._skillLoader.invoke(skillName, input.args || "");
+      appendSkillMetric(cfg.cwd, {
+        skill_name: skillName, found: !!invoked, is_error: !invoked,
+        args_present: !!(input.args), args_preview: input.args ? input.args.substring(0, 100) : undefined,
+        session_id: cfg.sessionId, turn_index: undefined,
+      });
       if (!invoked) {
         const available = cfg._skillLoader.list().map(s => s.name).join(", ");
         return { content: `Skill "${skillName}" not found. Available: ${available}`, is_error: true };
@@ -16000,6 +17430,9 @@ Important:
     if (_verbose && !isJsonOutput) {
       process.stderr.write(`\x1b[2m(${result.usage.input_tokens} in / ${result.usage.output_tokens} out | ${result.turns} turns)\x1b[0m\n`);
     }
+
+    // Increment dream session counter (one-shot counts as a session)
+    try { incrementDreamSessionCount(); } catch { /* non-fatal */ }
   } else {
     // Interactive REPL
     const repl = new InteractiveMode(cfg, registry, client, mcpManager, permissions);

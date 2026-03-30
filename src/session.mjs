@@ -19,8 +19,38 @@ import { ToolRegistry, registerBuiltinTools, registerMemoryTools, registerDeferr
 import { registerBrowserTools } from "./browser.mjs";
 import { oauthLogin, oauthLogout, openaiOAuthLogin, openaiOAuthLogout, getOAuthAccessToken, getOpenAIAccessToken } from "./auth.mjs";
 import { AutoMemory } from "./auto-memory.mjs";
+import { shouldDream, runDream, incrementDreamSessionCount } from "./memory-dream.mjs";
+import { readSkillMetrics, summarizeSkillMetrics } from "./skill-metrics.mjs";
 import { expandContextRefs } from "./context-refs.mjs";
 import { routeModel } from "./smart-routing.mjs";
+
+// ── Background Review Nudge Constants ──────────────────────────
+
+const DEFAULT_SKILL_NUDGE_INTERVAL = 20;
+const DEFAULT_MEMORY_NUDGE_INTERVAL = 10;
+
+const _SKILL_REVIEW_PROMPT = `Review the conversation and consider if repetitive patterns could be automated. If you identify a pattern, create it using the skill-creator skill via the Skill tool.
+Skill performance metrics:
+{METRICS}
+Existing skills: {SKILLS}
+Guidance:
+- High error rate skills need fixing or replacing
+- Zero uses skills should be pruned
+- Don't create duplicates of existing skills`;
+
+const _MEMORY_REVIEW_PROMPT = `Review the conversation and identify important facts or decisions. If you find something worth remembering, save it using MemorySave.`;
+
+const _COMBINED_REVIEW_PROMPT = `Review the conversation for both skill automation and memory-worthy facts. Don't create duplicates. For skills use the skill-creator skill via the Skill tool. For memories use MemorySave.`;
+
+function _extractReviewActions(result) {
+  const text = result?.text || "";
+  if (!text) return [];
+  const actions = [];
+  if (text.includes("Skill created")) actions.push("Skill created");
+  if (text.includes("Skill updated")) actions.push("Skill updated");
+  if (text.includes("Memory saved")) actions.push("Memory saved");
+  return actions;
+}
 
 function _parseStructuredOutput(toolName, result) {
   if (result?.is_error) return null;
@@ -80,6 +110,28 @@ class SessionManager {
   append(id, message) {
     const filePath = path.join(this.dir, `${id}.jsonl`);
     fs.appendFileSync(filePath, JSON.stringify(message) + "\n");
+  }
+
+  // Rewrite session file with compacted messages (preserves metadata)
+  rewrite(id, messages) {
+    const filePath = this._findFile(id);
+    if (!filePath) return;
+    // Preserve metadata lines from the old file
+    const oldLines = fs.readFileSync(filePath, "utf-8").split("\n").filter(Boolean);
+    const metaLines = [];
+    for (const line of oldLines) {
+      try {
+        const obj = JSON.parse(line);
+        if (obj._meta) metaLines.push(line);
+      } catch { /* skip */ }
+    }
+    // Write compaction marker + compacted messages + preserved metadata
+    const lines = [
+      JSON.stringify({ _meta: "compacted", value: true, timestamp: new Date().toISOString() }),
+      ...messages.map(m => JSON.stringify(m)),
+      ...metaLines,
+    ];
+    fs.writeFileSync(filePath, lines.join("\n") + "\n");
   }
 
   // Save session metadata (title, summary, etc.)
@@ -1008,6 +1060,47 @@ class InteractiveMode {
     this.slashCommands = new SlashCommandRegistry();
     this._rl = null;
     this._statuslineScript = null;
+    this._exchangeBuffer = [];  // ring buffer of last 5 exchanges for auto-memory context
+    this._lastUsage = null;     // last API call usage (for /context)
+    this._sessionMetrics = null; // cumulative session metrics (written to disk on exit)
+    this._toolCallsSinceSkillReview = 0;
+    this._turnsSinceMemoryReview = 0;
+    this._nudgeEnabled = true;
+    this._skillNudgeInterval = this.cfg._skillNudgeInterval || DEFAULT_SKILL_NUDGE_INTERVAL;
+    this._memoryNudgeInterval = this.cfg._memoryNudgeInterval || DEFAULT_MEMORY_NUDGE_INTERVAL;
+  }
+
+  // ── Background Review Nudge ──────────────────────────────────
+  async _spawnBackgroundReview(type) {
+    if (!this._nudgeEnabled || this.cfg._isSubAgent) return;
+    let prompt = type === "skill" ? _SKILL_REVIEW_PROMPT
+      : type === "memory" ? _MEMORY_REVIEW_PROMPT
+      : _COMBINED_REVIEW_PROMPT;
+
+    // Inject skill metrics reinforcement
+    if (type === "skill" || type === "combined") {
+      try {
+        const events = readSkillMetrics(this.cfg.cwd);
+        const summary = summarizeSkillMetrics(events);
+        const metricsStr = summary.map(s =>
+          `${s.skill}: ${s.uses} uses, error rate ${s.uses ? ((s.errors / s.uses) * 100).toFixed(0) : 0}%`
+        ).join(", ");
+        prompt = prompt.replace("{METRICS}", metricsStr || "(none)");
+        const skillList = this.cfg._skillLoader?.list() || [];
+        prompt = prompt.replace("{SKILLS}", skillList.map(s => s.name).join(", ") || "(none)");
+      } catch { prompt = prompt.replace("{METRICS}", "(unavailable)").replace("{SKILLS}", "(unavailable)"); }
+    }
+
+    const messagesSnapshot = [...this.messages].slice(-10);
+    try {
+      await this.registry.execute("Agent", {
+        prompt, subagent_type: "general-purpose",
+        description: `Background ${type} review`,
+        run_in_background: true,
+        _isSubAgent: true,
+        conversationContext: messagesSnapshot,
+      });
+    } catch (e) { log(`[nudge] Error: ${e.message}`); }
   }
 
   // ── Command Registration ─────────────────────────────────────
@@ -1430,23 +1523,53 @@ class InteractiveMode {
         }
       } });
 
-    // Context — visualize context usage
-    s.register({ name: "context", description: "Show context window usage", immediate: true,
+    // Context — rich breakdown by category (CC-style)
+    s.register({ name: "context", description: "Show context window usage breakdown", immediate: true,
       handler: () => {
-        const totalIn = self.messages.reduce((acc, m) => acc + (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length), 0);
-        const estimatedTokens = Math.ceil(totalIn / 4); // rough char-to-token ratio
-        const maxContext = 200000; // typical context window
-        const pct = Math.min(100, Math.round((estimatedTokens / maxContext) * 100));
-        const barLen = 40;
-        const filled = Math.round(barLen * pct / 100);
-        const bar = "\x1b[32m" + "█".repeat(Math.min(filled, Math.round(barLen * 0.6)))
-          + "\x1b[33m" + "█".repeat(Math.max(0, Math.min(filled - Math.round(barLen * 0.6), Math.round(barLen * 0.2))))
-          + "\x1b[31m" + "█".repeat(Math.max(0, filled - Math.round(barLen * 0.8)))
-          + "\x1b[0m" + "░".repeat(barLen - filled);
-        process.stderr.write(`\x1b[1m  Context Usage\x1b[0m\n`);
-        process.stderr.write(`  [${bar}] ${pct}%\n`);
-        process.stderr.write(`\x1b[2m  ~${(estimatedTokens / 1000).toFixed(1)}k tokens | ${self.messages.length} messages | ${(totalIn / 1024).toFixed(1)}kb raw\x1b[0m\n`);
-        if (pct > 70) process.stderr.write(`\x1b[33m  Consider /compact to free context.\x1b[0m\n`);
+        const W = (s) => process.stderr.write(s);
+        const provider = self.cfg._provider || detectProvider(self.cfg.model);
+        const contextLimit = provider?.capabilities?.contextWindow || 128000;
+
+        // Estimate each category
+        const systemBlocks = buildSystemPrompt(self.cfg);
+        const systemTokens = Math.ceil(systemBlocks.reduce((s, b) => s + (b.text || "").length, 0) / 3.5);
+        const toolDefs = self.registry.getDefinitions();
+        const toolTokens = Math.ceil(JSON.stringify(toolDefs).length / 3.5);
+        const msgTokens = Math.ceil(self.messages.reduce((s, m) => s + (typeof m.content === "string" ? m.content.length : JSON.stringify(m.content).length), 0) / 3.5);
+
+        // Memory: extract from system prompt
+        const memBlock = systemBlocks.find(b => b.text?.includes("# Memory"));
+        const memTokens = memBlock ? Math.ceil(memBlock.text.length / 3.5) : 0;
+
+        // Skills
+        const skills = self.cfg._skillLoader?.list() || [];
+        const skillTokens = Math.ceil(skills.reduce((s, sk) => s + (sk.body?.length || 100), 0) / 3.5);
+
+        const totalEstimated = systemTokens + toolTokens + msgTokens;
+        const pct = Math.min(100, Math.round((totalEstimated / contextLimit) * 100));
+        const free = contextLimit - totalEstimated;
+
+        // Real usage from API (if available)
+        const realIn = self._lastUsage?.input_tokens;
+        const realOut = self._lastUsage?.output_tokens;
+        const cacheRead = self._lastUsage?.cache_read_input_tokens || 0;
+        const cacheCreate = self._lastUsage?.cache_creation_input_tokens || 0;
+
+        W(`\x1b[1m  Context Usage\x1b[0m\n`);
+        W(`  ${self.cfg.model} · ~${(totalEstimated/1000).toFixed(1)}k/${(contextLimit/1000).toFixed(0)}k tokens (${pct}%)\n\n`);
+        W(`  \x1b[2mEstimated by category:\x1b[0m\n`);
+        W(`    System prompt: ~${(systemTokens/1000).toFixed(1)}k tokens\n`);
+        W(`    Tool definitions: ~${(toolTokens/1000).toFixed(1)}k tokens (${toolDefs.length} tools)\n`);
+        W(`    Memory: ~${(memTokens/1000).toFixed(1)}k tokens\n`);
+        W(`    Skills: ~${(skillTokens/1000).toFixed(1)}k tokens (${skills.length} skills)\n`);
+        W(`    Messages: ~${(msgTokens/1000).toFixed(1)}k tokens (${self.messages.length} messages)\n`);
+        W(`    Free: ~${(free/1000).toFixed(0)}k tokens (${100-pct}%)\n`);
+        if (realIn) {
+          W(`\n  \x1b[2mLast API call:\x1b[0m\n`);
+          W(`    Input: ${realIn} | Output: ${realOut}\n`);
+          if (cacheRead || cacheCreate) W(`    Cache: ${cacheRead} read, ${cacheCreate} created\n`);
+        }
+        if (pct > 70) W(`\n  \x1b[33mConsider /compact to free context.\x1b[0m\n`);
       } });
 
     // Tasks — list background tasks (from TaskList tool)
@@ -1817,6 +1940,13 @@ class InteractiveMode {
     const cost = this.totalCost > 0 ? `$${this.totalCost.toFixed(4)}` : "";
     const msgs = `${this.messages.length}msg`;
 
+    // Dynamic context usage % (like CC's inline indicator)
+    const contextLimit = (this.cfg._provider || detectProvider(this.cfg.model))?.capabilities?.contextWindow || 128000;
+    const realInput = this._lastUsage?.input_tokens || 0;
+    const ctxPct = realInput > 0 ? Math.min(100, Math.round((realInput / contextLimit) * 100)) : 0;
+    const ctxColor = ctxPct > 80 ? "\x1b[31m" : ctxPct > 60 ? "\x1b[33m" : "\x1b[2m";
+    const ctxStr = ctxPct > 0 ? `${ctxColor}${ctxPct}%ctx\x1b[0m` : "";
+
     const parts = [
       `\x1b[2m${provider}\x1b[0m`,
       `\x1b[36m${model}\x1b[0m`,
@@ -1826,6 +1956,7 @@ class InteractiveMode {
       `\x1b[2m${session}\x1b[0m`,
       `\x1b[2m${msgs}\x1b[0m`,
       cost ? `\x1b[2m${cost}\x1b[0m` : "",
+      ctxStr,
     ].filter(Boolean);
 
     let statusStr = parts.join(" \x1b[2m|\x1b[0m ");
@@ -2113,6 +2244,23 @@ class InteractiveMode {
       });
     }
 
+    // Increment dream session counter for consolidation trigger
+    try { incrementDreamSessionCount(); } catch { /* non-fatal */ }
+
+    // Write session metrics to disk
+    if (this._sessionMetrics) {
+      try {
+        const metricsDir = path.join(os.homedir(), ".claude-native", "session-metrics");
+        fs.mkdirSync(metricsDir, { recursive: true });
+        this._sessionMetrics.ended_at = new Date().toISOString();
+        this._sessionMetrics.total_cost = this.totalCost;
+        fs.writeFileSync(
+          path.join(metricsDir, `${this.sessionId}.json`),
+          JSON.stringify(this._sessionMetrics, null, 2)
+        );
+      } catch (e) { log(`[metrics] Write error: ${e.message}`); }
+    }
+
     this.mcpManager.shutdown();
   }
 
@@ -2280,6 +2428,11 @@ class InteractiveMode {
         }
         if (remote) remote.emit({ type: "tool_result", id, tool_name: toolName, is_error: result.is_error });
       },
+      onCompact: (compactedMessages) => {
+        // Persist compacted context to session file so resume loads the compact state
+        this.sessions.rewrite(this.sessionId, compactedMessages);
+        log(`[context] Session file rewritten with ${compactedMessages.length} compacted messages`);
+      },
       onPermissionDeny: (block, msg) => {
         process.stderr.write(`\x1b[33m[Denied: ${block.name}] ${msg}\x1b[0m\n`);
       },
@@ -2339,13 +2492,41 @@ class InteractiveMode {
       try {
         if (!this._autoMemory) this._autoMemory = new AutoMemory(this.cfg.cwd, this.client, this.cfg._provider);
         const userText = typeof input === "string" ? input : JSON.stringify(input);
+        // Maintain exchange buffer (rolling window of 5)
+        this._exchangeBuffer.push({ user: userText, assistant: assistantVisibleText || "" });
+        if (this._exchangeBuffer.length > 5) this._exchangeBuffer.shift();
         // Fire and forget — don't block the REPL on memory classification
-        this._autoMemory.processExchange(userText, assistantVisibleText || "").then(saved => {
+        this._autoMemory.processExchange(userText, assistantVisibleText || "", this._exchangeBuffer).then(saved => {
           for (const s of saved) log(`[auto-memory] Saved ${s.type}: ${s.name}`);
         }).catch(e => log(`[auto-memory] Error: ${e.message}`));
       } catch (e) { /* ignore: auto-memory is non-fatal */
         log(`[auto-memory] Error: ${e.message}`);
       }
+
+      // Dream trigger — consolidate memories if conditions are met
+      try {
+        if (shouldDream(this.cfg.cwd)) {
+          runDream(this.cfg.cwd, this.client, this.registry, this.permissions, new BackgroundAgentManager())
+            .catch(e => log(`[dream] Error: ${e.message}`));
+        }
+      } catch (e) { log(`[dream] Check error: ${e.message}`); }
+
+      // Background review nudge — skill creation + memory review
+      try {
+        this._turnsSinceMemoryReview++;
+        this._toolCallsSinceSkillReview += (result.toolUseCount || 0);
+        const cfg = this.cfg;
+        if (!cfg._isSubAgent && this._nudgeEnabled) {
+          if (this._toolCallsSinceSkillReview >= this._skillNudgeInterval) {
+            this._toolCallsSinceSkillReview = 0;
+            this._spawnBackgroundReview("skill").catch(e => log(`[nudge] ${e.message}`));
+          }
+          if (this._turnsSinceMemoryReview >= this._memoryNudgeInterval) {
+            this._turnsSinceMemoryReview = 0;
+            this._spawnBackgroundReview("memory").catch(e => log(`[nudge] ${e.message}`));
+          }
+        }
+      } catch (e) { log(`[nudge] Error: ${e.message}`); }
 
       // Auto-save session title on first exchange
       if (!this.sessions.getMeta(this.sessionId, "title") && this.messages.length >= 2) {
@@ -2357,6 +2538,23 @@ class InteractiveMode {
       const costIn = (result.usage.input_tokens / 1_000_000) * 3;
       const costOut = (result.usage.output_tokens / 1_000_000) * 15;
       this.totalCost += costIn + costOut;
+
+      // Track last usage for /context and session metrics
+      this._lastUsage = result.usage;
+      if (!this._sessionMetrics) {
+        this._sessionMetrics = {
+          session_id: this.sessionId, model: this.cfg.model,
+          turns: 0, total_input: 0, total_output: 0,
+          compactions: 0, cache_reads: 0, cache_creates: 0,
+          tool_calls: 0, started_at: new Date().toISOString(),
+        };
+      }
+      this._sessionMetrics.turns++;
+      this._sessionMetrics.total_input += result.usage.input_tokens || 0;
+      this._sessionMetrics.total_output += result.usage.output_tokens || 0;
+      this._sessionMetrics.cache_reads += result.usage.cache_read_input_tokens || 0;
+      this._sessionMetrics.cache_creates += result.usage.cache_creation_input_tokens || 0;
+      this._sessionMetrics.tool_calls += result.toolUseCount || 0;
 
       const inK = (result.usage.input_tokens / 1000).toFixed(1);
       const outK = (result.usage.output_tokens / 1000).toFixed(1);
@@ -2457,6 +2655,10 @@ class InteractiveMode {
         } else if (result.is_error) {
           process.stderr.write(`\x1b[31m[Error]\x1b[0m\n`);
         }
+      },
+      onCompact: (compactedMessages) => {
+        this.sessions.rewrite(this.sessionId, compactedMessages);
+        log(`[context] Session file rewritten with ${compactedMessages.length} compacted messages`);
       },
       onPermissionDeny: (block, msg) => {
         process.stderr.write(`\x1b[33m[Denied: ${block.name}] ${msg}\x1b[0m\n`);

@@ -1,0 +1,3 @@
+[2mUsing max subscription (OAuth)[0m
+[2mUsing OpenAI backend (gpt-5.4)[0m
+Reading the benchmark directives and scores, then I’ll make one surgical fix for multi_tool_chain and verify with build + tests.

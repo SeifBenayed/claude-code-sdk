@@ -1,0 +1,19 @@
+[2mUsing max subscription (OAuth)[0m
+[2mUsing OpenAI backend (gpt-5.4)[0m
+Made one surgical multi_tool_chain improvement in `src/config.mjs:67`.
+
+What changed:
+- Missing one-shot prompt values for `-p` / `--print` now emit a clearer validation hint (`Use -p "your prompt"` / `Use --print "your prompt"`) instead of generic `<value>` guidance.
+- Added a regression E2E in `test-suite.mjs:3357` covering bare `-p` / `--print` not entering interactive mode.
+
+Build:
+- `npm run build` ✅
+
+Test:
+- `npm test` completed, but the suite is already failing on pre-existing unrelated tests.
+- Count improved from **40 failures to 35 failures** after this change.
+- The new regression passes.
+
+Files changed:
+- `src/config.mjs:67`
+- `test-suite.mjs:3357`

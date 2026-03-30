@@ -12,6 +12,7 @@ import { render, Box, Text, Static, useInput, useApp, useStdout } from "ink";
 import TextInput from "ink-text-input";
 import { execSync } from "node:child_process";
 import os from "node:os";
+import { EXIT } from "./src/utils.mjs";
 
 // ── Slash Menu ─────────────────────────────────────────────────
 
@@ -637,6 +638,26 @@ function App({ interactiveMode, onSubmit, onExit }) {
 export function startInkUI(interactiveMode) {
   return new Promise((resolve) => {
     const im = interactiveMode;
+    let inkInstance = null;
+    let restoreStderr = null;
+    let didExit = false;
+    let pendingExitCode = EXIT.OK;
+
+    const restoreTerminalState = () => {
+      if (restoreStderr) {
+        process.stderr.write = restoreStderr;
+        restoreStderr = null;
+      }
+    };
+
+    const finish = (exitCode = EXIT.OK) => {
+      if (didExit) return;
+      didExit = true;
+      pendingExitCode = exitCode;
+      restoreTerminalState();
+      inkInstance?.unmount();
+      resolve({ exitCode });
+    };
 
     const onSubmit = async (input, addOutput) => {
       // Bare "/" or "/help"
@@ -681,8 +702,7 @@ export function startInkUI(interactiveMode) {
         const cmd = im.slashCommands.get(cmdName);
         if (cmd) {
           if (cmd.name === "exit") {
-            inkInstance.unmount();
-            resolve();
+            finish(EXIT.OK);
             return;
           }
           if (cmd.handler) {
@@ -712,6 +732,7 @@ export function startInkUI(interactiveMode) {
       // Capture stderr output from the agent
       const origWrite = process.stderr.write.bind(process.stderr);
       let buffer = "";
+      restoreStderr = origWrite;
       process.stderr.write = (data) => {
         buffer += data;
         // Flush complete lines
@@ -726,6 +747,7 @@ export function startInkUI(interactiveMode) {
       try {
         await im._processInput(input);
       } finally {
+        if (restoreStderr === origWrite) restoreStderr = null;
         process.stderr.write = origWrite;
         if (buffer.trim()) addOutput(buffer);
       }
@@ -737,11 +759,18 @@ export function startInkUI(interactiveMode) {
       onExit: () => { resolve(); },
     });
 
-    const inkInstance = render(app, {
-      exitOnCtrlC: true,
+    inkInstance = render(app, {
+      exitOnCtrlC: false,
     });
 
-    inkInstance.waitUntilExit().then(resolve);
+    process.once("SIGINT", () => {
+      finish(128 + 2);
+    });
+
+    inkInstance.waitUntilExit().then(() => {
+      restoreTerminalState();
+      if (!didExit) resolve({ exitCode: pendingExitCode });
+    });
   });
 }
 

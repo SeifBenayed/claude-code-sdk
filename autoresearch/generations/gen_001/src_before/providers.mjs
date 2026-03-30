@@ -13,7 +13,7 @@ import { log, sleep, EXIT, _VERSION } from "./utils.mjs";
 const PROVIDERS = {
   anthropic: {
     name: "Anthropic",
-    detect: (m) => m.startsWith("claude-"),
+    detect: (m) => m.startsWith("claude-") && !m.startsWith("openrouter/"),
     envKey: "ANTHROPIC_API_KEY",
     defaultUrl: "https://api.anthropic.com",
     oauthSupport: true,
@@ -246,6 +246,54 @@ const PROVIDERS = {
   },
 };
 
+function _parseRetryAfterMs(resp) {
+  const value = resp?.headers?.get?.("retry-after");
+  if (!value) return null;
+  const seconds = Number(value);
+  if (Number.isFinite(seconds) && seconds >= 0) return seconds * 1000;
+  const target = Date.parse(value);
+  if (!Number.isNaN(target)) return Math.max(0, target - Date.now());
+  return null;
+}
+
+async function _readProviderErrorText(resp) {
+  try {
+    return await resp.text();
+  } catch {
+    return "";
+  }
+}
+
+function _extractProviderErrorMessage(text) {
+  if (!text) return "";
+  try {
+    const parsed = JSON.parse(text);
+    return parsed?.error?.message || parsed?.message || text;
+  } catch {
+    return text;
+  }
+}
+
+function _isQuotaOrBillingError(text) {
+  const lower = (text || "").toLowerCase();
+  return lower.includes("insufficient_quota")
+    || lower.includes("quota")
+    || lower.includes("billing")
+    || lower.includes("credit balance")
+    || lower.includes("exceeded your current quota");
+}
+
+async function _handleRateLimitResponse(providerLabel, resp, attempt) {
+  const text = await _readProviderErrorText(resp);
+  const retryAfterMs = _parseRetryAfterMs(resp);
+  const exhausted = _isQuotaOrBillingError(text);
+  const message = exhausted
+    ? `${providerLabel} quota or billing limit reached${text ? `: ${_extractProviderErrorMessage(text)}` : "."}`
+    : `${providerLabel} rate limit hit.${retryAfterMs ? ` Retry in ${Math.max(1, Math.ceil(retryAfterMs / 1000))}s.` : " Retrying shortly."}`;
+  const delayMs = retryAfterMs ?? (1000 * (1 << (attempt + 1)));
+  return { retryable: !exhausted, delayMs, error: new Error(message) };
+}
+
 // Dynamic instruction placement — reasoning models use "developer" role
 // The pattern is declared in provider.capabilities.reasoningModelPattern (not hardcoded here).
 function getInstructionPlacement(provider, model) {
@@ -357,15 +405,17 @@ class AnthropicClient {
       : `${this.apiUrl}/v1/messages`;
     const signal = opts.signal;
     let lastError;
+    let retryDelayMs = null;
 
     for (let attempt = 0; attempt < 3; attempt++) {
       if (signal?.aborted) {
         throw signal.reason instanceof Error ? signal.reason : new Error("Request aborted");
       }
       if (attempt > 0) {
-        const delay = 1000 * (1 << attempt);
+        const delay = retryDelayMs ?? (1000 * (1 << attempt));
         log(`Retry ${attempt}/3 after ${delay}ms...`);
         await sleep(delay);
+        retryDelayMs = null;
       }
 
       let resp;
@@ -389,7 +439,10 @@ class AnthropicClient {
       }
 
       if (resp.status === 429 || resp.status === 529) {
-        lastError = new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        const rateLimit = await _handleRateLimitResponse("Anthropic", resp, attempt);
+        lastError = rateLimit.error;
+        retryDelayMs = rateLimit.delayMs;
+        if (!rateLimit.retryable) break;
         continue;
       }
 
@@ -494,12 +547,11 @@ class OpenAIClient {
             type: "function",
             function: { name: b.name, arguments: JSON.stringify(b.input) },
           }));
-          const oaiMsg = { role: "assistant" };
-          if (text) oaiMsg.content = text;
+          const oaiMsg = { role: "assistant", content: text || "" };
           if (toolCalls.length > 0) oaiMsg.tool_calls = toolCalls;
           out.push(oaiMsg);
         } else {
-          out.push({ role: "assistant", content: msg.content });
+          out.push({ role: "assistant", content: msg.content ?? "" });
         }
       } else if (msg.role === "user") {
         // User messages may be tool_result arrays
@@ -510,7 +562,7 @@ class OpenAIClient {
               out.push({
                 role: "tool",
                 tool_call_id: tr.tool_use_id,
-                content: typeof tr.content === "string" ? tr.content : JSON.stringify(tr.content),
+                content: typeof tr.content === "string" ? tr.content : (tr.content == null ? "" : JSON.stringify(tr.content)),
               });
             }
           } else {
@@ -518,7 +570,7 @@ class OpenAIClient {
             out.push({ role: "user", content: text || JSON.stringify(msg.content) });
           }
         } else {
-          out.push({ role: "user", content: msg.content });
+          out.push({ role: "user", content: msg.content ?? "" });
         }
       }
     }
@@ -541,14 +593,16 @@ class OpenAIClient {
     if (oaiTools?.length > 0) oaiBody.tools = oaiTools;
 
     let lastError;
+    let retryDelayMs = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       if (signal?.aborted) {
         throw signal.reason instanceof Error ? signal.reason : new Error("Request aborted");
       }
       if (attempt > 0) {
-        const delay = 1000 * (1 << attempt);
+        const delay = retryDelayMs ?? (1000 * (1 << attempt));
         log(`[openai] Retry ${attempt}/3 after ${delay}ms...`);
         await sleep(delay);
+        retryDelayMs = null;
       }
 
       let resp;
@@ -569,8 +623,21 @@ class OpenAIClient {
       }
 
       if (resp.status === 429 || resp.status === 529) {
-        lastError = new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        const rateLimit = await _handleRateLimitResponse("OpenAI", resp, attempt);
+        lastError = rateLimit.error;
+        retryDelayMs = rateLimit.delayMs;
+        if (!rateLimit.retryable) break;
         continue;
+      }
+
+      if (resp.status >= 500 && resp.status < 600) {
+        const text = await resp.text().catch(() => "");
+        lastError = new Error(`OpenAI API error ${resp.status}: ${text}`);
+        if (attempt < 2) {
+          retryDelayMs = 1000 * (1 << attempt);
+          continue;
+        }
+        throw lastError;
       }
 
       if (!resp.ok) {
@@ -755,15 +822,15 @@ class OpenAIResponsesClient {
               input.push({
                 type: "function_call_output",
                 call_id: tr.tool_use_id,
-                output: typeof tr.content === "string" ? tr.content : JSON.stringify(tr.content),
+                output: typeof tr.content === "string" ? tr.content : (tr.content == null ? "" : JSON.stringify(tr.content)),
               });
             }
           } else {
             const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("");
-            input.push({ role: "user", content: text || JSON.stringify(msg.content) });
+            input.push({ role: "user", content: text || JSON.stringify(msg.content) || "" });
           }
         } else {
-          input.push({ role: "user", content: msg.content });
+          input.push({ role: "user", content: msg.content ?? "" });
         }
       } else if (msg.role === "assistant") {
         if (Array.isArray(msg.content)) {
@@ -784,7 +851,7 @@ class OpenAIResponsesClient {
             });
           }
         } else {
-          input.push({ type: "message", role: "assistant", content: [{ type: "output_text", text: msg.content }] });
+          input.push({ type: "message", role: "assistant", content: [{ type: "output_text", text: msg.content ?? "" }] });
         }
       }
     }
@@ -793,7 +860,8 @@ class OpenAIResponsesClient {
 
   _getInstructions(systemBlocks) {
     if (!systemBlocks?.length) return undefined;
-    return systemBlocks.map((b) => b.text).join("\n\n");
+    const instructions = systemBlocks.map((b) => b.text).join("\n\n");
+    return instructions.trim() ? instructions : undefined;
   }
 
   async *stream(body, opts = {}) {
@@ -813,14 +881,16 @@ class OpenAIResponsesClient {
     if (tools?.length > 0) reqBody.tools = tools;
 
     let lastError;
+    let retryDelayMs = null;
     for (let attempt = 0; attempt < 3; attempt++) {
       if (signal?.aborted) {
         throw signal.reason instanceof Error ? signal.reason : new Error("Request aborted");
       }
       if (attempt > 0) {
-        const delay = 1000 * (1 << attempt);
+        const delay = retryDelayMs ?? (1000 * (1 << attempt));
         log(`[openai-responses] Retry ${attempt}/3 after ${delay}ms...`);
         await sleep(delay);
+        retryDelayMs = null;
       }
 
       let resp;
@@ -841,8 +911,21 @@ class OpenAIResponsesClient {
       }
 
       if (resp.status === 429 || resp.status === 529) {
-        lastError = new Error(`HTTP ${resp.status}: ${resp.statusText}`);
+        const rateLimit = await _handleRateLimitResponse("OpenAI", resp, attempt);
+        lastError = rateLimit.error;
+        retryDelayMs = rateLimit.delayMs;
+        if (!rateLimit.retryable) break;
         continue;
+      }
+
+      if (resp.status >= 500 && resp.status < 600) {
+        const text = await resp.text().catch(() => "");
+        lastError = new Error(`OpenAI Responses API error ${resp.status}: ${text}`);
+        if (attempt < 2) {
+          retryDelayMs = 1000 * (1 << attempt);
+          continue;
+        }
+        throw lastError;
       }
 
       if (!resp.ok) {

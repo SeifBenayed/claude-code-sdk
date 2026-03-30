@@ -10,6 +10,7 @@ import _http from "node:http";
 import _https from "node:https";
 
 import { log, sleep, EXIT, _VERSION, _httpGet, _getGitHubHeaders, _ghGet, getMemoryDir, ensureMemoryDir, getUserMemoryDir, ensureUserMemoryDir } from "./utils.mjs";
+import { appendMemoryMetric } from "./memory-metrics.mjs";
 import { resolveModel, MODEL_ALIASES, MODEL_PROFILES, MODEL_TIERS, resolveModelForWorkload, _hasProviderAuth } from "./config.mjs";
 import { detectProvider, PROVIDERS, getInstructionPlacement, isOpenAIModel, isResponsesAPIModel, AnthropicClient, OpenAIClient, OpenAIResponsesClient } from "./providers.mjs";
 import { ToolRegistry, registerBuiltinTools, registerDeferredBuiltinTools, registerBriefTools, registerToolSearch, registerAskUserQuestion, registerMcpResourceTools, registerDesktopTools, registerSpreadsheetTools, registerPdfTools, registerDocumentTools, registerPresentationTools, scanCustomTools, globToRegex, _loadToolManifest, _OFFICIAL_CATALOG } from "./tools.mjs";
@@ -328,6 +329,16 @@ VERDICT: SAFE
 VERDICT: WARN
 VERDICT: BLOCK
 Reason: <one-line explanation>`,
+  },
+
+  "memory-dream": {
+    agentType: "memory-dream",
+    description: "Memory consolidation — merges, prunes, re-indexes",
+    model: null,
+    workload: "exploration",  // fast-tier
+    readOnly: false,
+    disallowedTools: ["Agent", "WebFetch", "WebSearch", "Browser", "AskUserQuestion", "SendUserMessage", "TaskOutput"],
+    getSystemPrompt: () => `You are a memory consolidation agent. Your job is to clean up, merge, and prune the user's persistent memory files. Only modify files within the memory directories. Be conservative — only delete memories you're confident are stale or superseded.`,
   },
 };
 
@@ -846,13 +857,56 @@ function loadMemoryIndex(cwd, scope = "project") {
   const dir = scope === "user" ? getUserMemoryDir() : getMemoryDir(cwd);
   const indexPath = path.join(dir, MEMORY_INDEX);
   try {
-    const content = fs.readFileSync(indexPath, "utf-8");
+    let content = fs.readFileSync(indexPath, "utf-8");
+    const linkRegex = /\[[^\]]+\]\(([^)]+)\)/g;
+    const warnings = [];
+    content = content.replace(linkRegex, (match, target) => {
+      const trimmedTarget = target.trim();
+      if (!trimmedTarget || /^(?:[a-z]+:|#)/i.test(trimmedTarget)) return match;
+      const resolvedPath = path.resolve(dir, trimmedTarget);
+      if (!resolvedPath.startsWith(dir + path.sep) && resolvedPath !== dir) return match;
+      if (fs.existsSync(resolvedPath)) return match;
+      const warning = `> WARNING: Ignored broken memory link \`${trimmedTarget}\` in ${scope} ${MEMORY_INDEX}.`;
+      warnings.push(warning);
+      console.warn(warning.replace(/^> WARNING: /, "WARNING: "));
+      return match.replace(`(${target})`, "(missing-memory-file)");
+    });
+    // Enrich index entries with timestamps (display-only, not written to disk)
+    // and emit memory_loaded metrics for each linked file
+    const enrichLinkRegex = /\[([^\]]+)\]\(([^)]+)\)/g;
+    content = content.replace(enrichLinkRegex, (match, label, target) => {
+      const trimmedTarget = target.trim();
+      if (!trimmedTarget || trimmedTarget === "missing-memory-file") return match;
+      if (/^(?:[a-z]+:|#)/i.test(trimmedTarget)) return match;
+      const resolvedPath = path.resolve(dir, trimmedTarget);
+      if (!fs.existsSync(resolvedPath)) return match;
+      try {
+        const raw = fs.readFileSync(resolvedPath, "utf-8");
+        // Extract saved_at or last_verified from frontmatter
+        const savedMatch = raw.match(/^saved_at:\s*(.+)$/m);
+        const verifiedMatch = raw.match(/^last_verified:\s*(.+)$/m);
+        const nameMatch = raw.match(/^name:\s*(.+)$/m);
+        const dateStr = verifiedMatch ? verifiedMatch[1].trim().slice(0, 10) : savedMatch ? savedMatch[1].trim().slice(0, 10) : null;
+        const dateLabel = verifiedMatch ? "verified" : "saved";
+        const suffix = dateStr ? ` (${dateLabel}: ${dateStr})` : "";
+        // Emit memory_loaded metric
+        appendMemoryMetric(cwd, scope, { type: "memory_loaded", file: trimmedTarget, name: nameMatch?.[1]?.trim() || label });
+        // Only append if not already present
+        if (match.includes("(saved:") || match.includes("(verified:")) return match;
+        return `${match}${suffix}`;
+      } catch (e) { log(`[memory-enrich] Error: ${e.message}`); return match; }
+    });
+
     const lines = content.split("\n");
+    let finalContent = content;
     if (lines.length > MEMORY_MAX_LINES) {
-      return lines.slice(0, MEMORY_MAX_LINES).join("\n")
+      finalContent = lines.slice(0, MEMORY_MAX_LINES).join("\n")
         + `\n\n> WARNING: MEMORY.md is ${lines.length} lines (limit: ${MEMORY_MAX_LINES}). Only the first ${MEMORY_MAX_LINES} lines were loaded. Move detailed content into separate topic files.`;
     }
-    return content;
+    if (warnings.length) {
+      finalContent += `\n\n${warnings.join("\n")}`;
+    }
+    return finalContent;
   } catch { return ""; }
 }
 
@@ -935,7 +989,7 @@ Each scope has its own \`${MEMORY_INDEX}\`. The index should contain only links 
 - Do not write duplicate memories — check if one exists to update first
 
 ## Staleness warning
-Memory records are point-in-time observations, not live state. Before asserting facts from memory, verify: if a memory names a file path, check it exists; if it names a function, grep for it.
+Memory records are point-in-time observations, not live state. Each entry shows when it was saved or last verified. Memories not verified in 30+ days are more likely outdated. Before asserting facts from memory: if it names a file path, check it exists; if it names a function, grep for it.
 ${userMemContent ? `\n## Current User Memory Index (${MEMORY_INDEX})\n\n${userMemContent}` : ""}
 ${projectMemContent ? `\n## Current Project Memory Index (${MEMORY_INDEX})\n\n${projectMemContent}` : ""}`;
 }
@@ -2621,8 +2675,11 @@ If you can say it in one sentence, don't use three.`;
 
 - You are running in one-shot CLI mode. Prefer solving the user's request directly in your response rather than exploring the workspace by default.
 - If the prompt is self-contained and does not mention existing files, repositories, project structure, or current environment state, do NOT inspect the workspace or talk about looking for files, setup, or tests. Just produce the requested answer.
+- Treat filenames, schemas, columns, paths, and constraints written directly in the prompt as sufficient context unless the user explicitly says something is omitted or unknown. Do not claim those details are missing when they are already present inline.
 - For standalone coding tasks, return runnable code and any requested tests directly in the response. Do not replace the solution with meta-commentary such as "I'm locating the right file" or "I need to inspect the test setup first."
+- If the prompt clearly targets repo code but omits a few specifics, infer the most likely target from the current codebase and proceed with the best justified assumption instead of stopping for clarification unless the ambiguity blocks all reasonable progress.
 - Only use tools in one-shot mode when the prompt explicitly requires interacting with the local workspace, running commands, reading/modifying files, or fetching external information that is not present in the prompt.
+- For short factual or math questions, answer in a complete sentence that includes the result directly instead of returning only a bare token.
 - When you choose not to use tools, still fully complete the task with concrete output. Avoid empty or partial responses.` : "";
 
   const dynamicPrompt = `# Environment

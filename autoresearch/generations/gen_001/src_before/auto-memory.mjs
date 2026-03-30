@@ -9,7 +9,7 @@
 
 import fs from "node:fs";
 import path from "node:path";
-import { log, getMemoryDir, ensureMemoryDir } from "./utils.mjs";
+import { log, getMemoryDir, ensureMemoryDir, getUserMemoryDir, ensureUserMemoryDir } from "./utils.mjs";
 
 // ── Pre-filter (cheap gate — skip obvious non-memorable messages) ──
 
@@ -42,6 +42,10 @@ Memory types:
 - "project": ongoing work, deadlines, team structure, architecture decisions, business context
 - "reference": pointers to external systems (URLs, tools, dashboards, where things are tracked)
 
+Memory scopes:
+- "user": survives across projects and sessions for this user (preferences, workflow, corrections, stable identity)
+- "project": specific to the current working directory/project (architecture, deadlines, systems, project references)
+
 Rules:
 - Only save things that will be useful in FUTURE conversations, not ephemeral task details
 - Don't save things derivable from code, git history, or project files
@@ -51,7 +55,10 @@ Rules:
 Respond with EXACTLY one JSON object (no markdown, no explanation):
 {"save":false}
 or
-{"save":true,"type":"feedback","name":"short slug","description":"one-line description for index","content":"the actual memory content to persist"}
+{"save":true,"scope":"user","type":"feedback","name":"short slug","description":"one-line description for index","content":"the actual memory content to persist"}
+
+Recent conversation context (for understanding the flow):
+{HISTORY}
 
 User message:
 {MESSAGE}
@@ -59,10 +66,17 @@ User message:
 Context (last assistant response, for understanding corrections):
 {CONTEXT}`;
 
-async function classifyWithLLM(client, provider, userMessage, assistantContext) {
+async function classifyWithLLM(client, provider, userMessage, assistantContext, exchangeHistory = []) {
   const today = new Date().toISOString().split("T")[0];
+  // Build history string from last 4 exchanges (skip current), ~150 chars each
+  const historyStr = exchangeHistory.slice(0, -1).slice(-4).map((ex, i) => {
+    const u = (ex.user || "").slice(0, 150);
+    const a = (ex.assistant || "").slice(0, 150);
+    return `[${i + 1}] User: ${u}${u.length >= 150 ? "…" : ""}\n    Assistant: ${a}${a.length >= 150 ? "…" : ""}`;
+  }).join("\n") || "(no prior context)";
   const prompt = CLASSIFY_PROMPT
     .replace("{TODAY}", today)
+    .replace("{HISTORY}", historyStr)
     .replace("{MESSAGE}", userMessage.slice(0, 2000))
     .replace("{CONTEXT}", (assistantContext || "").slice(0, 500));
 
@@ -103,6 +117,9 @@ async function classifyWithLLM(client, provider, userMessage, assistantContext) 
     if (!["user", "feedback", "project", "reference"].includes(result.type)) return null;
 
     return {
+      scope: (result.scope === "user" || result.scope === "project")
+        ? result.scope
+        : (result.type === "user" || result.type === "feedback" ? "user" : "project"),
       type: result.type,
       name: result.name.slice(0, 60),
       description: (result.description || result.content).slice(0, 100),
@@ -141,7 +158,7 @@ class AutoMemoryTracker {
   }
 
   markSaved(type, name) {
-    this._lastSave.set(type + ":" + name, Date.now());
+    this._lastSave.set(this._key(type, name), Date.now());
   }
 
   markClassified() {
@@ -170,8 +187,8 @@ function _memoryExists(memDir, slug) {
   return false;
 }
 
-function saveAutoMemory(cwd, type, name, description, content) {
-  const dir = ensureMemoryDir(cwd);
+function saveAutoMemory(cwd, scope, type, name, description, content) {
+  const dir = scope === "user" ? ensureUserMemoryDir() : ensureMemoryDir(cwd);
   const slug = _slugify(name);
   const filename = `auto_${type}_${slug}.md`;
   const filepath = path.join(dir, filename);
@@ -179,6 +196,7 @@ function saveAutoMemory(cwd, type, name, description, content) {
   const fileContent = `---
 name: ${name}
 description: ${description}
+scope: ${scope}
 type: ${type}
 auto_saved: true
 saved_at: ${new Date().toISOString()}
@@ -225,7 +243,7 @@ class AutoMemory {
   }
 
   // Called after each user↔assistant exchange
-  async processExchange(userMessage, assistantResponse) {
+  async processExchange(userMessage, assistantResponse, exchangeHistory = []) {
     this._lastAssistant = assistantResponse || "";
 
     // Tier 1: cheap pre-filter
@@ -239,24 +257,25 @@ class AutoMemory {
       this._client,
       this._provider,
       userMessage,
-      this._lastAssistant
+      this._lastAssistant,
+      exchangeHistory
     );
 
     if (!result) return [];
 
     // Dedup check
     const slug = _slugify(result.name);
-    const memDir = getMemoryDir(this.cwd);
+    const memDir = result.scope === "user" ? getUserMemoryDir() : getMemoryDir(this.cwd);
     if (_memoryExists(memDir, slug)) return [];
     if (!this._tracker.shouldSave(result.type, result.name)) return [];
 
     // Save
     const filepath = saveAutoMemory(
-      this.cwd, result.type, result.name, result.description, result.content
+      this.cwd, result.scope, result.type, result.name, result.description, result.content
     );
     this._tracker.markSaved(result.type, result.name);
 
-    return [{ type: result.type, name: result.name, filepath }];
+    return [{ scope: result.scope, type: result.type, name: result.name, filepath }];
   }
 }
 

@@ -19,6 +19,7 @@ import { ToolRegistry, registerBuiltinTools, registerMemoryTools, registerDeferr
 import { registerBrowserTools } from "./browser.mjs";
 import { oauthLogin, oauthLogout, openaiOAuthLogin, openaiOAuthLogout, getOAuthAccessToken, getOpenAIAccessToken } from "./auth.mjs";
 import { AutoMemory } from "./auto-memory.mjs";
+import { shouldDream, runDream, incrementDreamSessionCount } from "./memory-dream.mjs";
 import { expandContextRefs } from "./context-refs.mjs";
 import { routeModel } from "./smart-routing.mjs";
 
@@ -1008,6 +1009,7 @@ class InteractiveMode {
     this.slashCommands = new SlashCommandRegistry();
     this._rl = null;
     this._statuslineScript = null;
+    this._exchangeBuffer = [];  // ring buffer of last 5 exchanges for auto-memory context
   }
 
   // ── Command Registration ─────────────────────────────────────
@@ -2113,6 +2115,9 @@ class InteractiveMode {
       });
     }
 
+    // Increment dream session counter for consolidation trigger
+    try { incrementDreamSessionCount(); } catch { /* non-fatal */ }
+
     this.mcpManager.shutdown();
   }
 
@@ -2339,13 +2344,24 @@ class InteractiveMode {
       try {
         if (!this._autoMemory) this._autoMemory = new AutoMemory(this.cfg.cwd, this.client, this.cfg._provider);
         const userText = typeof input === "string" ? input : JSON.stringify(input);
+        // Maintain exchange buffer (rolling window of 5)
+        this._exchangeBuffer.push({ user: userText, assistant: assistantVisibleText || "" });
+        if (this._exchangeBuffer.length > 5) this._exchangeBuffer.shift();
         // Fire and forget — don't block the REPL on memory classification
-        this._autoMemory.processExchange(userText, assistantVisibleText || "").then(saved => {
+        this._autoMemory.processExchange(userText, assistantVisibleText || "", this._exchangeBuffer).then(saved => {
           for (const s of saved) log(`[auto-memory] Saved ${s.type}: ${s.name}`);
         }).catch(e => log(`[auto-memory] Error: ${e.message}`));
       } catch (e) { /* ignore: auto-memory is non-fatal */
         log(`[auto-memory] Error: ${e.message}`);
       }
+
+      // Dream trigger — consolidate memories if conditions are met
+      try {
+        if (shouldDream(this.cfg.cwd)) {
+          runDream(this.cfg.cwd, this.client, this.registry, this.permissions, new BackgroundAgentManager())
+            .catch(e => log(`[dream] Error: ${e.message}`));
+        }
+      } catch (e) { log(`[dream] Check error: ${e.message}`); }
 
       // Auto-save session title on first exchange
       if (!this.sessions.getMeta(this.sessionId, "title") && this.messages.length >= 2) {
