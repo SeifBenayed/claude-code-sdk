@@ -146,6 +146,19 @@ export function ensureMemoryDir(cwd) {
   return dir;
 }
 
+// ── Shares Dir ─────────────────────────────────────────────────
+
+export function getSharesDir(cwd) {
+  const sanitized = (cwd || process.cwd()).replace(/[^a-zA-Z0-9]/g, "-").replace(/-+/g, "-").slice(0, 100);
+  return path.join(os.homedir(), ".claude-native", "projects", sanitized, "shares");
+}
+
+export function ensureSharesDir(cwd) {
+  const dir = getSharesDir(cwd);
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
 export function getUserMemoryDir() {
   return path.join(os.homedir(), ".claude-native", "user-memory");
 }

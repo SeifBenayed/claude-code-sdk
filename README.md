@@ -76,16 +76,20 @@ Switch providers live in the REPL: `/model codex`, `/model sonnet`, `/model olla
 ## Features
 
 - **Multi-provider**: 13 backends, one CLI. Switch mid-conversation.
-- **Full agent loop**: streaming, tool calling, multi-turn, sub-agents
-- **Built-in tools**: Bash, Read, Write, Edit, Glob, Grep, WebFetch, WebSearch, Agent
+- **Full agent loop**: streaming, tool calling, multi-turn, sub-agents with fork mode
+- **Built-in tools**: Bash, Read, Write, Edit, Glob, Grep, WebFetch, WebSearch, Agent, MemoryShare
 - **Extended thinking**: `--thinking 8192` for Claude Sonnet/Opus
 - **MCP integration**: `--mcp-config servers.json` for external tool servers
-- **Permissions**: 6 modes from `auto` to `bypassPermissions`
+- **Permissions**: 6 modes from `auto` to `bypassPermissions`, with LLM security classifier
 - **Session management**: resume, checkpoints, rewind
-- **Memory system**: persistent cross-session memory
-- **Skills & hooks**: extensible slash commands, lifecycle hooks (command, webhook, prompt, agent)
+- **Memory system**: persistent cross-session memory with auto-suggest
+- **Shareable moments**: capture and share interesting exchanges (`/share`) as markdown, HTML, SVG
+- **Skills marketplace**: browse and install 45+ skills (`/marketplace`)
+- **Skills & hooks**: extensible slash commands, 13 lifecycle hooks (command, webhook, prompt, agent)
 - **NDJSON bridge**: programmatic use from any language
-- **Ink UI**: rich terminal interface with slash menu, status bar, and live output
+- **Ink UI**: rich terminal interface with streaming output, markdown rendering, permission dialogs, tool spinners, syntax highlighting, history navigation, and context tracking
+- **Prompt caching**: automatic cache_control on system prompt and last user message for 60-70% cost reduction
+- **Security**: 2-stage LLM classifier (28 BLOCK rules, 7 ALLOW exceptions, user intent analysis), sandbox support
 
 ## REPL Commands
 
@@ -95,6 +99,10 @@ Switch providers live in the REPL: `/model codex`, `/model sonnet`, `/model olla
 /compact            Compress conversation to save context
 /permissions <mode> Change permission mode
 /memory             Show saved memories
+/share [N]          Capture last exchange as shareable moment (md/html/svg)
+/shares             Browse past shared moments
+/marketplace        Browse and install skills from the registry
+/catalog            Browse and install tools from the catalog
 /checkpoints        List file checkpoints
 /rewind             Restore files to a checkpoint
 /sessions           List recent sessions
@@ -331,7 +339,7 @@ node test-suite.mjs --verbose
 
 ## Architecture
 
-Single-file SDK (`claude-native.mjs`, ~7500 lines) with provider-pluggable core. AgentLoop reads capabilities from the provider contract — never checks provider names. All provider-specific logic lives in the provider definition.
+Single-file SDK (`claude-native.mjs`, ~18500 lines) with provider-pluggable core. AgentLoop reads capabilities from the provider contract — never checks provider names. All provider-specific logic lives in the provider definition.
 
 ```
 AgentLoop (streaming, tools, permissions, hooks)

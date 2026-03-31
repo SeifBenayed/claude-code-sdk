@@ -27,7 +27,7 @@ import {
   toolTest, toolInstall, toolUpdate, toolRemove, toolCatalog, toolPublish,
 } from "./tools.mjs";
 import { registerBrowserTools } from "./browser.mjs";
-import { PermissionManager } from "./security.mjs";
+import { PermissionManager, LLMSecurityClassifier } from "./security.mjs";
 import {
   AgentLoop, buildSystemPrompt, SkillLoader, AgentLoader, HookRunner,
   loadSettings, applySettings, loadRules, registerAgentTool,
@@ -486,7 +486,9 @@ async function main() {
     // Pre-pull image in background
     sandboxRunner.ensureImage().catch(() => { /* ignore: will pull on first use */ });
   } else if (sandboxConfig.mode === "docker") {
-    process.stderr.write("\x1b[33m⚠ Docker not available — Bash running on host (no sandbox)\x1b[0m\n");
+    process.stderr.write("\x1b[33m[sandbox] Docker not available — Bash running on host (no sandbox)\x1b[0m\n");
+  } else if (sandboxConfig.mode === "auto" && sandboxRunner.effectiveMode === "host") {
+    log("[sandbox] Docker not detected — commands will run unsandboxed on the host");
   }
 
   registerAskUserQuestion(registry);
@@ -535,6 +537,11 @@ async function main() {
 
   // Permission manager (after settings applied so rules are merged)
   const permissions = new PermissionManager(cfg);
+
+  // LLM security classifier for auto mode (CC-aligned: haiku validates Bash/Agent before auto-allow)
+  if (cfg.permissionMode === "auto") {
+    permissions._llmClassifier = new LLMSecurityClassifier(client, cfg);
+  }
 
   // Apply settings permission rules
   for (const rule of cfg.permissionRules) {
@@ -657,7 +664,17 @@ Important:
   }
 
   // Handle shutdown
-  const cleanup = () => { sandboxRunner.shutdown(); audit.shutdown(); lspManager.shutdown(); mcpManager.shutdown(); process.exit(0); };
+  const cleanup = () => {
+    // SessionEnd hook (sync-safe: fire-and-forget since we're exiting)
+    if (cfg._hookRunner?.hasHooksFor("SessionEnd")) {
+      cfg._hookRunner.fire("SessionEnd", {
+        session_id: cfg.sessionId || "",
+        cwd: process.cwd(),
+        hook_event_name: "SessionEnd",
+      }).catch(() => {}); // non-blocking
+    }
+    sandboxRunner.shutdown(); audit.shutdown(); lspManager.shutdown(); mcpManager.shutdown(); process.exit(0);
+  };
   process.on("SIGINT", cleanup);
   process.on("SIGTERM", cleanup);
 
@@ -703,6 +720,18 @@ Important:
   // Audit: session start
   const mode = cfg.ndjson ? "ndjson" : cfg.prompt ? "one-shot" : "interactive";
   audit.sessionStart(mode, cfg.model, provider.name);
+
+  // SessionStart hook
+  if (cfg._hookRunner?.hasHooksFor("SessionStart")) {
+    await cfg._hookRunner.fire("SessionStart", {
+      session_id: cfg.sessionId || "",
+      cwd: process.cwd(),
+      hook_event_name: "SessionStart",
+      model: cfg.model,
+      mode: cfg.permissionMode || "default",
+      provider: provider.name,
+    });
+  }
 
   // Mode dispatch
   if (cfg.ndjson) {

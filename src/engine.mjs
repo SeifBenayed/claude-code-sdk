@@ -475,7 +475,7 @@ class SubAgentRunner {
     this.cfg = cfg;
   }
 
-  async run({ prompt, subagentType, model, description, depth = 0, parentAgentId = null, runInBackground = false, isolation = null, provider = null }) {
+  async run({ prompt, subagentType, model, description, depth = 0, parentAgentId = null, runInBackground = false, isolation = null, provider = null, fork = false, parentMessages = [], parentSystemBlocks = null }) {
     const agentId = randomUUID();
 
     // Depth check
@@ -623,8 +623,32 @@ class SubAgentRunner {
     };
     systemBlocks.splice(systemBlocks.length > 1 ? 1 : 0, 0, agentPromptBlock);
 
-    // Build messages
-    const messages = [{ role: "user", content: prompt }];
+    // Build messages — fork mode inherits parent conversation for context + cache sharing
+    let messages;
+    if (fork && parentMessages.length > 0) {
+      // Inherit parent messages (user/assistant only, truncate large tool results)
+      const inherited = parentMessages
+        .filter(m => m.role === "user" || m.role === "assistant")
+        .map(m => {
+          if (typeof m.content === "string" && m.content.length > 2000) {
+            return { role: m.role, content: m.content.slice(0, 2000) + "\n... (truncated for fork)" };
+          }
+          return { role: m.role, content: m.content };
+        });
+      // Token budget: keep last N messages to stay within 60% of effective window
+      const maxInherited = 30;
+      const trimmed = inherited.length > maxInherited ? inherited.slice(-maxInherited) : inherited;
+      messages = [...trimmed, { role: "user", content: prompt }];
+      log(`[sub-agent] Fork mode: inherited ${trimmed.length} parent messages`);
+    } else {
+      messages = [{ role: "user", content: prompt }];
+    }
+
+    // Fork system blocks: reuse parent's for prompt cache sharing
+    if (fork && parentSystemBlocks) {
+      systemBlocks = [...parentSystemBlocks];
+      systemBlocks.splice(systemBlocks.length > 1 ? 1 : 0, 0, agentPromptBlock);
+    }
 
     // Run sub-agent loop
     const subCfgWithModel = { ...this.cfg, model: effectiveSubModel, _provider: subProvider, maxTurns: Math.min(this.cfg.maxTurns, 15), cwd: effectiveCwd, briefMode: false };
@@ -824,6 +848,8 @@ Guidelines:
       required: ["description", "prompt"],
     },
   }, async (input) => {
+    // Fork mode: when no subagent_type is specified, fork with parent context (CC baseline)
+    const shouldFork = !input.subagent_type;
     const result = await runner.run({
       prompt: input.prompt,
       subagentType: input.subagent_type,
@@ -834,6 +860,9 @@ Guidelines:
       parentAgentId: null,
       runInBackground: input.run_in_background || false,
       isolation: input.isolation || null,
+      fork: shouldFork,
+      parentMessages: shouldFork ? (registry._currentMessages || []) : [],
+      parentSystemBlocks: shouldFork ? (registry._currentSystemBlocks || null) : null,
     });
 
     return { content: result.content, is_error: false, usage: result.usage, agent_result: result };
@@ -2183,40 +2212,59 @@ class AgentLoader {
       if (!fs.existsSync(dir)) continue;
       try {
         for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
-          if (!entry.isDirectory()) continue;
-          const agentFile = path.join(dir, entry.name, "AGENT.md");
-          if (!fs.existsSync(agentFile)) continue;
-          try {
-            const raw = fs.readFileSync(agentFile, "utf-8");
-            const { frontmatter } = parseYamlFrontmatter(raw);
-            const name = frontmatter.name || entry.name;
-            // Project agents override personal ones
-            // Parse disallowed_tools — handle both CSV string and YAML array
-            let disallowedTools = [];
-            if (Array.isArray(frontmatter.disallowed_tools)) {
-              disallowedTools = frontmatter.disallowed_tools.map(s => String(s).trim()).filter(Boolean);
-            } else if (typeof frontmatter.disallowed_tools === "string") {
-              disallowedTools = frontmatter.disallowed_tools.split(",").map(s => s.trim()).filter(Boolean);
+          // Directory-based: agents/<name>/AGENT.md (cloclo native format)
+          if (entry.isDirectory()) {
+            const agentFile = path.join(dir, entry.name, "AGENT.md");
+            if (!fs.existsSync(agentFile)) continue;
+            try {
+              const raw = fs.readFileSync(agentFile, "utf-8");
+              const { frontmatter } = parseYamlFrontmatter(raw);
+              const name = frontmatter.name || entry.name;
+              this._agents.set(name, this._parseAgentFrontmatter(frontmatter, name, agentFile, source));
+            } catch (e) {
+              log(`AgentLoader: failed to parse ${agentFile}: ${e.message}`);
             }
-
-            this._agents.set(name, {
-              name,
-              description: frontmatter.description || `Custom agent: ${name}`,
-              model: frontmatter.model || null,
-              provider: frontmatter.provider || null,
-              workload: frontmatter.workload || null,
-              readOnly: frontmatter.read_only === true || frontmatter.read_only === "true",
-              disallowedTools,
-              filePath: agentFile,
-              source,
-            });
-          } catch (e) {
-            log(`AgentLoader: failed to parse ${agentFile}: ${e.message}`);
+            continue;
+          }
+          // Flat .md files: agents/<name>.md (CC-compatible format)
+          if (entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md" && entry.name !== "INDEX.md") {
+            const agentFile = path.join(dir, entry.name);
+            const flatName = entry.name.replace(/\.md$/, "");
+            if (this._agents.has(flatName)) continue; // directory-based takes precedence
+            try {
+              const raw = fs.readFileSync(agentFile, "utf-8");
+              const { frontmatter } = parseYamlFrontmatter(raw);
+              const name = frontmatter.name || flatName;
+              if (this._agents.has(name)) continue;
+              this._agents.set(name, this._parseAgentFrontmatter(frontmatter, name, agentFile, source));
+            } catch (e) {
+              log(`AgentLoader: failed to parse flat agent ${agentFile}: ${e.message}`);
+            }
           }
         }
       } catch { /* ignore: directory may not exist or be unreadable */ }
     }
     return this;
+  }
+
+  _parseAgentFrontmatter(frontmatter, name, filePath, source) {
+    let disallowedTools = [];
+    if (Array.isArray(frontmatter.disallowed_tools)) {
+      disallowedTools = frontmatter.disallowed_tools.map(s => String(s).trim()).filter(Boolean);
+    } else if (typeof frontmatter.disallowed_tools === "string") {
+      disallowedTools = frontmatter.disallowed_tools.split(",").map(s => s.trim()).filter(Boolean);
+    }
+    return {
+      name,
+      description: frontmatter.description || `Custom agent: ${name}`,
+      model: frontmatter.model || null,
+      provider: frontmatter.provider || null,
+      workload: frontmatter.workload || null,
+      readOnly: frontmatter.read_only === true || frontmatter.read_only === "true",
+      disallowedTools,
+      filePath,
+      source,
+    };
   }
 
   has(name) { return this._agents.has(name); }
@@ -2887,7 +2935,7 @@ class AgentLoop {
   _estimateTokens(text) {
     if (!text) return 0;
     const str = typeof text === "string" ? text : JSON.stringify(text);
-    return Math.ceil(str.length / 3.5);
+    return Math.ceil(str.length / 4);
   }
 
   _estimateMessageTokens(messages) {
@@ -2896,7 +2944,7 @@ class AgentLoop {
       total += 4; // message overhead
       total += this._estimateTokens(msg.content);
     }
-    return total;
+    return Math.ceil(total * 1.333); // CC safety multiplier — overestimate to avoid prompt-too-long errors
   }
 
   _estimateSystemTokens(systemBlocks) {
@@ -3071,7 +3119,7 @@ class AgentLoop {
 
     // Env override for compact threshold (like CC's CLAUDE_AUTOCOMPACT_PCT_OVERRIDE)
     const pctOverride = parseFloat(process.env.CLOCLO_AUTOCOMPACT_PCT);
-    const compactThreshold = (pctOverride > 0 && pctOverride <= 100) ? pctOverride / 100 : 0.75;
+    const compactThreshold = (pctOverride > 0 && pctOverride <= 100) ? pctOverride / 100 : 0.85;
 
     // Level 1 (60%): Disable deferred tool promotion
     if (pct > 0.6) {
@@ -3116,7 +3164,7 @@ class AgentLoop {
     // Use real API usage if available, fall back to estimation
     const inputTokens = this.totalUsage.input_tokens || this._estimateMessageTokens(messages);
     const effectiveWindow = this._getEffectiveWindow();
-    const threshold = Math.floor(effectiveWindow * 0.75);
+    const threshold = Math.floor(effectiveWindow * 0.85);
 
     if (inputTokens < threshold || messages.length < 6) return false;
 
@@ -3226,6 +3274,14 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
   }
 
   async run(messages, systemBlocks) {
+    // Expose messages/systemBlocks to Agent tool for fork mode
+    this.registry._currentMessages = messages;
+    this.registry._currentSystemBlocks = systemBlocks;
+    // Update PermissionManager with recent messages for LLM classifier
+    if (this.permissions?.setRecentMessages) {
+      this.permissions.setRecentMessages(messages.slice(-5));
+    }
+
     let turnCount = 0;
 
     while (turnCount < this.cfg.maxTurns) {
@@ -3283,6 +3339,26 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
 
       // Strip non-API fields (messageId) from messages before sending
       const apiMessages = messages.map(({ messageId, ...rest }) => rest);
+
+      // Prompt caching: mark the last user message with cache_control (CC baseline)
+      // This makes everything up to this message a cache hit on the next turn,
+      // saving 60-70% of input token costs on successive turns.
+      if (this.provider?.capabilities?.apiStyle === "anthropic") {
+        for (let i = apiMessages.length - 1; i >= 0; i--) {
+          if (apiMessages[i].role === "user") {
+            const msg = apiMessages[i];
+            if (typeof msg.content === "string") {
+              apiMessages[i] = { ...msg, content: [{ type: "text", text: msg.content, cache_control: { type: "ephemeral" } }] };
+            } else if (Array.isArray(msg.content) && msg.content.length > 0) {
+              const lastBlock = msg.content[msg.content.length - 1];
+              if (!lastBlock.cache_control) {
+                msg.content[msg.content.length - 1] = { ...lastBlock, cache_control: { type: "ephemeral" } };
+              }
+            }
+            break;
+          }
+        }
+      }
 
       const body = {
         model: this.cfg.model,
@@ -3375,6 +3451,8 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
       // Build assistant message
       const assistantMsg = { role: "assistant", content: contentBlocks };
       messages.push(assistantMsg);
+      // Keep LLM classifier and fork in sync
+      if (this.permissions?.setRecentMessages) this.permissions.setRecentMessages(messages.slice(-5));
 
       // If no tool use, we're done
       if (stopReason !== "tool_use") {
@@ -3483,6 +3561,17 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
           }
           if (perm.behavior === "ask") {
             if (this.cfg._audit) this.cfg._audit.permissionAsk(block.name, block.input);
+            // PermissionRequest hook
+            if (this.cfg._hookRunner?.hasHooksFor("PermissionRequest")) {
+              await this.cfg._hookRunner.fire("PermissionRequest", {
+                session_id: this.cfg.sessionId || "",
+                cwd: this.registry._cwd || this.cfg.cwd || process.cwd(),
+                hook_event_name: "PermissionRequest",
+                tool_name: block.name,
+                tool_input: block.input,
+                rule: perm.rule,
+              });
+            }
             // In interactive mode: prompt user. In NDJSON: forward callback or deny.
             const allowed = await this._askPermission(block, perm.message);
             if (this.cfg._audit) this.cfg._audit.permissionResponse(block.name, allowed, perm.message);
@@ -3548,6 +3637,19 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
             tool_name: block.name,
             tool_input: block.input,
             tool_result: toolResults[toolResults.length - 1],
+          }, { skillContext: this.skillContext });
+        }
+
+        // PostToolUseFailure hook — fires only when tool returned an error
+        const lastToolResult = toolResults[toolResults.length - 1];
+        if (lastToolResult?.is_error && this.cfg._hookRunner?.hasHooksFor("PostToolUseFailure", this.skillContext)) {
+          await this.cfg._hookRunner.fire("PostToolUseFailure", {
+            session_id: this.cfg.sessionId || "",
+            cwd: this.registry._cwd || this.cfg.cwd || process.cwd(),
+            hook_event_name: "PostToolUseFailure",
+            tool_name: block.name,
+            tool_input: block.input,
+            error: (typeof lastToolResult.content === "string" ? lastToolResult.content : JSON.stringify(lastToolResult.content))?.substring(0, 1000),
           }, { skillContext: this.skillContext });
         }
       }

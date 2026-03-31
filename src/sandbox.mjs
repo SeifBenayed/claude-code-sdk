@@ -86,6 +86,11 @@ class SandboxRunner {
   async exec(command, { cwd, timeout = 120000, env = {} } = {}) {
     const mode = this.effectiveMode;
 
+    if (mode === "host" && this.config.mode === "auto" && !this._hostWarningEmitted) {
+      this._hostWarningEmitted = true;
+      process.stderr.write("\x1b[33m[sandbox] Warning: Docker unavailable — running commands on host without sandbox.\x1b[0m\n");
+    }
+
     if (mode === "host") {
       return this._execHost(command, { cwd, timeout, env });
     }

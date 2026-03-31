@@ -10,6 +10,7 @@ import _https from "node:https";
 
 import { log, sleep, EXIT, _VERSION, _httpGet, getMemoryDir, ensureMemoryDir, getUserMemoryDir, ensureUserMemoryDir } from "./utils.mjs";
 import { appendMemoryMetric } from "./memory-metrics.mjs";
+import { extractExchange, sanitize, buildMoment, saveMoment, renderMarkdown } from "./share.mjs";
 import { detectProvider, PROVIDERS, isOpenAIModel } from "./providers.mjs";
 import { isDomainPreapproved, _checkFilePath } from "./security.mjs";
 
@@ -222,7 +223,7 @@ function _buildManifestEntry(toolDef, source, existing = {}, extras = {}) {
 
 function _classifyToolType(name) {
   if (name.startsWith("mcp__")) return "connector";
-  if (["Bash","Read","Write","Edit","Glob","Grep","WebFetch","WebSearch","ToolSearch","NotebookEdit","AskUserQuestion","SendUserMessage","TaskOutput","Agent","Browser","MemoryList","MemoryRead","MemorySave","MemoryForget"].includes(name)) return "builtin";
+  if (["Bash","Read","Write","Edit","Glob","Grep","WebFetch","WebSearch","ToolSearch","NotebookEdit","AskUserQuestion","SendUserMessage","TaskOutput","Agent","Browser","MemoryList","MemoryRead","MemorySave","MemoryForget","MemoryShare"].includes(name)) return "builtin";
   if (name.startsWith("Task") || name.startsWith("Enter") || name.startsWith("Exit") || name.startsWith("ListMcp") || name.startsWith("ReadMcp")) return "builtin";
   return "custom";
 }
@@ -2651,6 +2652,61 @@ function registerMemoryTools(registry) {
     if (forgotten?.error) return { content: forgotten.error, is_error: true };
     if (!forgotten) return { content: "Memory not found.", is_error: true };
     return { content: JSON.stringify({ forgotten: true, scope: forgotten.scope, file: forgotten.file }, null, 2), is_error: false };
+  });
+
+  // ── MemoryShare — capture exchanges as shareable moments ────
+  registry.register("MemoryShare", {
+    description: `Capture the current conversation exchange as a shareable moment.
+
+Use this when the conversation contains something noteworthy:
+- A clever bug fix or debugging session
+- An impressive multi-file refactor
+- A complex task completed in one shot
+- A useful explanation or learning moment
+
+The moment is saved locally with markdown, HTML, JSON, and SVG exports.`,
+    input_schema: {
+      type: "object",
+      properties: {
+        title: { type: "string", description: "Short title for the moment (e.g., 'Fixed race condition in connection pool')" },
+        description: { type: "string", description: "One-line description" },
+        tags: { type: "array", items: { type: "string" }, description: "Tags (e.g., ['debugging', 'concurrency'])" },
+        format: { type: "string", enum: ["markdown", "html", "json", "svg", "all"], description: "Export format (default: all)" },
+        exchange_index: { type: "number", description: "Which exchange to capture (1=last, 2=second-to-last). Default: 1" },
+      },
+      required: ["title"],
+    },
+  }, async (input) => {
+    try {
+      const cwd = registry._cwd || process.cwd();
+      const messages = registry._currentMessages || [];
+      const exchange = extractExchange(messages, input.exchange_index || 1);
+      if (!exchange) return { content: "No exchange found to share.", is_error: true };
+
+      const moment = buildMoment(exchange, {
+        sessionId: registry._sessionId || null,
+        cwd,
+        model: registry._currentModel || "unknown",
+        provider: registry._provider?.name || "unknown",
+        title: input.title,
+        description: input.description || null,
+        tags: input.tags || [],
+      });
+      sanitize(moment, cwd);
+
+      const formats = (input.format === "all" || !input.format)
+        ? ["markdown", "html", "json", "svg"]
+        : [input.format === "md" ? "markdown" : input.format];
+      const exports = saveMoment(cwd, moment, formats);
+
+      const md = renderMarkdown(moment);
+      return {
+        content: `Moment saved: "${moment.title}"\n\nExports:\n${Object.entries(exports).map(([f, p]) => `- ${f}: ${p}`).join("\n")}\n\n---\n\n${md}`,
+        is_error: false,
+      };
+    } catch (e) {
+      return { content: `Failed to save moment: ${e.message}`, is_error: true };
+    }
   });
 }
 

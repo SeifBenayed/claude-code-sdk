@@ -3110,7 +3110,7 @@ section("UNIT: Auto-compaction — graduated context management");
 
 {
   // Verify graduated thresholds
-  assert(source.includes("effectiveWindow * 0.75"), "Auto-compact threshold is 75% of effective window");
+  assert(source.includes("effectiveWindow * 0.85"), "Auto-compact threshold is 85% of effective window (CC-aligned)");
   assert(source.includes("pct > 0.6"), "Level 1: block promotions at 60%");
   assert(source.includes("pct > 0.65"), "Level 2: windowing at 65%");
   assert(source.includes("pct > compactThreshold"), "Level 3: auto-compact at configurable threshold");

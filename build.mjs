@@ -21,6 +21,7 @@ const modules = [
   "auto-memory.mjs",
   "memory-metrics.mjs",
   "memory-dream.mjs",
+  "share.mjs",
   "audit.mjs",
   "teams.mjs",
   "sandbox.mjs",

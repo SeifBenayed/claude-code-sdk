@@ -22,6 +22,7 @@ import { AutoMemory } from "./auto-memory.mjs";
 import { shouldDream, runDream, incrementDreamSessionCount } from "./memory-dream.mjs";
 import { readSkillMetrics, summarizeSkillMetrics } from "./skill-metrics.mjs";
 import { expandContextRefs } from "./context-refs.mjs";
+import { extractExchange, sanitize, buildMoment, saveMoment, listMoments, loadMoment, renderMarkdown, detectShareworthyExchange } from "./share.mjs";
 import { routeModel } from "./smart-routing.mjs";
 
 // ── Background Review Nudge Constants ──────────────────────────
@@ -1190,6 +1191,59 @@ class InteractiveMode {
           }
         }
       } });
+    // Shareable Moments
+    s.register({ name: "share", aliases: ["moment"], argumentHint: "[N] [--title=\"...\"] [--format=md|html|svg|all]", description: "Capture last exchange as a shareable moment",
+      handler: async (args) => {
+        let n = 1, title = null, format = "all";
+        for (let i = 0; i < args.length; i++) {
+          if (args[i].startsWith("--title=")) title = args[i].slice(8).replace(/^["']|["']$/g, "");
+          else if (args[i].startsWith("--format=")) format = args[i].slice(9);
+          else if (/^\d+$/.test(args[i])) n = parseInt(args[i], 10);
+        }
+        const exchange = extractExchange(self.messages, n);
+        if (!exchange) { process.stderr.write("\x1b[31mNo exchange to share.\x1b[0m\n"); return; }
+        const moment = buildMoment(exchange, {
+          sessionId: self.sessionId, cwd: self.cfg.cwd || process.cwd(),
+          model: self.cfg.model, provider: self.cfg._provider?.name || "unknown", title,
+        });
+        sanitize(moment, self.cfg.cwd || process.cwd());
+        const formats = format === "all" ? ["markdown", "html", "json", "svg"] : [format === "md" ? "markdown" : format];
+        const exports = saveMoment(self.cfg.cwd, moment, formats);
+        process.stderr.write(`\n\x1b[1mMoment saved: ${moment.title}\x1b[0m\n`);
+        for (const [fmt, fpath] of Object.entries(exports)) {
+          process.stderr.write(`  \x1b[2m${fmt}: ${fpath}\x1b[0m\n`);
+        }
+        // Copy markdown to clipboard if available
+        try {
+          const md = renderMarkdown(moment);
+          const clip = process.platform === "darwin" ? "pbcopy" : "xclip -selection clipboard";
+          const proc = spawn(clip.split(" ")[0], clip.split(" ").slice(1), { stdio: ["pipe", "ignore", "ignore"] });
+          proc.stdin.write(md);
+          proc.stdin.end();
+          process.stderr.write(`  \x1b[32mMarkdown copied to clipboard\x1b[0m\n`);
+        } catch { /* clipboard not available */ }
+        process.stderr.write("\n");
+      } });
+
+    s.register({ name: "shares", aliases: ["moments"], argumentHint: "[id]", description: "Browse shared moments", immediate: true,
+      handler: (args) => {
+        if (args[0]) {
+          const m = loadMoment(self.cfg.cwd, args[0]);
+          if (!m) { process.stderr.write(`\x1b[31mMoment not found: ${args[0]}\x1b[0m\n`); return; }
+          process.stderr.write(renderMarkdown(m));
+          return;
+        }
+        const moments = listMoments(self.cfg.cwd);
+        if (moments.length === 0) { process.stderr.write("\x1b[2mNo shared moments yet. Use /share to capture one.\x1b[0m\n"); return; }
+        process.stderr.write(`\n\x1b[1mShared Moments (${moments.length})\x1b[0m\n\n`);
+        for (const m of moments) {
+          const date = (m.created_at || "").slice(0, 10);
+          const tags = m.tags?.length > 0 ? ` \x1b[2m(${m.tags.join(", ")})\x1b[0m` : "";
+          process.stderr.write(`  \x1b[36m${m.id}\x1b[0m  ${m.title}  \x1b[2m${date}\x1b[0m${tags}\n`);
+        }
+        process.stderr.write("\n");
+      } });
+
     s.register({ name: "checkpoints", aliases: ["ckpt"], description: "List file checkpoints", immediate: true,
       handler: () => { if (!self.checkpoints) { process.stderr.write("\x1b[2mCheckpointing not enabled.\x1b[0m\n"); return; } const snaps = self.checkpoints.getSnapshots(); if (snaps.length === 0) { process.stderr.write("\x1b[2mNo checkpoints yet.\x1b[0m\n"); return; } for (const sn of snaps) { const ago = Math.floor((Date.now() - new Date(sn.timestamp).getTime()) / 1000); const agoStr = ago < 60 ? `${ago}s ago` : ago < 3600 ? `${Math.floor(ago/60)}m ago` : `${Math.floor(ago/3600)}h ago`; process.stderr.write(`\x1b[2m  [${sn.messageId.slice(0,8)}] ${sn.fileCount} files | ${agoStr}\x1b[0m\n`); } } });
     s.register({ name: "rewind", argumentHint: "[id]", description: "Rewind to a checkpoint",
@@ -1772,7 +1826,177 @@ class InteractiveMode {
 
     // Catalog shortcut — /catalog [query]
     s.register({ name: "catalog", description: "Browse the tool marketplace", argumentHint: "[query]",
-      handler: async (args) => { await toolCatalog(args.join(" ") || "*"); } });
+      handler: async (args) => {
+        const query = args.join(" ").trim();
+        // Structured data mode: if _overlayData is checked by Ink UI, populate it
+        const regUrl = process.env.CLOCLO_REGISTRY_URL || "https://cloclo-registry-799190737906.europe-west1.run.app";
+        const endpoint = query ? `/api/tools/search?q=${encodeURIComponent(query)}` : "/api/tools";
+        process.stderr.write("\x1b[2mFetching tool catalog...\x1b[0m\n");
+        let tools = [];
+        try {
+          const resp = await fetch(regUrl + endpoint, {
+            headers: { "User-Agent": "cloclo/1.0", Accept: "application/json" },
+            signal: AbortSignal.timeout(5000),
+          });
+          if (resp.ok) tools = ((await resp.json()).tools || []);
+        } catch { /* registry unavailable */ }
+        // Fallback: static catalog
+        if (tools.length === 0 && self.cfg?._officialToolCatalog) {
+          tools = Object.values(self.cfg._officialToolCatalog).map(t => ({
+            name: t.name, description: t.description, type: t.type, category: t._meta?.category || "",
+            author: t._meta?.author || "cloclo",
+          }));
+          if (query) { const q = query.toLowerCase(); tools = tools.filter(t => `${t.name} ${t.description}`.toLowerCase().includes(q)); }
+        }
+        const manifest = {};
+        try { Object.assign(manifest, JSON.parse(fs.readFileSync(path.join(os.homedir(), ".claude", "tools", ".cloclo-tools.json"), "utf-8"))); } catch { /* no manifest file */ }
+        const installedSet = new Set(Object.keys(manifest.tools || {}));
+
+        if (tools.length === 0) {
+          process.stderr.write(query ? `No tools found matching "${query}".\n` : "Catalog is empty.\n");
+          return;
+        }
+        // Set overlay data for Ink UI to pick up
+        self._overlayData = { type: "catalog", tools, installed: installedSet };
+        // Text fallback for non-Ink mode
+        if (!self._inkMode) {
+          process.stderr.write(`\n\x1b[1mTool Catalog (${tools.length} tools)\x1b[0m\n\n`);
+          for (const t of tools) {
+            const icon = installedSet.has(t.name) ? "\x1b[32m\u2713\x1b[0m" : " ";
+            const desc = (t.description || "").length > 60 ? (t.description || "").slice(0, 57) + "..." : (t.description || "");
+            process.stderr.write(`  ${icon} \x1b[33m${t.name}\x1b[0m  ${desc}\n`);
+          }
+          process.stderr.write(`\n\x1b[2mInstall: /tool install official:<name>\x1b[0m\n\n`);
+          self._overlayData = null;
+        }
+      } });
+
+    // Skill marketplace — browse and install skills from registry
+    s.register({ name: "marketplace", aliases: ["market"], description: "Browse the skill marketplace", argumentHint: "[query]",
+      handler: async (args) => {
+        const query = args.join(" ").trim();
+        const regUrl = process.env.CLOCLO_REGISTRY_URL || "https://cloclo-registry-799190737906.europe-west1.run.app";
+        const endpoint = query ? `/api/skills/search?q=${encodeURIComponent(query)}` : "/api/skills";
+        process.stderr.write("\x1b[2mFetching from skill registry...\x1b[0m\n");
+        try {
+          const resp = await fetch(regUrl + endpoint, {
+            headers: { "User-Agent": "cloclo/1.0", Accept: "application/json" },
+            signal: AbortSignal.timeout(10000),
+          });
+          if (!resp.ok) throw new Error(`Registry returned ${resp.status}`);
+          const data = await resp.json();
+          let skills = data.skills || [];
+
+          // Collect ALL local skills (personal + project) by scanning directories directly
+          const _localSkills = [];
+          const _skillDirs = [
+            { dir: path.join(os.homedir(), ".claude", "skills"), source: "personal" },
+            { dir: path.join(self.cfg.cwd || process.cwd(), ".claude", "skills"), source: "project" },
+          ];
+          const _seenNames = new Set();
+          for (const { dir, source } of _skillDirs) {
+            try {
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                if (!entry.isDirectory()) continue;
+                try {
+                  const raw = fs.readFileSync(path.join(dir, entry.name, "SKILL.md"), "utf-8");
+                  const nameMatch = raw.match(/^name:\s*(.+)/m);
+                  const descMatch = raw.match(/^description:\s*(.+)/m);
+                  const name = nameMatch ? nameMatch[1].trim() : entry.name;
+                  if (_seenNames.has(name)) continue;
+                  _seenNames.add(name);
+                  _localSkills.push({ name, dirName: entry.name, description: (descMatch ? descMatch[1].trim().replace(/^\|?\s*/, "") : ""), source });
+                } catch { /* no SKILL.md */ }
+              }
+            } catch { /* dir not found */ }
+          }
+          const installed = new Set(_localSkills.map(s => s.name));
+
+          // Fallback: if registry is empty, show locally installed skills
+          if (skills.length === 0) {
+            if (_localSkills.length === 0) {
+              process.stderr.write(query ? `No skills found matching "${query}".\n` : "No skills installed. Use /skill import <source> to add some.\n");
+              return;
+            }
+            skills = _localSkills.map(s => ({
+              name: s.name, description: s.description || "",
+              author: s.source === "personal" ? "local" : "project",
+            }));
+            if (query) {
+              const q = query.toLowerCase();
+              skills = skills.filter(s => s.name.toLowerCase().includes(q) || (s.description || "").toLowerCase().includes(q));
+            }
+            if (skills.length === 0) {
+              process.stderr.write(`No skills found matching "${query}".\n`);
+              return;
+            }
+          }
+
+          // Set overlay data for Ink UI to pick up
+          self._overlayData = { type: "marketplace", skills, installed };
+          // Text fallback for non-Ink mode
+          if (!self._inkMode) {
+            process.stderr.write(`\n\x1b[1mSkill Marketplace (${skills.length} skills)\x1b[0m\n\n`);
+            for (const s of skills) {
+              const icon = installed.has(s.name) ? "\x1b[32m\u2713\x1b[0m" : " ";
+              const desc = (s.description || "").length > 60 ? (s.description || "").slice(0, 57) + "..." : (s.description || "");
+              const author = s.author ? `\x1b[2m${s.author}\x1b[0m ` : "";
+              process.stderr.write(`  ${icon} \x1b[36m${s.name}\x1b[0m  ${author}${desc}\n`);
+            }
+            process.stderr.write(`\n\x1b[2mInstall: /skill import registry:<name> or /skill import <github-url>\x1b[0m\n\n`);
+            self._overlayData = null;
+          }
+        } catch (e) {
+          // Registry unavailable — fallback to local skills (scan directories directly)
+          const _fallbackSkills = [];
+          const _fbDirs = [
+            { dir: path.join(os.homedir(), ".claude", "skills"), source: "personal" },
+            { dir: path.join(self.cfg.cwd || process.cwd(), ".claude", "skills"), source: "project" },
+          ];
+          const _fbSeen = new Set();
+          for (const { dir, source } of _fbDirs) {
+            try {
+              for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+                if (!entry.isDirectory()) continue;
+                try {
+                  const raw = fs.readFileSync(path.join(dir, entry.name, "SKILL.md"), "utf-8");
+                  const nameMatch = raw.match(/^name:\s*(.+)/m);
+                  const descMatch = raw.match(/^description:\s*(.+)/m);
+                  const name = nameMatch ? nameMatch[1].trim() : entry.name;
+                  if (_fbSeen.has(name)) continue;
+                  _fbSeen.add(name);
+                  _fallbackSkills.push({ name, description: (descMatch ? descMatch[1].trim().replace(/^\|?\s*/, "") : ""), source });
+                } catch { /* no SKILL.md */ }
+              }
+            } catch { /* dir not found */ }
+          }
+          if (_fallbackSkills.length > 0) {
+            let skills = _fallbackSkills.map(s => ({
+              name: s.name, description: s.description || "",
+              author: s.source === "personal" ? "local" : "project",
+            }));
+            const query = args.join(" ").trim();
+            if (query) {
+              const q = query.toLowerCase();
+              skills = skills.filter(s => s.name.toLowerCase().includes(q) || (s.description || "").toLowerCase().includes(q));
+            }
+            const installed = new Set(_fallbackSkills.map(s => s.name));
+            self._overlayData = { type: "marketplace", skills, installed };
+            if (!self._inkMode) {
+              process.stderr.write(`\n\x1b[1mInstalled Skills (${skills.length})\x1b[0m \x1b[2m(registry unavailable)\x1b[0m\n\n`);
+              for (const s of skills) {
+                const desc = (s.description || "").length > 60 ? (s.description || "").slice(0, 57) + "..." : (s.description || "");
+                process.stderr.write(`  \x1b[32m\u2713\x1b[0m \x1b[36m${s.name}\x1b[0m  ${desc}\n`);
+              }
+              process.stderr.write("\n");
+              self._overlayData = null;
+            }
+          } else {
+            process.stderr.write(`\x1b[31mRegistry unavailable: ${e.message}\x1b[0m\n`);
+            process.stderr.write(`\x1b[2mTip: install skills with /skill import <github-url-or-path>\x1b[0m\n`);
+          }
+        }
+      } });
 
     // Remote session
     s.register({ name: "remote", description: "Remote session access", argumentHint: "[status|stop|renew|mode|approve|deny|log]",
@@ -2366,7 +2590,7 @@ class InteractiveMode {
     });
   }
 
-  async _processInput(input) {
+  async _processInput(input, externalCallbacks = null) {
     // Expand context references (@file:, @diff, @url:, etc.)
     let expandedInput = input;
     try {
@@ -2388,6 +2612,21 @@ class InteractiveMode {
     const _originalModel = this.cfg.model;
     if (_routedModel) this.cfg.model = _routedModel;
 
+    // UserPromptSubmit hook — can block the prompt
+    if (this.cfg._hookRunner?.hasHooksFor("UserPromptSubmit")) {
+      const hookResult = await this.cfg._hookRunner.fire("UserPromptSubmit", {
+        session_id: this.sessionId || "",
+        cwd: this.cfg.cwd || process.cwd(),
+        hook_event_name: "UserPromptSubmit",
+        prompt: expandedInput.substring(0, 2000),
+      });
+      if (hookResult?.blocked) {
+        process.stderr.write(`\x1b[33m[hook] Prompt blocked: ${hookResult.feedback || "blocked by hook"}\x1b[0m\n`);
+        if (_routedModel) this.cfg.model = _originalModel;
+        return;
+      }
+    }
+
     const messageId = randomUUID();
     this.messages.push({ role: "user", content: expandedInput, messageId });
     this.sessions.append(this.sessionId, { role: "user", content: expandedInput, messageId });
@@ -2404,41 +2643,52 @@ class InteractiveMode {
 
     const brief = this.cfg.briefMode;
     const remote = _remoteManager?.isActive() ? _remoteManager : null;
-    const loop = new AgentLoop(this.client, this.registry, this.cfg, {
-      onText: (delta) => {
+    const ext = externalCallbacks || {};
+
+    // Default callbacks (stderr-based for readline mode)
+    // When externalCallbacks is provided (Ink UI mode), those take precedence
+    const callbacks = {
+      onText: ext.onText || ((delta) => {
         if (brief) { process.stderr.write(`\x1b[2m${delta}\x1b[0m`); } else { process.stderr.write(delta); }
         if (remote) remote.emit({ type: "stream", event_type: "text_delta", data: { text: delta } });
-      },
-      onThinking: (delta) => {
+      }),
+      onThinking: ext.onThinking || ((delta) => {
         process.stderr.write(`\x1b[2m${delta}\x1b[0m`);
-      },
+      }),
       onToolUse: (block) => {
         toolCalls++;
-        const inputStr = JSON.stringify(block.input).substring(0, 80);
-        process.stderr.write(`\n\x1b[2m[${block.name}: ${inputStr}]\x1b[0m\n`);
+        if (ext.onToolUse) {
+          ext.onToolUse(block);
+        } else {
+          const inputStr = JSON.stringify(block.input).substring(0, 80);
+          process.stderr.write(`\n\x1b[2m[${block.name}: ${inputStr}]\x1b[0m\n`);
+        }
         if (remote) remote.emit({ type: "tool_use", name: block.name, input: block.input, id: block.id });
       },
       onToolResult: (id, result, toolName) => {
-        const parsed = _parseStructuredOutput(toolName, result);
-        if (parsed) {
-          const rendered = _renderStructuredOutput(parsed, toolName);
-          if (rendered) process.stderr.write(`\n${rendered}\n`);
-        } else if (result.is_error) {
-          process.stderr.write(`\x1b[31m[Error]\x1b[0m\n`);
+        if (ext.onToolResult) {
+          ext.onToolResult(id, result, toolName);
+        } else {
+          const parsed = _parseStructuredOutput(toolName, result);
+          if (parsed) {
+            const rendered = _renderStructuredOutput(parsed, toolName);
+            if (rendered) process.stderr.write(`\n${rendered}\n`);
+          } else if (result.is_error) {
+            process.stderr.write(`\x1b[31m[Error]\x1b[0m\n`);
+          }
         }
         if (remote) remote.emit({ type: "tool_result", id, tool_name: toolName, is_error: result.is_error });
       },
       onCompact: (compactedMessages) => {
-        // Persist compacted context to session file so resume loads the compact state
         this.sessions.rewrite(this.sessionId, compactedMessages);
         log(`[context] Session file rewritten with ${compactedMessages.length} compacted messages`);
+        if (ext.onCompact) ext.onCompact(compactedMessages);
       },
-      onPermissionDeny: (block, msg) => {
+      onPermissionDeny: ext.onPermissionDeny || ((block, msg) => {
         process.stderr.write(`\x1b[33m[Denied: ${block.name}] ${msg}\x1b[0m\n`);
-      },
-      onInteractivePermission: (block, message) => {
+      }),
+      onInteractivePermission: ext.onInteractivePermission || ((block, message) => {
         return new Promise((resolve) => {
-          // Remote permission enforcement: if input came from remote, check tier
           if (remote && remote._inputIsRemote) {
             const isReadOnly = block.name === "Read" || block.name === "Glob" || block.name === "Grep" || block.name === "WebSearch" || block.name === "WebFetch";
             if (!remote.canExecuteTool(block.name, isReadOnly)) {
@@ -2478,12 +2728,26 @@ class InteractiveMode {
             }
           });
         });
-      },
-    }, this.permissions);
+      }),
+    };
+
+    const loop = new AgentLoop(this.client, this.registry, this.cfg, callbacks, this.permissions);
 
     try {
       const result = await loop.run(this.messages, systemBlocks);
       const assistantVisibleText = _flattenUserFacingOutputs(result.userFacingOutputs, result.text);
+
+      // Notify external UI of turn completion (usage, context %)
+      if (ext.onTurnComplete) {
+        const contextWindow = this.cfg._provider?.capabilities?.contextWindow || 128000;
+        ext.onTurnComplete({
+          usage: result.usage,
+          turns: result.turns,
+          toolUseCount: result.toolUseCount || toolCalls,
+          contextPct: result.usage?.input_tokens ? Math.round((result.usage.input_tokens / contextWindow) * 100) : 0,
+          text: assistantVisibleText,
+        });
+      }
 
       // Save assistant message
       this.sessions.append(this.sessionId, { role: "assistant", content: assistantVisibleText });
@@ -2502,6 +2766,22 @@ class InteractiveMode {
       } catch (e) { /* ignore: auto-memory is non-fatal */
         log(`[auto-memory] Error: ${e.message}`);
       }
+
+      // Share-worthy detection — soft nudge to share interesting exchanges
+      try {
+        const lastExchange = extractExchange(this.messages, 1);
+        if (lastExchange) {
+          const shareCheck = detectShareworthyExchange(lastExchange, result.toolUseCount || 0, 0);
+          if (shareCheck.shareable) {
+            // Inject hint for next turn (non-persistent, will be in messages but not session file)
+            this.messages.push({
+              role: "user",
+              content: `<system-hint>The last exchange looks like ${shareCheck.reason}. You can suggest /share to the user if it seems noteworthy, or use MemoryShare to capture it.</system-hint>`,
+            });
+            log(`[share] Detected share-worthy exchange: ${shareCheck.reason}`);
+          }
+        }
+      } catch { /* non-fatal */ }
 
       // Dream trigger — consolidate memories if conditions are met
       try {

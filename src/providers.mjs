@@ -315,14 +315,32 @@ function _isQuotaOrBillingError(text) {
     || lower.includes("exceeded your current quota");
 }
 
+function _computeRetryDelay(attempt, retryAfterMs) {
+  if (retryAfterMs) return retryAfterMs;
+  const base = 500, max = 32000;
+  const exp = Math.min(base * Math.pow(2, attempt), max);
+  return Math.floor(exp + Math.random() * 0.25 * exp);
+}
+
+function _isRetryableStatus(status, headers) {
+  if ([429, 529, 408, 409].includes(status) || status >= 500) return true;
+  if (headers?.get?.("x-should-retry") === "true") return true;
+  return false;
+}
+
 async function _handleRateLimitResponse(providerLabel, resp, attempt) {
   const text = await _readProviderErrorText(resp);
   const retryAfterMs = _parseRetryAfterMs(resp);
   const exhausted = _isQuotaOrBillingError(text);
+  const shouldRetry = resp?.headers?.get?.("x-should-retry");
+  if (shouldRetry === "false") {
+    return { retryable: false, delayMs: 0, error: new Error(`${providerLabel}: ${_extractProviderErrorMessage(text) || "non-retryable error"}`) };
+  }
   const message = exhausted
     ? `${providerLabel} quota or billing limit reached${text ? `: ${_extractProviderErrorMessage(text)}` : "."}`
     : `${providerLabel} rate limit hit.${retryAfterMs ? ` Retry in ${Math.max(1, Math.ceil(retryAfterMs / 1000))}s.` : " Retrying shortly."}`;
-  const delayMs = retryAfterMs ?? (1000 * (1 << (attempt + 1)));
+  const is529 = resp?.status === 529;
+  const delayMs = is529 && attempt >= 3 ? 30000 : _computeRetryDelay(attempt, retryAfterMs);
   return { retryable: !exhausted, delayMs, error: new Error(message) };
 }
 
@@ -405,7 +423,6 @@ class AnthropicClient {
       "advanced-tool-use-2025-11-20",
       "tool-search-tool-2025-10-19",
       "effort-2025-11-24",
-      "fast-mode-2026-02-01",
       "redact-thinking-2026-02-12",
       "context-management-2025-06-27",
     ];
@@ -440,13 +457,13 @@ class AnthropicClient {
     let lastError;
     let retryDelayMs = null;
 
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 10; attempt++) {
       if (signal?.aborted) {
         throw signal.reason instanceof Error ? signal.reason : new Error("Request aborted");
       }
       if (attempt > 0) {
-        const delay = retryDelayMs ?? (1000 * (1 << attempt));
-        log(`Retry ${attempt}/3 after ${delay}ms...`);
+        const delay = retryDelayMs ?? _computeRetryDelay(attempt, null);
+        log(`Retry ${attempt}/10 after ${delay}ms...`);
         await sleep(delay);
         retryDelayMs = null;
       }
@@ -468,14 +485,21 @@ class AnthropicClient {
       } catch (e) {
         if (signal?.aborted || e?.name === "AbortError") throw e;
         lastError = e;
+        retryDelayMs = _computeRetryDelay(attempt, null);
         continue;
       }
 
-      if (resp.status === 429 || resp.status === 529) {
-        const rateLimit = await _handleRateLimitResponse("Anthropic", resp, attempt);
-        lastError = rateLimit.error;
-        retryDelayMs = rateLimit.delayMs;
-        if (!rateLimit.retryable) break;
+      if (_isRetryableStatus(resp.status, resp.headers)) {
+        if (resp.status === 429 || resp.status === 529) {
+          const rateLimit = await _handleRateLimitResponse("Anthropic", resp, attempt);
+          lastError = rateLimit.error;
+          retryDelayMs = rateLimit.delayMs;
+          if (!rateLimit.retryable) break;
+        } else {
+          const text = await resp.text().catch(() => "");
+          lastError = new Error(`API error ${resp.status}: ${text}`);
+          retryDelayMs = _computeRetryDelay(attempt, null);
+        }
         continue;
       }
 
@@ -627,13 +651,13 @@ class OpenAIClient {
 
     let lastError;
     let retryDelayMs = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 10; attempt++) {
       if (signal?.aborted) {
         throw signal.reason instanceof Error ? signal.reason : new Error("Request aborted");
       }
       if (attempt > 0) {
-        const delay = retryDelayMs ?? (1000 * (1 << attempt));
-        log(`[openai] Retry ${attempt}/3 after ${delay}ms...`);
+        const delay = retryDelayMs ?? _computeRetryDelay(attempt, null);
+        log(`[openai] Retry ${attempt}/10 after ${delay}ms...`);
         await sleep(delay);
         retryDelayMs = null;
       }
@@ -644,7 +668,7 @@ class OpenAIClient {
           method: "POST",
           headers: {
             "content-type": "application/json",
-            "authorization": `Bearer ${this.apiKey}`,  // Works for both API keys and OAuth tokens
+            "authorization": `Bearer ${this.apiKey}`,
           },
           body: JSON.stringify(oaiBody),
           signal,
@@ -652,25 +676,22 @@ class OpenAIClient {
       } catch (e) {
         if (signal?.aborted || e?.name === "AbortError") throw e;
         lastError = e;
+        retryDelayMs = _computeRetryDelay(attempt, null);
         continue;
       }
 
-      if (resp.status === 429 || resp.status === 529) {
-        const rateLimit = await _handleRateLimitResponse("OpenAI", resp, attempt);
-        lastError = rateLimit.error;
-        retryDelayMs = rateLimit.delayMs;
-        if (!rateLimit.retryable) break;
-        continue;
-      }
-
-      if (resp.status >= 500 && resp.status < 600) {
-        const text = await resp.text().catch(() => "");
-        lastError = new Error(`OpenAI API error ${resp.status}: ${text}`);
-        if (attempt < 2) {
-          retryDelayMs = 1000 * (1 << attempt);
-          continue;
+      if (_isRetryableStatus(resp.status, resp.headers)) {
+        if (resp.status === 429 || resp.status === 529) {
+          const rateLimit = await _handleRateLimitResponse("OpenAI", resp, attempt);
+          lastError = rateLimit.error;
+          retryDelayMs = rateLimit.delayMs;
+          if (!rateLimit.retryable) break;
+        } else {
+          const text = await resp.text().catch(() => "");
+          lastError = new Error(`OpenAI API error ${resp.status}: ${text}`);
+          retryDelayMs = _computeRetryDelay(attempt, null);
         }
-        throw lastError;
+        continue;
       }
 
       if (!resp.ok) {
@@ -678,7 +699,6 @@ class OpenAIClient {
         throw new Error(`OpenAI API error ${resp.status}: ${text}`);
       }
 
-      // Translate OpenAI SSE → Anthropic SSE events
       yield* this._translateStream(resp.body);
       return;
     }
@@ -915,13 +935,13 @@ class OpenAIResponsesClient {
 
     let lastError;
     let retryDelayMs = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 10; attempt++) {
       if (signal?.aborted) {
         throw signal.reason instanceof Error ? signal.reason : new Error("Request aborted");
       }
       if (attempt > 0) {
-        const delay = retryDelayMs ?? (1000 * (1 << attempt));
-        log(`[openai-responses] Retry ${attempt}/3 after ${delay}ms...`);
+        const delay = retryDelayMs ?? _computeRetryDelay(attempt, null);
+        log(`[openai-responses] Retry ${attempt}/10 after ${delay}ms...`);
         await sleep(delay);
         retryDelayMs = null;
       }
@@ -940,25 +960,22 @@ class OpenAIResponsesClient {
       } catch (e) {
         if (signal?.aborted || e?.name === "AbortError") throw e;
         lastError = e;
+        retryDelayMs = _computeRetryDelay(attempt, null);
         continue;
       }
 
-      if (resp.status === 429 || resp.status === 529) {
-        const rateLimit = await _handleRateLimitResponse("OpenAI", resp, attempt);
-        lastError = rateLimit.error;
-        retryDelayMs = rateLimit.delayMs;
-        if (!rateLimit.retryable) break;
-        continue;
-      }
-
-      if (resp.status >= 500 && resp.status < 600) {
-        const text = await resp.text().catch(() => "");
-        lastError = new Error(`OpenAI Responses API error ${resp.status}: ${text}`);
-        if (attempt < 2) {
-          retryDelayMs = 1000 * (1 << attempt);
-          continue;
+      if (_isRetryableStatus(resp.status, resp.headers)) {
+        if (resp.status === 429 || resp.status === 529) {
+          const rateLimit = await _handleRateLimitResponse("OpenAI", resp, attempt);
+          lastError = rateLimit.error;
+          retryDelayMs = rateLimit.delayMs;
+          if (!rateLimit.retryable) break;
+        } else {
+          const text = await resp.text().catch(() => "");
+          lastError = new Error(`OpenAI Responses API error ${resp.status}: ${text}`);
+          retryDelayMs = _computeRetryDelay(attempt, null);
         }
-        throw lastError;
+        continue;
       }
 
       if (!resp.ok) {
