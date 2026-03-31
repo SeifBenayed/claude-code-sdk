@@ -379,7 +379,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
   const FLAGS_BOOLEAN = new Set([
     "--oauth", "--ndjson", "--resume", "--verbose", "--permission-callbacks",
     "--brief", "--json", "--yes", "-y", "--openai", "--login", "--logout",
-    "--openai-login", "--openai-logout", "--onboarding", "--help", "-h",
+    "--openai-login", "--openai-logout", "--onboarding", "--help", "-h", "--version",
   ]);
 
   // Helper: require next argv value or die
@@ -469,7 +469,12 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "-p": case "--print": {
         i++;
         const v = argv[i];
-        if (i >= argv.length || v === undefined || (typeof v === "string" && (v.startsWith("-") || v === ","))) {
+        if (v === "-") {
+          cfg.prompt = "__STDIN__";
+          cfg.interactive = false;
+          break;
+        }
+        if (i >= argv.length || v === undefined || v === "" || (typeof v === "string" && (v.startsWith("-") || v === ","))) {
           process.stderr.write(`Error: ${a} requires a value\n  ${a} requires a prompt value. Use ${a} "your prompt"\n`);
           process.exit(EXIT.BAD_ARGS);
         }
@@ -499,7 +504,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
         const v = needValue(a, ++i);
         const n = parseInt(v, 10);
         if (isNaN(n) || n < 1) { process.stderr.write(`Error: --max-tokens must be a positive integer, got "${v}"\n`); process.exit(EXIT.BAD_ARGS); }
-        cfg.maxTokens = n; break;
+        cfg.maxTokens = n; cfg._maxTokensExplicit = true; break;
       }
       case "--mcp-config": cfg.mcpConfig = needValue(a, ++i); break;
       case "--allowed-tools": cfg.allowedTools = (cfg.allowedTools || []).concat(needValue(a, ++i).split(",")); break;
@@ -555,6 +560,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "--openai-logout": openaiOAuthLogout(); process.exit(0);
       case "--openai": cfg.useOpenAIOAuth = true; break;
       case "--help": case "-h": printHelp(); process.exit(0);
+      case "--version": process.stderr.write(`${_VERSION}\n`); process.exit(0);
       default:
         if (a.startsWith("-")) {
           process.stderr.write(`Error: Unknown flag "${a}"\n  Run cloclo --help for usage\n`);
@@ -1559,7 +1565,7 @@ class OpenAIClient {
               event: "message_delta",
               data: {
                 delta: { stop_reason: stopReason },
-                usage: usage || { output_tokens: 0 },
+                usage: usage || { input_tokens: 0, output_tokens: 0 },
               },
             };
             yield { event: "message_stop", data: {} };
@@ -4378,6 +4384,31 @@ function registerBrowserTools(registry) {
 
 
 
+// ── Security helpers ────────────────────────────────────────────
+function _shellEscape(s) {
+  return "'" + String(s).replace(/'/g, "'\\''") + "'";
+}
+
+const _SENSITIVE_PATH_SEGMENTS = ['.ssh', '.aws', '.gnupg', '.env', 'credentials'];
+function _isSensitivePath(filePath) {
+  const fp = path.resolve(filePath);
+  for (const s of _SENSITIVE_PATH_SEGMENTS) {
+    if (fp.includes(path.sep + s)) return s;
+  }
+  return null;
+}
+
+function _isPrivateUrl(url) {
+  try {
+    const hostname = new URL(url).hostname;
+    // localhost is OK (used for local dev servers)
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return false;
+    if (/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/.test(hostname)) return true;
+    if (hostname.endsWith('.internal') || hostname === 'metadata.google.internal') return true;
+    return false;
+  } catch { return false; }
+}
+
 // ── ToolRegistry ────────────────────────────────────────────────
 
 class ToolRegistry {
@@ -4848,24 +4879,13 @@ async function _autoInstallBinary(binary, installHint, toolDir, registry) {
   const installCmd = installHint || await _discoverInstallCommand(binary, registry);
   if (!installCmd) return { installed: false, path: null, error: `Binary not found: ${binary}. No install_hint provided and discovery found nothing. Add "install_hint" to TOOL.json.` };
 
-  // 3. Install
-  process.stderr.write(`  \x1b[33m↓\x1b[0m Binary "${binary}" not found. Installing via: ${installCmd}\n`);
-  try {
-    execSync(installCmd, { encoding: "utf-8", timeout: 120000, stdio: ["pipe", "pipe", "pipe"] });
-  } catch (e) {
-    return { installed: false, path: null, error: `Install failed: ${installCmd}\n${(e.stderr || e.message).slice(0, 300)}` };
-  }
-
-  // 4. Verify
-  const resolved = _resolveBinary(binary, toolDir);
-  if (resolved && fs.existsSync(resolved)) {
-    process.stderr.write(`  \x1b[32m✓\x1b[0m Installed: ${resolved}\n`);
-    return { installed: true, path: resolved };
-  }
-  return { installed: false, path: null, error: `Install ran but binary still not found: ${binary}` };
+  // 3. Suggest install command instead of auto-executing
+  process.stderr.write(`  \x1b[33m!\x1b[0m Binary "${binary}" not found. Suggested install: ${installCmd}\n`);
+  process.stderr.write(`  Run it manually, then retry.\n`);
+  return { installed: false, path: null, error: `Binary "${binary}" not found. Install manually: ${installCmd}` };
 }
 
-function _createShellExecutor(toolDef) { const timeout = toolDef.timeout || 30000; return async (input) => { let cmd = toolDef.command; cmd = cmd.replace(/\$INPUT_JSON/g, JSON.stringify(input)); for (const [k, v] of Object.entries(input || {})) cmd = cmd.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), String(v)); try { return { content: execSync(cmd, { encoding: "utf-8", timeout, cwd: toolDef.cwd || process.cwd(), env: { ...process.env, ...(toolDef.env || {}) }, maxBuffer: 10 * 1024 * 1024 }), is_error: false }; } catch (e) { return { content: e.stderr || e.message, is_error: true }; } }; }
+function _createShellExecutor(toolDef) { const timeout = toolDef.timeout || 30000; return async (input) => { let cmd = toolDef.command; cmd = cmd.replace(/\$INPUT_JSON/g, _shellEscape(JSON.stringify(input))); for (const [k, v] of Object.entries(input || {})) cmd = cmd.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), _shellEscape(String(v))); try { return { content: execSync(cmd, { encoding: "utf-8", timeout, cwd: toolDef.cwd || process.cwd(), env: { ...process.env, ...(toolDef.env || {}) }, maxBuffer: 10 * 1024 * 1024 }), is_error: false }; } catch (e) { return { content: e.stderr || e.message, is_error: true }; } }; }
 
 // ── CLI executor (type: "cli") ────────────────────────────────
 function _createCliExecutor(toolDef, toolDir) {
@@ -4884,7 +4904,7 @@ function _createCliExecutor(toolDef, toolDir) {
     const args = [];
     for (const a of (toolDef.args_template || [])) {
       let s = a.replace(/\$INPUT_JSON/g, JSON.stringify(input));
-      for (const [k, v] of Object.entries(input || {})) s = s.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), String(v));
+      for (const [k, v] of Object.entries(input || {})) s = s.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), String(v).replace(/[\0\n\r]/g, ""));
       // If the original template was a single variable (e.g. "$ARGS") and it expanded to a multi-word string, split it
       if (/^\$[A-Z_]+$/.test(a) && s.includes(" ")) args.push(...s.split(/\s+/).filter(Boolean));
       else args.push(s);
@@ -6291,6 +6311,8 @@ Use this tool instead of cat, head, or tail via Bash. You can read any file dire
       required: ["file_path"],
     },
   }, async (input) => {
+    const sensitiveSeg = _isSensitivePath(input.file_path);
+    if (sensitiveSeg) return { content: `Blocked: ${sensitiveSeg} is a sensitive path`, is_error: true };
     const content = await fs.promises.readFile(input.file_path, "utf-8");
     let lines = content.split("\n");
     const offset = (input.offset || 1) - 1;
@@ -6321,6 +6343,8 @@ Use this tool instead of echo/cat heredoc via Bash.
       required: ["file_path", "content"],
     },
   }, async (input) => {
+    const sensitiveSeg = _isSensitivePath(input.file_path);
+    if (sensitiveSeg) return { content: `Blocked: ${sensitiveSeg} is a sensitive path`, is_error: true };
     // Checkpoint before mutation
     if (registry._checkpoints) registry._checkpoints.backupBeforeMutation(input.file_path, registry._messageId);
     await fs.promises.mkdir(path.dirname(input.file_path), { recursive: true });
@@ -6349,6 +6373,8 @@ Usage:
       required: ["file_path", "old_string", "new_string"],
     },
   }, async (input) => {
+    const sensitiveSeg = _isSensitivePath(input.file_path);
+    if (sensitiveSeg) return { content: `Blocked: ${sensitiveSeg} is a sensitive path`, is_error: true };
     // Checkpoint before mutation
     if (registry._checkpoints) registry._checkpoints.backupBeforeMutation(input.file_path, registry._messageId);
     const filePath = input.file_path;
@@ -6418,18 +6444,14 @@ Usage:
       }
     }
 
-    // Apply the replacement
+    // Apply the replacement — if deleting (newStr="") and old_string+\n exists, remove the trailing newline too
+    const target = (newStr === "" && !matchStr.endsWith("\n") && content.includes(matchStr + "\n") && !replaceAll)
+      ? matchStr + "\n" : matchStr;
     let updated;
     if (replaceAll) {
-      updated = content.replaceAll(matchStr, newStr);
+      updated = content.replaceAll(target, newStr);
     } else {
-      updated = content.replace(matchStr, newStr);
-    }
-
-    // Handle trailing newline: if deleting (newStr="") and old_string didn't end with \n
-    // but old_string+\n exists, remove the extra newline too
-    if (newStr === "" && !matchStr.endsWith("\n") && content.includes(matchStr + "\n") && !replaceAll) {
-      updated = content.replace(matchStr + "\n", "");
+      updated = content.replace(target, newStr);
     }
 
     if (updated === content) {
@@ -6478,6 +6500,9 @@ Usage notes:
     // Validate URL
     try { new URL(url); } catch {
       return { content: `Invalid URL: ${url}`, is_error: true };
+    }
+    if (_isPrivateUrl(url)) {
+      return { content: `Blocked: fetching private/internal URLs is not allowed (${new URL(url).hostname})`, is_error: true };
     }
 
     // Upgrade HTTP → HTTPS
@@ -6598,7 +6623,8 @@ Use this tool instead of find or ls via Bash.
       required: ["pattern"],
     },
   }, async (input) => {
-    const dir = input.path || registry._cwd || process.cwd();
+    let dir = input.path || registry._cwd || process.cwd();
+    try { dir = fs.realpathSync(dir); } catch { /* keep original */ }
     const pattern = input.pattern;
     const regex = globToRegex(pattern);
 
@@ -7365,6 +7391,56 @@ function registerDeferredBuiltinTools(registry, cfg) {
     const planFile = path.join(os.tmpdir(), `claude-plan-${Date.now()}.md`);
     fs.writeFileSync(planFile, input.plan);
     return { content: `Exited plan mode. Plan saved to ${planFile}\n\nYou can now implement the plan.`, is_error: false };
+  }, { deferred: true });
+
+  // ── WebSearch ──────────────────────────────────────────────
+  registry.register("WebSearch", {
+    description: "Search the web for information. Returns search result snippets.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search query" },
+        max_results: { type: "number", description: "Max results to return (default 5)" },
+      },
+      required: ["query"],
+    },
+  }, async (input) => {
+    const maxResults = input.max_results || 5;
+    try {
+      const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(input.query)}`;
+      const resp = await fetch(url, {
+        headers: { "User-Agent": "cloclo/1.0" },
+        redirect: "follow",
+      });
+      if (!resp.ok) return { content: `Search failed: HTTP ${resp.status}`, is_error: true };
+      const html = await resp.text();
+
+      // Parse result snippets from DuckDuckGo HTML
+      const results = [];
+      const resultRegex = /<a[^>]+class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+      let match;
+      while ((match = resultRegex.exec(html)) !== null && results.length < maxResults) {
+        const link = match[1];
+        const title = match[2].replace(/<[^>]+>/g, "").trim();
+        const snippet = match[3].replace(/<[^>]+>/g, "").trim();
+        if (title || snippet) {
+          results.push(`${results.length + 1}. ${title}\n   ${link}\n   ${snippet}`);
+        }
+      }
+
+      if (results.length === 0) {
+        // Fallback: try simpler regex for result links
+        const simpleRegex = /<a[^>]+class="result__url"[^>]*>([\s\S]*?)<\/a>/g;
+        while ((match = simpleRegex.exec(html)) !== null && results.length < maxResults) {
+          const text = match[1].replace(/<[^>]+>/g, "").trim();
+          if (text) results.push(`${results.length + 1}. ${text}`);
+        }
+      }
+
+      return { content: results.length > 0 ? results.join("\n\n") : "No results found.", is_error: false };
+    } catch (e) {
+      return { content: `Search error: ${e.message}`, is_error: true };
+    }
   }, { deferred: true });
 
 }
@@ -11723,8 +11799,8 @@ class SubAgentRunner {
 
     if (subProvider.name !== parentProvider.name) {
       // Cross-provider: resolve credentials and create a new client
-      const providerKey = subProvider.envKey === "ANTHROPIC_API_KEY" ? (this.cfg.apiKey || this.cfg.authToken)
-        : subProvider.envKey === "OPENAI_API_KEY" ? this.cfg.openaiApiKey
+      const providerKey = subProvider.envKey === "ANTHROPIC_API_KEY" ? (this.cfg.apiKey || this.cfg.authToken || process.env.ANTHROPIC_API_KEY)
+        : subProvider.envKey === "OPENAI_API_KEY" ? (this.cfg.openaiApiKey || this.cfg.openaiAuthToken || process.env.OPENAI_API_KEY)
         : subProvider.envKey ? (process.env[subProvider.envKey] || "")
         : "no-auth";
 
@@ -11808,7 +11884,7 @@ class SubAgentRunner {
 
     // Build system prompt after cwd/isolation is resolved
     const subCfg = { ...this.cfg, model: resolvedModel, cwd: effectiveCwd, briefMode: false };
-    const systemBlocks = buildSystemPrompt(subCfg);
+    let systemBlocks = buildSystemPrompt(subCfg);
     const agentPromptBlock = {
       type: "text",
       text: agentDef.getSystemPrompt(this.cfg),
@@ -12703,6 +12779,9 @@ function parseSkillSource(source) {
   if (source.startsWith("github:")) {
     const parts = source.slice(7).split("/");
     if (parts.length < 2) throw new Error(`Invalid GitHub source: ${source}. Use github:owner/repo`);
+    if (!/^[a-zA-Z0-9._-]+$/.test(parts[0]) || !/^[a-zA-Z0-9._-]+$/.test(parts[1])) {
+      throw new Error(`Invalid GitHub source: ${source}. Owner/repo contain invalid characters.`);
+    }
     return { type: "github", owner: parts[0], repo: parts[1], subpath: parts.slice(2).join("/") || null };
   }
   // GitHub URL (https://github.com/owner/repo)
@@ -12878,7 +12957,7 @@ async function fetchSkillContents(parsed) {
           : `https://github.com/${parsed.owner}/${parsed.repo}.git`;
         const tmpClone = fs.mkdtempSync(path.join(os.tmpdir(), "cloclo-clone-"));
         process.stderr.write(`\x1b[2mAPI found nothing, trying git clone --depth 1...\x1b[0m\n`);
-        execSync(`git clone --depth 1 --single-branch ${cloneUrl} ${tmpClone}`, { stdio: "pipe", timeout: 30000 });
+        execFileSync("git", ["clone", "--depth", "1", "--single-branch", cloneUrl, tmpClone], { stdio: "pipe", timeout: 30000 });
         usedGitClone = true;
         const result = await fetchSkillContents({ type: "dir", path: tmpClone });
         try { fs.rmSync(tmpClone, { recursive: true, force: true }); } catch { /* best effort */ }
@@ -13273,6 +13352,9 @@ async function _installOneSkill(cfg, client, registry, permissions, source, skil
     throw new Error("SKILL.md has no 'name' in frontmatter");
   }
   const skillName = fm.name || skill.name;
+  if (!/^[a-zA-Z0-9._-]+$/.test(skillName)) {
+    throw new Error(`Invalid skill name: ${skillName}. Only alphanumeric, dot, dash, underscore allowed.`);
+  }
 
   // 4. Static security scan
   const scan = staticSkillScan(skill.files);
@@ -13372,6 +13454,10 @@ async function _installOneSkill(cfg, client, registry, permissions, source, skil
   fs.mkdirSync(targetDir, { recursive: true });
   for (const [filePath, content] of Object.entries(skill.files)) {
     const dest = path.join(targetDir, filePath);
+    if (!dest.startsWith(targetDir + path.sep) && dest !== targetDir) {
+      log(`[skill] Blocked path traversal: ${filePath}`);
+      continue;
+    }
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(dest, content);
   }
@@ -13814,6 +13900,10 @@ Do not output anything else after the JSON verdict.`,
 // ── System Prompt Builder ───────────────────────────────────────
 
 function buildSystemPrompt(cfg) {
+  // Brief mode: cap max_tokens unless user explicitly set --max-tokens
+  if (cfg.briefMode && !cfg._maxTokensExplicit && cfg.maxTokens > 2048) {
+    cfg.maxTokens = 2048;
+  }
   // Billing header required for OAuth (Pro/Max subscription)
   const billingBlock = cfg.authToken ? [{
     type: "text",
@@ -13988,12 +14078,15 @@ Rules:
   // Brief mode instructions
   const briefSection = cfg.briefMode ? `
 
-# Brief Mode
+# Brief Mode (ACTIVE)
 
+You MUST be extremely concise. Maximum 3 sentences for any response.
+- One-line answers when possible
+- No explanations unless explicitly asked
+- No bullet lists, no headers, no formatting unless essential
+- Skip preamble, transitions, and summaries
 - Keep SendUserMessage and TaskOutput content tight and high-signal
-- Prefer one-line acknowledgements before longer work
-- For longer work: ack → work → result. Send checkpoints through TaskOutput when something useful happened
-- Keep messages tight — the decision, the file:line, the finding` : "";
+- For longer work: ack → work → result` : "";
 
   const blocks = [
     ...billingBlock,
@@ -14781,9 +14874,10 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
         }
 
         // Check if it's an external tool (NDJSON bridge mode)
+        let result;
         const isExternal = this.registry.isExternal(block.name) || (!this.registry.has(block.name) && this.cb.onExternalToolUse);
         if (isExternal && this.cb.onExternalToolUse) {
-          const result = await this.cb.onExternalToolUse(block);
+          result = await this.cb.onExternalToolUse(block);
           toolResults.push({
             type: "tool_result",
             tool_use_id: block.id,
@@ -14793,7 +14887,7 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
         } else {
           const _toolStart = Date.now();
           if (this.cfg._audit) this.cfg._audit.toolUse(block.name, block.input, block._messageId);
-          const result = await this.registry.execute(block.name, block.input);
+          result = await this.registry.execute(block.name, block.input);
           if (this.cfg._audit) this.cfg._audit.toolResult(block.name, result?.is_error || false, (result?.content || "").length, Date.now() - _toolStart);
           this._recordUsage(result?.usage);
           this._recordUserFacingOutput(block.name, result);
@@ -14860,7 +14954,8 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
       }
     }
 
-    return { text: "(max turns reached)", usage: this.totalUsage, turns: turnCount, toolUseCount: this.toolUseCount, stopReason: "max_turns", userFacingOutputs: this._finalizeUserFacingOutputs("(max turns reached)") };
+    const summaryText = `(max turns reached — ${turnCount} turns, ${this.toolUseCount} tool calls)\nUse --max-turns to increase the limit or --resume to continue.`;
+    return { text: summaryText, usage: this.totalUsage, turns: turnCount, toolUseCount: this.toolUseCount, stopReason: "max_turns", userFacingOutputs: this._finalizeUserFacingOutputs(summaryText) };
   }
 }
 
@@ -17904,7 +17999,11 @@ class McpManager {
           const pending = server.pending.get(msg.id);
           if (pending) {
             server.pending.delete(msg.id);
-            pending.resolve(msg.result);
+            if (msg.error) {
+              pending.reject(new Error(msg.error.message || `MCP RPC error ${msg.error.code}`));
+            } else {
+              pending.resolve(msg.result);
+            }
           }
         } catch { /* skip */ }
       }
@@ -18541,6 +18640,13 @@ Important:
     // CheckpointStore created inside bridge.run() with its session ID
     await bridge.run();
   } else if (cfg.prompt) {
+    // Resolve stdin sentinel (from -p -)
+    if (cfg.prompt === "__STDIN__") {
+      const chunks = [];
+      for await (const chunk of process.stdin) chunks.push(chunk);
+      cfg.prompt = Buffer.concat(chunks).toString("utf-8").trimEnd();
+      if (!cfg.prompt) { process.stderr.write("Error: no input on stdin\n"); process.exit(EXIT.BAD_ARGS); }
+    }
     // One-shot mode
     const messageId = randomUUID();
     const checkpoints = new CheckpointStore(cfg.sessionId || messageId);
@@ -18556,7 +18662,20 @@ Important:
       userPrompt += `\n\nIMPORTANT: Your response MUST be valid JSON conforming to this schema:\n${JSON.stringify(cfg.jsonSchema, null, 2)}\n\nRespond with ONLY the JSON object, no markdown fences, no explanation.`;
     }
 
-    const messages = [{ role: "user", content: userPrompt, messageId }];
+    let messages;
+    if (cfg.resume) {
+      const sessions = new SessionManager(cfg.cwd);
+      const sessionId = cfg.sessionId || sessions.latest();
+      if (sessionId) {
+        messages = sessions.load(sessionId);
+        messages.push({ role: "user", content: userPrompt, messageId });
+        cfg.sessionId = sessionId;
+      } else {
+        messages = [{ role: "user", content: userPrompt, messageId }];
+      }
+    } else {
+      messages = [{ role: "user", content: userPrompt, messageId }];
+    }
 
     const isJsonOutput = cfg.outputFormat === "json";
 
@@ -18610,7 +18729,7 @@ Important:
     if (isJsonOutput) {
       const jsonOutput = {
         version: cfg.outputVersion || "1",
-        message: result.text,
+        message: assistantVisibleText || result.text,
         user_facing_message: assistantVisibleText,
         user_facing_outputs: result.userFacingOutputs || [],
         result: schemaResult,  // parsed+validated object (null if no schema or parse failed)
@@ -18651,13 +18770,15 @@ Important:
 }
 
 main().catch((err) => {
-  process.stderr.write(`Fatal: ${err.message}\n${err.stack}\n`);
-  // Map known error types to structured exit codes
   const msg = err.message || "";
-  if (msg.includes("No ") && (msg.includes("auth") || msg.includes("credentials") || msg.includes("API key"))) {
-    process.exit(EXIT.AUTH_FAILURE);
-  } else if (msg.includes("provider") || msg.includes("Unknown model") || msg.includes("ECONNREFUSED")) {
-    process.exit(EXIT.PROVIDER_ERROR);
+  const isAuth = msg.includes("auth") || msg.includes("credentials") || msg.includes("API key") || msg.includes("401") || msg.includes("403");
+  const isProvider = msg.includes("provider") || msg.includes("Unknown model") || msg.includes("ECONNREFUSED") || msg.includes("404") || msg.includes("model") || msg.includes("does not exist");
+
+  if (isAuth || isProvider) {
+    process.stderr.write(`Error: ${msg}\n`);
+    process.exit(isAuth ? EXIT.AUTH_FAILURE : EXIT.PROVIDER_ERROR);
   }
+  // Unknown errors get full trace
+  process.stderr.write(`Fatal: ${msg}\n${err.stack}\n`);
   process.exit(EXIT.RUNTIME_ERROR);
 });

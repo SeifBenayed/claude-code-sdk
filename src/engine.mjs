@@ -1,6 +1,6 @@
 // src/engine.mjs — AgentLoop, skills, hooks, memory, SubAgentRunner, conventions
 
-import { spawn, execSync } from "node:child_process";
+import { spawn, execSync, execFileSync } from "node:child_process";
 import { randomUUID, createHash } from "node:crypto";
 import { createInterface } from "node:readline";
 import fs from "node:fs";
@@ -530,8 +530,8 @@ class SubAgentRunner {
 
     if (subProvider.name !== parentProvider.name) {
       // Cross-provider: resolve credentials and create a new client
-      const providerKey = subProvider.envKey === "ANTHROPIC_API_KEY" ? (this.cfg.apiKey || this.cfg.authToken)
-        : subProvider.envKey === "OPENAI_API_KEY" ? this.cfg.openaiApiKey
+      const providerKey = subProvider.envKey === "ANTHROPIC_API_KEY" ? (this.cfg.apiKey || this.cfg.authToken || process.env.ANTHROPIC_API_KEY)
+        : subProvider.envKey === "OPENAI_API_KEY" ? (this.cfg.openaiApiKey || this.cfg.openaiAuthToken || process.env.OPENAI_API_KEY)
         : subProvider.envKey ? (process.env[subProvider.envKey] || "")
         : "no-auth";
 
@@ -615,7 +615,7 @@ class SubAgentRunner {
 
     // Build system prompt after cwd/isolation is resolved
     const subCfg = { ...this.cfg, model: resolvedModel, cwd: effectiveCwd, briefMode: false };
-    const systemBlocks = buildSystemPrompt(subCfg);
+    let systemBlocks = buildSystemPrompt(subCfg);
     const agentPromptBlock = {
       type: "text",
       text: agentDef.getSystemPrompt(this.cfg),
@@ -1511,6 +1511,9 @@ function parseSkillSource(source) {
   if (source.startsWith("github:")) {
     const parts = source.slice(7).split("/");
     if (parts.length < 2) throw new Error(`Invalid GitHub source: ${source}. Use github:owner/repo`);
+    if (!/^[a-zA-Z0-9._-]+$/.test(parts[0]) || !/^[a-zA-Z0-9._-]+$/.test(parts[1])) {
+      throw new Error(`Invalid GitHub source: ${source}. Owner/repo contain invalid characters.`);
+    }
     return { type: "github", owner: parts[0], repo: parts[1], subpath: parts.slice(2).join("/") || null };
   }
   // GitHub URL (https://github.com/owner/repo)
@@ -1687,7 +1690,7 @@ async function fetchSkillContents(parsed) {
           : `https://github.com/${parsed.owner}/${parsed.repo}.git`;
         const tmpClone = fs.mkdtempSync(path.join(os.tmpdir(), "cloclo-clone-"));
         process.stderr.write(`\x1b[2mAPI found nothing, trying git clone --depth 1...\x1b[0m\n`);
-        execSync(`git clone --depth 1 --single-branch ${cloneUrl} ${tmpClone}`, { stdio: "pipe", timeout: 30000 });
+        execFileSync("git", ["clone", "--depth", "1", "--single-branch", cloneUrl, tmpClone], { stdio: "pipe", timeout: 30000 });
         usedGitClone = true;
         const result = await fetchSkillContents({ type: "dir", path: tmpClone });
         try { fs.rmSync(tmpClone, { recursive: true, force: true }); } catch { /* best effort */ }
@@ -2082,6 +2085,9 @@ async function _installOneSkill(cfg, client, registry, permissions, source, skil
     throw new Error("SKILL.md has no 'name' in frontmatter");
   }
   const skillName = fm.name || skill.name;
+  if (!/^[a-zA-Z0-9._-]+$/.test(skillName)) {
+    throw new Error(`Invalid skill name: ${skillName}. Only alphanumeric, dot, dash, underscore allowed.`);
+  }
 
   // 4. Static security scan
   const scan = staticSkillScan(skill.files);
@@ -2181,6 +2187,10 @@ async function _installOneSkill(cfg, client, registry, permissions, source, skil
   fs.mkdirSync(targetDir, { recursive: true });
   for (const [filePath, content] of Object.entries(skill.files)) {
     const dest = path.join(targetDir, filePath);
+    if (!dest.startsWith(targetDir + path.sep) && dest !== targetDir) {
+      log(`[skill] Blocked path traversal: ${filePath}`);
+      continue;
+    }
     fs.mkdirSync(path.dirname(dest), { recursive: true });
     fs.writeFileSync(dest, content);
   }
@@ -2623,6 +2633,10 @@ Do not output anything else after the JSON verdict.`,
 // ── System Prompt Builder ───────────────────────────────────────
 
 function buildSystemPrompt(cfg) {
+  // Brief mode: cap max_tokens unless user explicitly set --max-tokens
+  if (cfg.briefMode && !cfg._maxTokensExplicit && cfg.maxTokens > 2048) {
+    cfg.maxTokens = 2048;
+  }
   // Billing header required for OAuth (Pro/Max subscription)
   const billingBlock = cfg.authToken ? [{
     type: "text",
@@ -2797,12 +2811,15 @@ Rules:
   // Brief mode instructions
   const briefSection = cfg.briefMode ? `
 
-# Brief Mode
+# Brief Mode (ACTIVE)
 
+You MUST be extremely concise. Maximum 3 sentences for any response.
+- One-line answers when possible
+- No explanations unless explicitly asked
+- No bullet lists, no headers, no formatting unless essential
+- Skip preamble, transitions, and summaries
 - Keep SendUserMessage and TaskOutput content tight and high-signal
-- Prefer one-line acknowledgements before longer work
-- For longer work: ack → work → result. Send checkpoints through TaskOutput when something useful happened
-- Keep messages tight — the decision, the file:line, the finding` : "";
+- For longer work: ack → work → result` : "";
 
   const blocks = [
     ...billingBlock,
@@ -3590,9 +3607,10 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
         }
 
         // Check if it's an external tool (NDJSON bridge mode)
+        let result;
         const isExternal = this.registry.isExternal(block.name) || (!this.registry.has(block.name) && this.cb.onExternalToolUse);
         if (isExternal && this.cb.onExternalToolUse) {
-          const result = await this.cb.onExternalToolUse(block);
+          result = await this.cb.onExternalToolUse(block);
           toolResults.push({
             type: "tool_result",
             tool_use_id: block.id,
@@ -3602,7 +3620,7 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
         } else {
           const _toolStart = Date.now();
           if (this.cfg._audit) this.cfg._audit.toolUse(block.name, block.input, block._messageId);
-          const result = await this.registry.execute(block.name, block.input);
+          result = await this.registry.execute(block.name, block.input);
           if (this.cfg._audit) this.cfg._audit.toolResult(block.name, result?.is_error || false, (result?.content || "").length, Date.now() - _toolStart);
           this._recordUsage(result?.usage);
           this._recordUserFacingOutput(block.name, result);
@@ -3669,7 +3687,8 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
       }
     }
 
-    return { text: "(max turns reached)", usage: this.totalUsage, turns: turnCount, toolUseCount: this.toolUseCount, stopReason: "max_turns", userFacingOutputs: this._finalizeUserFacingOutputs("(max turns reached)") };
+    const summaryText = `(max turns reached — ${turnCount} turns, ${this.toolUseCount} tool calls)\nUse --max-turns to increase the limit or --resume to continue.`;
+    return { text: summaryText, usage: this.totalUsage, turns: turnCount, toolUseCount: this.toolUseCount, stopReason: "max_turns", userFacingOutputs: this._finalizeUserFacingOutputs(summaryText) };
   }
 }
 
@@ -3723,4 +3742,5 @@ export {
   _loadSkillManifest,
   _saveSkillManifest,
   _scanProjectStructure,
+  _backgroundManager,
 };

@@ -14,6 +14,31 @@ import { extractExchange, sanitize, buildMoment, saveMoment, renderMarkdown } fr
 import { detectProvider, PROVIDERS, isOpenAIModel } from "./providers.mjs";
 import { isDomainPreapproved, _checkFilePath } from "./security.mjs";
 
+// ── Security helpers ────────────────────────────────────────────
+function _shellEscape(s) {
+  return "'" + String(s).replace(/'/g, "'\\''") + "'";
+}
+
+const _SENSITIVE_PATH_SEGMENTS = ['.ssh', '.aws', '.gnupg', '.env', 'credentials'];
+function _isSensitivePath(filePath) {
+  const fp = path.resolve(filePath);
+  for (const s of _SENSITIVE_PATH_SEGMENTS) {
+    if (fp.includes(path.sep + s)) return s;
+  }
+  return null;
+}
+
+function _isPrivateUrl(url) {
+  try {
+    const hostname = new URL(url).hostname;
+    // localhost is OK (used for local dev servers)
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '::1') return false;
+    if (/^(10\.|172\.(1[6-9]|2\d|3[01])\.|192\.168\.|169\.254\.)/.test(hostname)) return true;
+    if (hostname.endsWith('.internal') || hostname === 'metadata.google.internal') return true;
+    return false;
+  } catch { return false; }
+}
+
 // ── ToolRegistry ────────────────────────────────────────────────
 
 class ToolRegistry {
@@ -484,24 +509,13 @@ async function _autoInstallBinary(binary, installHint, toolDir, registry) {
   const installCmd = installHint || await _discoverInstallCommand(binary, registry);
   if (!installCmd) return { installed: false, path: null, error: `Binary not found: ${binary}. No install_hint provided and discovery found nothing. Add "install_hint" to TOOL.json.` };
 
-  // 3. Install
-  process.stderr.write(`  \x1b[33m↓\x1b[0m Binary "${binary}" not found. Installing via: ${installCmd}\n`);
-  try {
-    execSync(installCmd, { encoding: "utf-8", timeout: 120000, stdio: ["pipe", "pipe", "pipe"] });
-  } catch (e) {
-    return { installed: false, path: null, error: `Install failed: ${installCmd}\n${(e.stderr || e.message).slice(0, 300)}` };
-  }
-
-  // 4. Verify
-  const resolved = _resolveBinary(binary, toolDir);
-  if (resolved && fs.existsSync(resolved)) {
-    process.stderr.write(`  \x1b[32m✓\x1b[0m Installed: ${resolved}\n`);
-    return { installed: true, path: resolved };
-  }
-  return { installed: false, path: null, error: `Install ran but binary still not found: ${binary}` };
+  // 3. Suggest install command instead of auto-executing
+  process.stderr.write(`  \x1b[33m!\x1b[0m Binary "${binary}" not found. Suggested install: ${installCmd}\n`);
+  process.stderr.write(`  Run it manually, then retry.\n`);
+  return { installed: false, path: null, error: `Binary "${binary}" not found. Install manually: ${installCmd}` };
 }
 
-function _createShellExecutor(toolDef) { const timeout = toolDef.timeout || 30000; return async (input) => { let cmd = toolDef.command; cmd = cmd.replace(/\$INPUT_JSON/g, JSON.stringify(input)); for (const [k, v] of Object.entries(input || {})) cmd = cmd.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), String(v)); try { return { content: execSync(cmd, { encoding: "utf-8", timeout, cwd: toolDef.cwd || process.cwd(), env: { ...process.env, ...(toolDef.env || {}) }, maxBuffer: 10 * 1024 * 1024 }), is_error: false }; } catch (e) { return { content: e.stderr || e.message, is_error: true }; } }; }
+function _createShellExecutor(toolDef) { const timeout = toolDef.timeout || 30000; return async (input) => { let cmd = toolDef.command; cmd = cmd.replace(/\$INPUT_JSON/g, _shellEscape(JSON.stringify(input))); for (const [k, v] of Object.entries(input || {})) cmd = cmd.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), _shellEscape(String(v))); try { return { content: execSync(cmd, { encoding: "utf-8", timeout, cwd: toolDef.cwd || process.cwd(), env: { ...process.env, ...(toolDef.env || {}) }, maxBuffer: 10 * 1024 * 1024 }), is_error: false }; } catch (e) { return { content: e.stderr || e.message, is_error: true }; } }; }
 
 // ── CLI executor (type: "cli") ────────────────────────────────
 function _createCliExecutor(toolDef, toolDir) {
@@ -520,7 +534,7 @@ function _createCliExecutor(toolDef, toolDir) {
     const args = [];
     for (const a of (toolDef.args_template || [])) {
       let s = a.replace(/\$INPUT_JSON/g, JSON.stringify(input));
-      for (const [k, v] of Object.entries(input || {})) s = s.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), String(v));
+      for (const [k, v] of Object.entries(input || {})) s = s.replace(new RegExp(`\\$${k.toUpperCase()}`, "g"), String(v).replace(/[\0\n\r]/g, ""));
       // If the original template was a single variable (e.g. "$ARGS") and it expanded to a multi-word string, split it
       if (/^\$[A-Z_]+$/.test(a) && s.includes(" ")) args.push(...s.split(/\s+/).filter(Boolean));
       else args.push(s);
@@ -1927,6 +1941,8 @@ Use this tool instead of cat, head, or tail via Bash. You can read any file dire
       required: ["file_path"],
     },
   }, async (input) => {
+    const sensitiveSeg = _isSensitivePath(input.file_path);
+    if (sensitiveSeg) return { content: `Blocked: ${sensitiveSeg} is a sensitive path`, is_error: true };
     const content = await fs.promises.readFile(input.file_path, "utf-8");
     let lines = content.split("\n");
     const offset = (input.offset || 1) - 1;
@@ -1957,6 +1973,8 @@ Use this tool instead of echo/cat heredoc via Bash.
       required: ["file_path", "content"],
     },
   }, async (input) => {
+    const sensitiveSeg = _isSensitivePath(input.file_path);
+    if (sensitiveSeg) return { content: `Blocked: ${sensitiveSeg} is a sensitive path`, is_error: true };
     // Checkpoint before mutation
     if (registry._checkpoints) registry._checkpoints.backupBeforeMutation(input.file_path, registry._messageId);
     await fs.promises.mkdir(path.dirname(input.file_path), { recursive: true });
@@ -1985,6 +2003,8 @@ Usage:
       required: ["file_path", "old_string", "new_string"],
     },
   }, async (input) => {
+    const sensitiveSeg = _isSensitivePath(input.file_path);
+    if (sensitiveSeg) return { content: `Blocked: ${sensitiveSeg} is a sensitive path`, is_error: true };
     // Checkpoint before mutation
     if (registry._checkpoints) registry._checkpoints.backupBeforeMutation(input.file_path, registry._messageId);
     const filePath = input.file_path;
@@ -2054,18 +2074,14 @@ Usage:
       }
     }
 
-    // Apply the replacement
+    // Apply the replacement — if deleting (newStr="") and old_string+\n exists, remove the trailing newline too
+    const target = (newStr === "" && !matchStr.endsWith("\n") && content.includes(matchStr + "\n") && !replaceAll)
+      ? matchStr + "\n" : matchStr;
     let updated;
     if (replaceAll) {
-      updated = content.replaceAll(matchStr, newStr);
+      updated = content.replaceAll(target, newStr);
     } else {
-      updated = content.replace(matchStr, newStr);
-    }
-
-    // Handle trailing newline: if deleting (newStr="") and old_string didn't end with \n
-    // but old_string+\n exists, remove the extra newline too
-    if (newStr === "" && !matchStr.endsWith("\n") && content.includes(matchStr + "\n") && !replaceAll) {
-      updated = content.replace(matchStr + "\n", "");
+      updated = content.replace(target, newStr);
     }
 
     if (updated === content) {
@@ -2114,6 +2130,9 @@ Usage notes:
     // Validate URL
     try { new URL(url); } catch {
       return { content: `Invalid URL: ${url}`, is_error: true };
+    }
+    if (_isPrivateUrl(url)) {
+      return { content: `Blocked: fetching private/internal URLs is not allowed (${new URL(url).hostname})`, is_error: true };
     }
 
     // Upgrade HTTP → HTTPS
@@ -2234,7 +2253,8 @@ Use this tool instead of find or ls via Bash.
       required: ["pattern"],
     },
   }, async (input) => {
-    const dir = input.path || registry._cwd || process.cwd();
+    let dir = input.path || registry._cwd || process.cwd();
+    try { dir = fs.realpathSync(dir); } catch { /* keep original */ }
     const pattern = input.pattern;
     const regex = globToRegex(pattern);
 
@@ -3001,6 +3021,56 @@ function registerDeferredBuiltinTools(registry, cfg) {
     const planFile = path.join(os.tmpdir(), `claude-plan-${Date.now()}.md`);
     fs.writeFileSync(planFile, input.plan);
     return { content: `Exited plan mode. Plan saved to ${planFile}\n\nYou can now implement the plan.`, is_error: false };
+  }, { deferred: true });
+
+  // ── WebSearch ──────────────────────────────────────────────
+  registry.register("WebSearch", {
+    description: "Search the web for information. Returns search result snippets.",
+    input_schema: {
+      type: "object",
+      properties: {
+        query: { type: "string", description: "Search query" },
+        max_results: { type: "number", description: "Max results to return (default 5)" },
+      },
+      required: ["query"],
+    },
+  }, async (input) => {
+    const maxResults = input.max_results || 5;
+    try {
+      const url = `https://html.duckduckgo.com/html/?q=${encodeURIComponent(input.query)}`;
+      const resp = await fetch(url, {
+        headers: { "User-Agent": "cloclo/1.0" },
+        redirect: "follow",
+      });
+      if (!resp.ok) return { content: `Search failed: HTTP ${resp.status}`, is_error: true };
+      const html = await resp.text();
+
+      // Parse result snippets from DuckDuckGo HTML
+      const results = [];
+      const resultRegex = /<a[^>]+class="result__a"[^>]*href="([^"]*)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g;
+      let match;
+      while ((match = resultRegex.exec(html)) !== null && results.length < maxResults) {
+        const link = match[1];
+        const title = match[2].replace(/<[^>]+>/g, "").trim();
+        const snippet = match[3].replace(/<[^>]+>/g, "").trim();
+        if (title || snippet) {
+          results.push(`${results.length + 1}. ${title}\n   ${link}\n   ${snippet}`);
+        }
+      }
+
+      if (results.length === 0) {
+        // Fallback: try simpler regex for result links
+        const simpleRegex = /<a[^>]+class="result__url"[^>]*>([\s\S]*?)<\/a>/g;
+        while ((match = simpleRegex.exec(html)) !== null && results.length < maxResults) {
+          const text = match[1].replace(/<[^>]+>/g, "").trim();
+          if (text) results.push(`${results.length + 1}. ${text}`);
+        }
+      }
+
+      return { content: results.length > 0 ? results.join("\n\n") : "No results found.", is_error: false };
+    } catch (e) {
+      return { content: `Search error: ${e.message}`, is_error: true };
+    }
   }, { deferred: true });
 
 }

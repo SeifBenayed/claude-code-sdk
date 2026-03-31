@@ -4,7 +4,7 @@
 import fs from "fs";
 import path from "path";
 import os from "os";
-import { EXIT, printHelp } from "./utils.mjs";
+import { EXIT, printHelp, _VERSION } from "./utils.mjs";
 import { detectProvider } from "./providers.mjs";
 import { oauthLogin, oauthLogout, openaiOAuthLogin, openaiOAuthLogout } from "./auth.mjs";
 
@@ -60,7 +60,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
   const FLAGS_BOOLEAN = new Set([
     "--oauth", "--ndjson", "--resume", "--verbose", "--permission-callbacks",
     "--brief", "--json", "--yes", "-y", "--openai", "--login", "--logout",
-    "--openai-login", "--openai-logout", "--onboarding", "--help", "-h",
+    "--openai-login", "--openai-logout", "--onboarding", "--help", "-h", "--version",
   ]);
 
   // Helper: require next argv value or die
@@ -150,7 +150,12 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "-p": case "--print": {
         i++;
         const v = argv[i];
-        if (i >= argv.length || v === undefined || (typeof v === "string" && (v.startsWith("-") || v === ","))) {
+        if (v === "-") {
+          cfg.prompt = "__STDIN__";
+          cfg.interactive = false;
+          break;
+        }
+        if (i >= argv.length || v === undefined || v === "" || (typeof v === "string" && (v.startsWith("-") || v === ","))) {
           process.stderr.write(`Error: ${a} requires a value\n  ${a} requires a prompt value. Use ${a} "your prompt"\n`);
           process.exit(EXIT.BAD_ARGS);
         }
@@ -180,7 +185,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
         const v = needValue(a, ++i);
         const n = parseInt(v, 10);
         if (isNaN(n) || n < 1) { process.stderr.write(`Error: --max-tokens must be a positive integer, got "${v}"\n`); process.exit(EXIT.BAD_ARGS); }
-        cfg.maxTokens = n; break;
+        cfg.maxTokens = n; cfg._maxTokensExplicit = true; break;
       }
       case "--mcp-config": cfg.mcpConfig = needValue(a, ++i); break;
       case "--allowed-tools": cfg.allowedTools = (cfg.allowedTools || []).concat(needValue(a, ++i).split(",")); break;
@@ -236,6 +241,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
       case "--openai-logout": openaiOAuthLogout(); process.exit(0);
       case "--openai": cfg.useOpenAIOAuth = true; break;
       case "--help": case "-h": printHelp(); process.exit(0);
+      case "--version": process.stderr.write(`${_VERSION}\n`); process.exit(0);
       default:
         if (a.startsWith("-")) {
           process.stderr.write(`Error: Unknown flag "${a}"\n  Run cloclo --help for usage\n`);

@@ -102,7 +102,11 @@ class McpManager {
           const pending = server.pending.get(msg.id);
           if (pending) {
             server.pending.delete(msg.id);
-            pending.resolve(msg.result);
+            if (msg.error) {
+              pending.reject(new Error(msg.error.message || `MCP RPC error ${msg.error.code}`));
+            } else {
+              pending.resolve(msg.result);
+            }
           }
         } catch { /* skip */ }
       }
@@ -739,6 +743,13 @@ Important:
     // CheckpointStore created inside bridge.run() with its session ID
     await bridge.run();
   } else if (cfg.prompt) {
+    // Resolve stdin sentinel (from -p -)
+    if (cfg.prompt === "__STDIN__") {
+      const chunks = [];
+      for await (const chunk of process.stdin) chunks.push(chunk);
+      cfg.prompt = Buffer.concat(chunks).toString("utf-8").trimEnd();
+      if (!cfg.prompt) { process.stderr.write("Error: no input on stdin\n"); process.exit(EXIT.BAD_ARGS); }
+    }
     // One-shot mode
     const messageId = randomUUID();
     const checkpoints = new CheckpointStore(cfg.sessionId || messageId);
@@ -754,7 +765,20 @@ Important:
       userPrompt += `\n\nIMPORTANT: Your response MUST be valid JSON conforming to this schema:\n${JSON.stringify(cfg.jsonSchema, null, 2)}\n\nRespond with ONLY the JSON object, no markdown fences, no explanation.`;
     }
 
-    const messages = [{ role: "user", content: userPrompt, messageId }];
+    let messages;
+    if (cfg.resume) {
+      const sessions = new SessionManager(cfg.cwd);
+      const sessionId = cfg.sessionId || sessions.latest();
+      if (sessionId) {
+        messages = sessions.load(sessionId);
+        messages.push({ role: "user", content: userPrompt, messageId });
+        cfg.sessionId = sessionId;
+      } else {
+        messages = [{ role: "user", content: userPrompt, messageId }];
+      }
+    } else {
+      messages = [{ role: "user", content: userPrompt, messageId }];
+    }
 
     const isJsonOutput = cfg.outputFormat === "json";
 
@@ -808,7 +832,7 @@ Important:
     if (isJsonOutput) {
       const jsonOutput = {
         version: cfg.outputVersion || "1",
-        message: result.text,
+        message: assistantVisibleText || result.text,
         user_facing_message: assistantVisibleText,
         user_facing_outputs: result.userFacingOutputs || [],
         result: schemaResult,  // parsed+validated object (null if no schema or parse failed)
@@ -849,13 +873,15 @@ Important:
 }
 
 main().catch((err) => {
-  process.stderr.write(`Fatal: ${err.message}\n${err.stack}\n`);
-  // Map known error types to structured exit codes
   const msg = err.message || "";
-  if (msg.includes("No ") && (msg.includes("auth") || msg.includes("credentials") || msg.includes("API key"))) {
-    process.exit(EXIT.AUTH_FAILURE);
-  } else if (msg.includes("provider") || msg.includes("Unknown model") || msg.includes("ECONNREFUSED")) {
-    process.exit(EXIT.PROVIDER_ERROR);
+  const isAuth = msg.includes("auth") || msg.includes("credentials") || msg.includes("API key") || msg.includes("401") || msg.includes("403");
+  const isProvider = msg.includes("provider") || msg.includes("Unknown model") || msg.includes("ECONNREFUSED") || msg.includes("404") || msg.includes("model") || msg.includes("does not exist");
+
+  if (isAuth || isProvider) {
+    process.stderr.write(`Error: ${msg}\n`);
+    process.exit(isAuth ? EXIT.AUTH_FAILURE : EXIT.PROVIDER_ERROR);
   }
+  // Unknown errors get full trace
+  process.stderr.write(`Fatal: ${msg}\n${err.stack}\n`);
   process.exit(EXIT.RUNTIME_ERROR);
 });

@@ -819,7 +819,7 @@ class OpenAIClient {
               event: "message_delta",
               data: {
                 delta: { stop_reason: stopReason },
-                usage: usage || { output_tokens: 0 },
+                usage: usage || { input_tokens: 0, output_tokens: 0 },
               },
             };
             yield { event: "message_stop", data: {} };

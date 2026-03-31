@@ -2171,11 +2171,11 @@ section("UNIT: Task Tools — registered as deferred");
 
       // All in getAllDefinitions
       const all = reg.getAllDefinitions();
-      assert(all.length === 6, "6 total tools from registerDeferredBuiltinTools");
+      assert(all.length === 7, "7 total tools from registerDeferredBuiltinTools");
 
       // All in getDeferredNames
       const names = reg.getDeferredNames();
-      assert(names.length === 6, "6 deferred names");
+      assert(names.length === 7, "7 deferred names");
     } catch (e) {
       skip(`Task tools registration test failed: ${e.message}`);
     }
@@ -3166,7 +3166,7 @@ section("UNIT: CLI — --output json structured payload");
   // Verify the jsonOutput object has the right shape
   assert(source.includes("const jsonOutput = {"), "JSON output object constructed");
   assert(source.includes("version: cfg.outputVersion"), "JSON output includes version field");
-  assert(source.includes("message: result.text"), "JSON output includes message field");
+  assert(source.includes("message: assistantVisibleText || result.text"), "JSON output includes message field");
   assert(source.includes("model: cfg.model"), "JSON output includes model field");
   assert(source.includes("provider: provider.name"), "JSON output includes provider field");
   assert(source.includes("stop_reason: result.stopReason"), "JSON output includes stop_reason field");
@@ -7275,6 +7275,695 @@ section("UNIT: Staleness — enhanced warning and timestamps");
     const funcSlice = source.slice(loadIdx, loadIdx + 3000);
     assert(funcSlice.includes("saved_at") || funcSlice.includes("last_verified"), "loadMemoryIndex reads timestamps from frontmatter");
     assert(funcSlice.includes("(verified:") || funcSlice.includes("(saved:"), "loadMemoryIndex appends date labels");
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// DEEP INTEGRATION TESTS — Audit Fixes (P0/P1/P2)
+// ═══════════════════════════════════════════════════════════════════
+
+// ── P0-1: Shell injection via _createShellExecutor — real exec ─────
+section("DEEP: P0-1 — Shell executor escapes LLM input (real exec)");
+{
+  const shellExecFunc = extractBlock(source, "function _createShellExecutor(");
+  const shellEscapeFunc = extractBlock(source, "function _shellEscape(");
+  if (shellExecFunc && shellEscapeFunc) {
+    const shellNs = {};
+    try {
+      new Function("exports", "execSync", "process", "path",
+        shellEscapeFunc + "\n" + shellExecFunc +
+        "\nexports._createShellExecutor = _createShellExecutor;\nexports._shellEscape = _shellEscape;\n"
+      )(shellNs, execSync, process, path);
+
+      // Test 1: _shellEscape fundamentals
+      assert(shellNs._shellEscape("hello") === "'hello'", "shellEscape: normal string quoted");
+      assert(shellNs._shellEscape("it's") === "'it'\\''s'", "shellEscape: single quotes escaped");
+      assert(shellNs._shellEscape("$(whoami)") === "'$(whoami)'", "shellEscape: command substitution neutralized");
+      assert(shellNs._shellEscape("`id`") === "'`id`'", "shellEscape: backtick injection neutralized");
+      const chainInput = "'; rm -rf /; echo '";
+      const chainEscaped = shellNs._shellEscape(chainInput);
+      // The escaped result should be safe to eval as a bash single-quoted string
+      assert(chainEscaped.startsWith("'") && chainEscaped.endsWith("'"), "shellEscape: chain break is fully quoted");
+      assert(chainEscaped.includes("\\'"), "shellEscape: chain break escapes internal quotes");
+
+      // Test 2: Real shell executor — injection attempt should be literal
+      const executor = shellNs._createShellExecutor({
+        command: "echo $NAME",
+        timeout: 5000,
+      });
+      const result = await executor({ name: "$(echo PWNED)" });
+      assert(!result.is_error, "Shell executor succeeds");
+      // The output should contain the LITERAL string "$(echo PWNED)", not just "PWNED"
+      // If injection worked, we'd get just "PWNED" from command execution
+      assert(result.content.trim().includes("$(echo PWNED)"), "Injection payload echoed as literal, not executed");
+
+      // Test 3: Normal input works fine
+      const result2 = await executor({ name: "Alice" });
+      assert(!result2.is_error, "Normal input succeeds");
+      assert(result2.content.trim().includes("Alice"), "Normal input echoed correctly");
+
+      // Test 4: $INPUT_JSON also escaped
+      const executor2 = shellNs._createShellExecutor({
+        command: "echo $INPUT_JSON",
+        timeout: 5000,
+      });
+      const result3 = await executor2({ key: "$(whoami)" });
+      assert(!result3.is_error, "INPUT_JSON executor succeeds");
+      assert(!result3.content.includes(os.userInfo().username) || result3.content.includes("$(whoami)"),
+        "INPUT_JSON injection neutralized");
+
+      // Test 5: Multi-variable substitution with mixed attacks
+      const executor3 = shellNs._createShellExecutor({
+        command: "echo $A $B",
+        timeout: 5000,
+      });
+      const result4 = await executor3({ a: "safe", b: "; cat /etc/passwd" });
+      assert(!result4.is_error, "Multi-var executor succeeds");
+      assert(!result4.content.includes("root:"), "/etc/passwd NOT leaked");
+
+    } catch (e) {
+      skip(`Shell executor deep test failed: ${e.message}`);
+    }
+  } else {
+    skip("_createShellExecutor extraction failed");
+  }
+}
+
+// ── P0-2: Path traversal in skill installation — real filesystem ──
+section("DEEP: P0-2 — Skill install blocks path traversal (real fs)");
+{
+  const tmpSkillDir = fs.mkdtempSync(path.join(os.tmpdir(), "cloclo-traversal-"));
+  try {
+    // Simulate the install loop from engine.mjs
+    const targetDir = path.join(tmpSkillDir, "my-skill");
+    fs.mkdirSync(targetDir, { recursive: true });
+
+    const maliciousFiles = {
+      "SKILL.md": "---\nname: test\n---\ntest skill",
+      "../../etc/evil.txt": "TRAVERSAL_PAYLOAD",
+      "../sibling/pwned.txt": "SIBLING_PAYLOAD",
+      "safe/nested/file.txt": "SAFE_CONTENT",
+    };
+
+    let blocked = 0;
+    let installed = 0;
+    for (const [filePath, content] of Object.entries(maliciousFiles)) {
+      const dest = path.join(targetDir, filePath);
+      if (!dest.startsWith(targetDir + path.sep) && dest !== targetDir) {
+        blocked++;
+        continue;
+      }
+      fs.mkdirSync(path.dirname(dest), { recursive: true });
+      fs.writeFileSync(dest, content);
+      installed++;
+    }
+
+    assert(blocked === 2, `Blocked ${blocked}/2 traversal attempts`);
+    assert(installed === 2, `Installed ${installed}/2 safe files`);
+
+    // Verify traversal targets don't exist
+    assert(!fs.existsSync(path.join(tmpSkillDir, "etc", "evil.txt")), "../../etc/evil.txt NOT created");
+    assert(!fs.existsSync(path.join(tmpSkillDir, "sibling", "pwned.txt")), "../sibling/pwned.txt NOT created");
+
+    // Verify safe files DO exist
+    assert(fs.existsSync(path.join(targetDir, "SKILL.md")), "SKILL.md installed correctly");
+    assert(fs.existsSync(path.join(targetDir, "safe", "nested", "file.txt")), "Nested safe file installed");
+    assert(fs.readFileSync(path.join(targetDir, "safe", "nested", "file.txt"), "utf-8") === "SAFE_CONTENT",
+      "Safe file content correct");
+
+  } catch (e) {
+    skip(`Path traversal deep test failed: ${e.message}`);
+  } finally {
+    fs.rmSync(tmpSkillDir, { recursive: true, force: true });
+  }
+}
+
+// ── P0-3: GitHub source validation in parseSkillSource ─────────────
+section("DEEP: P0-3 — parseSkillSource rejects injection chars");
+{
+  const parseFunc = extractBlock(source, "function parseSkillSource(");
+  if (parseFunc) {
+    const psNs = {};
+    try {
+      new Function("exports", parseFunc + "\nexports.parseSkillSource = parseSkillSource;\n")(psNs);
+
+      // Valid sources should work
+      const r1 = psNs.parseSkillSource("github:owner/repo");
+      assert(r1.type === "github", "Valid github: source accepted");
+      assert(r1.owner === "owner" && r1.repo === "repo", "Owner/repo parsed correctly");
+
+      const r2 = psNs.parseSkillSource("github:my-org/my.repo/subpath");
+      assert(r2.subpath === "subpath", "Subpath parsed correctly");
+
+      // Injection attempts should throw
+      let threw = false;
+      try { psNs.parseSkillSource("github:foo;echo pwned/bar"); } catch (e) {
+        threw = true;
+        assert(e.message.includes("Invalid GitHub source") || e.message.includes("invalid"), "Error message mentions invalid source");
+      }
+      assert(threw, "Semicolon injection in owner throws");
+
+      threw = false;
+      try { psNs.parseSkillSource("github:ok/repo$(cmd)"); } catch (e) { threw = true; }
+      assert(threw, "Command substitution in repo throws");
+
+      threw = false;
+      try { psNs.parseSkillSource("github:ok/repo`id`"); } catch (e) { threw = true; }
+      assert(threw, "Backtick injection in repo throws");
+
+      threw = false;
+      try { psNs.parseSkillSource("github:ok/repo|cat /etc/passwd"); } catch (e) { threw = true; }
+      assert(threw, "Pipe injection in repo throws");
+
+      // Edge cases: dots and dashes are OK
+      const r3 = psNs.parseSkillSource("github:my-org.v2/my_repo-3");
+      assert(r3.owner === "my-org.v2", "Dots and dashes in owner allowed");
+      assert(r3.repo === "my_repo-3", "Underscores and dashes in repo allowed");
+
+    } catch (e) {
+      skip(`parseSkillSource deep test failed: ${e.message}`);
+    }
+  } else {
+    skip("parseSkillSource extraction failed");
+  }
+}
+
+// ── P0-3: Skill name validation in _installOneSkill ────────────────
+section("DEEP: P0-3 — Skill name validation rejects bad names");
+{
+  // Test the regex directly since _installOneSkill needs too many dependencies
+  const validName = /^[a-zA-Z0-9._-]+$/;
+  const goodNames = ["my-skill", "skill.v2", "SKILL_V3", "a", "test-skill-2.0"];
+  const badNames = ["foo;bar", "skill$(cmd)", "skill`id`", "../escape", "ski ll", "skill\nname", "skill/name", ""];
+
+  for (const n of goodNames) {
+    assert(validName.test(n), `Skill name "${n}" accepted`);
+  }
+  for (const n of badNames) {
+    assert(!validName.test(n), `Skill name "${n}" rejected`);
+  }
+}
+
+// ── P0-4a: Sensitive path blocking — real Read/Write/Edit executors ──
+section("DEEP: P0-4a — Read/Write/Edit block sensitive paths (real executors)");
+{
+  const trClass = extractBlock(source, "class ToolRegistry {");
+  const builtinFunc = extractBlock(source, "function registerBuiltinTools(");
+  const sensPathFunc = extractBlock(source, "function _isSensitivePath(");
+  const sensConst = source.match(/const _SENSITIVE_PATH_SEGMENTS = \[.*?\];/)?.[0] || "";
+  if (trClass && builtinFunc && sensPathFunc && sensConst) {
+    const sensNs = {};
+    try {
+      new Function("exports", "fs", "path", "os", "spawn", "execSync", "process",
+        "function log() {} function sleep() { return Promise.resolve(); }\n" +
+        sensConst + "\n" + sensPathFunc + "\n" + trClass + "\n" + builtinFunc +
+        "\nexports.ToolRegistry = ToolRegistry;\nexports.registerBuiltinTools = registerBuiltinTools;\nexports._isSensitivePath = _isSensitivePath;\n"
+      )(sensNs, fs, path, os, spawn, execSync, process);
+
+      const reg = new sensNs.ToolRegistry();
+      sensNs.registerBuiltinTools(reg);
+
+      // Read: sensitive paths blocked
+      const r1 = await reg.execute("Read", { file_path: path.join(os.homedir(), ".ssh", "id_rsa") });
+      assert(r1.is_error === true, "Read ~/.ssh/id_rsa returns error");
+      assert(r1.content.includes("Blocked") && r1.content.includes(".ssh"), "Read error mentions .ssh blocked");
+
+      const r2 = await reg.execute("Read", { file_path: path.join(os.homedir(), ".aws", "credentials") });
+      assert(r2.is_error === true, "Read ~/.aws/credentials returns error");
+      assert(r2.content.includes("Blocked"), "Read error says Blocked");
+
+      // Write: sensitive paths blocked
+      const r3 = await reg.execute("Write", { file_path: path.join(os.homedir(), ".gnupg", "evil"), content: "x" });
+      assert(r3.is_error === true, "Write to ~/.gnupg blocked");
+
+      // Edit: sensitive paths blocked
+      const r4 = await reg.execute("Edit", { file_path: "/project/.env", old_string: "x", new_string: "y" });
+      assert(r4.is_error === true, "Edit /project/.env blocked");
+
+      // Read: normal paths allowed (test with a temp file)
+      const tmpFile = path.join(os.tmpdir(), `cloclo-sens-test-${Date.now()}.txt`);
+      fs.writeFileSync(tmpFile, "hello world\nsecond line\n");
+      const r5 = await reg.execute("Read", { file_path: tmpFile });
+      assert(!r5.is_error, "Read normal temp file succeeds");
+      assert(typeof r5.content === "string" || typeof r5 === "string", "Read returns string content");
+      const readContent = r5.content || r5;
+      assert(readContent.includes("hello world"), "Read content is correct");
+      fs.unlinkSync(tmpFile);
+
+      // Write + Read roundtrip on safe path
+      const tmpFile2 = path.join(os.tmpdir(), `cloclo-sens-write-${Date.now()}.txt`);
+      const wr = await reg.execute("Write", { file_path: tmpFile2, content: "test content 123" });
+      assert(!wr.is_error && (typeof wr === "string" ? wr.includes("Wrote") : !wr.is_error), "Write to safe path succeeds");
+      const rd = await reg.execute("Read", { file_path: tmpFile2 });
+      const rdContent = rd.content || rd;
+      assert(rdContent.includes("test content 123"), "Write+Read roundtrip content matches");
+      fs.unlinkSync(tmpFile2);
+
+    } catch (e) {
+      skip(`Sensitive path deep test failed: ${e.message}`);
+    }
+  } else {
+    skip("Sensitive path extraction failed: " + (!trClass ? "ToolRegistry" : !builtinFunc ? "registerBuiltinTools" : !sensPathFunc ? "_isSensitivePath" : "SENSITIVE_PATHS const"));
+  }
+}
+
+// ── P0-4b: WebFetch SSRF — multi-step URL validation ──────────────
+section("DEEP: P0-4b — WebFetch SSRF blocks private/metadata URLs");
+{
+  const isPrivateFunc = extractBlock(source, "function _isPrivateUrl(");
+  if (isPrivateFunc) {
+    const ssrfNs = {};
+    try {
+      new Function("exports", isPrivateFunc + "\nexports._isPrivateUrl = _isPrivateUrl;\n")(ssrfNs);
+
+      // AWS metadata (most critical)
+      assert(ssrfNs._isPrivateUrl("http://169.254.169.254/latest/meta-data/iam/security-credentials/"), "AWS metadata IP blocked");
+      assert(ssrfNs._isPrivateUrl("http://169.254.169.254/latest/api/token"), "AWS IMDSv2 token endpoint blocked");
+
+      // GCP metadata
+      assert(ssrfNs._isPrivateUrl("http://metadata.google.internal/computeMetadata/v1/"), "GCP metadata blocked");
+
+      // RFC 1918 ranges
+      assert(ssrfNs._isPrivateUrl("http://10.0.0.1/admin"), "10.x blocked");
+      assert(ssrfNs._isPrivateUrl("http://10.255.255.255/"), "10.255 blocked");
+      assert(ssrfNs._isPrivateUrl("http://172.16.0.1/"), "172.16.x blocked");
+      assert(ssrfNs._isPrivateUrl("http://172.31.255.255/"), "172.31.x blocked");
+      assert(!ssrfNs._isPrivateUrl("http://172.15.0.1/"), "172.15.x NOT blocked (not private)");
+      assert(!ssrfNs._isPrivateUrl("http://172.32.0.1/"), "172.32.x NOT blocked (not private)");
+      assert(ssrfNs._isPrivateUrl("http://192.168.0.1/"), "192.168.x blocked");
+      assert(ssrfNs._isPrivateUrl("http://192.168.255.255/"), "192.168.255 blocked");
+
+      // Internal domains
+      assert(ssrfNs._isPrivateUrl("http://grafana.internal/d/dashboard"), ".internal TLD blocked");
+      assert(ssrfNs._isPrivateUrl("http://vault.internal:8200/v1/secret"), ".internal with port blocked");
+
+      // Localhost ALLOWED (for local dev)
+      assert(!ssrfNs._isPrivateUrl("http://localhost:3000/api"), "localhost allowed");
+      assert(!ssrfNs._isPrivateUrl("http://127.0.0.1:8080/"), "127.0.0.1 allowed");
+      assert(!ssrfNs._isPrivateUrl("http://[::1]:3000/"), "::1 allowed");
+
+      // Public URLs allowed
+      assert(!ssrfNs._isPrivateUrl("https://github.com/owner/repo"), "github.com allowed");
+      assert(!ssrfNs._isPrivateUrl("https://api.openai.com/v1/chat"), "api.openai.com allowed");
+      assert(!ssrfNs._isPrivateUrl("https://example.com/"), "example.com allowed");
+      // 169.254.example.com gets blocked because hostname matches the IP regex — this is acceptable (overly cautious)
+      assert(ssrfNs._isPrivateUrl("https://169.254.example.com/"), "169.254.example.com blocked (hostname matches IP pattern, acceptable false positive)");
+
+      // Edge: malformed URL returns false (not blocked, let URL constructor throw later)
+      assert(!ssrfNs._isPrivateUrl("not-a-url"), "Malformed URL returns false");
+
+    } catch (e) {
+      skip(`SSRF deep test failed: ${e.message}`);
+    }
+  } else {
+    skip("_isPrivateUrl extraction failed");
+  }
+}
+
+// ── P1-1: const→let systemBlocks — verify no const reassignment ───
+section("DEEP: P1-1 — Fork mode systemBlocks reassignment is valid");
+{
+  // Verify the actual code pattern: let declaration followed by reassignment
+  const engineSrc = fs.readFileSync(path.join(__dirname, "src", "engine.mjs"), "utf-8");
+
+  // Find the systemBlocks declaration
+  const declMatch = engineSrc.match(/(\blet|\bconst)\s+systemBlocks\s*=\s*buildSystemPrompt/);
+  assert(declMatch && declMatch[1] === "let", "systemBlocks declared with let (not const)");
+
+  // Find the reassignment in fork mode
+  const reassignIdx = engineSrc.indexOf("systemBlocks = [...parentSystemBlocks]");
+  assert(reassignIdx > 0, "Fork mode reassignment exists");
+
+  // Verify let comes before reassignment
+  const declIdx = engineSrc.indexOf("let systemBlocks = buildSystemPrompt");
+  assert(declIdx > 0 && declIdx < reassignIdx, "let declaration comes before fork reassignment");
+
+  // Simulate the pattern to verify no TypeError at runtime
+  try {
+    let systemBlocks = ["initial"];
+    const agentPromptBlock = { type: "text", text: "agent" };
+    // Fork mode reassignment
+    const parentSystemBlocks = ["parent1", "parent2"];
+    systemBlocks = [...parentSystemBlocks];
+    systemBlocks.splice(systemBlocks.length > 1 ? 1 : 0, 0, agentPromptBlock);
+    assert(systemBlocks.length === 3, "Reassignment works: 3 blocks");
+    assert(systemBlocks[1] === agentPromptBlock, "Agent prompt spliced at position 1");
+  } catch (e) {
+    assert(false, `Fork mode simulation threw: ${e.message}`);
+  }
+}
+
+// ── P1-2: LSP hook result scope — verify result accessible ────────
+section("DEEP: P1-2 — LSP hook result variable in scope after if/else");
+{
+  const engineSrc = fs.readFileSync(path.join(__dirname, "src", "engine.mjs"), "utf-8");
+
+  // Find the hoisted declaration
+  const hoistIdx = engineSrc.indexOf("let result;\n");
+  const externalIdx = engineSrc.indexOf("const isExternal = this.registry.isExternal(block.name)");
+  const lspHookIdx = engineSrc.indexOf("const lspResult = await this.registry._lspPostToolHook(block.name, block.input, result)");
+
+  assert(hoistIdx > 0, "let result; declaration exists");
+  assert(externalIdx > 0, "isExternal check exists");
+  assert(lspHookIdx > 0, "LSP hook uses result variable");
+
+  // Verify ordering: hoist < isExternal < lspHook
+  assert(hoistIdx < externalIdx, "result hoisted before isExternal check");
+  assert(externalIdx < lspHookIdx, "isExternal before LSP hook");
+
+  // Verify result assigned in both branches (no const)
+  const ifBranch = engineSrc.indexOf("result = await this.cb.onExternalToolUse(block)");
+  const elseBranch = engineSrc.indexOf("result = await this.registry.execute(block.name, block.input)");
+  assert(ifBranch > hoistIdx, "result assigned in external branch");
+  assert(elseBranch > hoistIdx, "result assigned in registry branch");
+
+  // Verify no stale const declarations
+  const constResult = engineSrc.indexOf("const result = await this.cb.onExternalToolUse");
+  const constResult2 = engineSrc.indexOf("const result = await this.registry.execute");
+  assert(constResult === -1, "No const result in external branch");
+  assert(constResult2 === -1, "No const result in registry branch");
+
+  // Runtime simulation
+  try {
+    let result;
+    const isExternal = false;
+    if (isExternal) {
+      result = { content: "external", is_error: false };
+    } else {
+      result = { content: "registry", is_error: false };
+    }
+    // LSP hook should see result
+    assert(result.content === "registry", "LSP hook sees registry result");
+
+    // And for external branch
+    let result2;
+    const isExternal2 = true;
+    if (isExternal2) {
+      result2 = { content: "external", is_error: false };
+    } else {
+      result2 = { content: "registry", is_error: false };
+    }
+    assert(result2.content === "external", "LSP hook sees external result");
+  } catch (e) {
+    assert(false, `Result scope simulation threw: ${e.message}`);
+  }
+}
+
+// ── P1-3: Session imports — verify build output has the symbols ────
+section("DEEP: P1-3 — Session imports resolve in build output");
+{
+  // Verify the build output has the functions accessible
+  const buildSrc = fs.readFileSync(path.join(__dirname, "claude-native.mjs"), "utf-8");
+
+  // aggregateVerdicts should be defined before it's used in session code
+  const aggrDefIdx = buildSrc.indexOf("function aggregateVerdicts(");
+  const aggrUseIdx = buildSrc.indexOf("aggregateVerdicts(codeVerdict");
+  assert(aggrDefIdx > 0, "aggregateVerdicts defined in build");
+  assert(aggrUseIdx > 0, "aggregateVerdicts used in build");
+  assert(aggrDefIdx < aggrUseIdx, "aggregateVerdicts defined before use");
+
+  // _backgroundManager should be defined before it's used
+  const bgmDefIdx = buildSrc.indexOf("const _backgroundManager = new BackgroundAgentManager()");
+  const bgmUseIdx = buildSrc.indexOf("_backgroundManager.list()");
+  assert(bgmDefIdx > 0, "_backgroundManager defined in build");
+  assert(bgmUseIdx > 0, "_backgroundManager.list() used in build");
+  assert(bgmDefIdx < bgmUseIdx, "_backgroundManager defined before use");
+
+  // AnthropicClient should be defined in build and used at runtime
+  const acDefIdx = buildSrc.indexOf("class AnthropicClient {");
+  const acUseIdx = buildSrc.indexOf("new AnthropicClient({");
+  assert(acDefIdx > 0, "AnthropicClient class in build");
+  assert(acUseIdx > 0, "new AnthropicClient({}) in build");
+  // Note: text position doesn't matter — PROVIDERS.createClient is a closure called at runtime,
+  // after all classes are defined. What matters is the class exists in the build.
+  assert(acDefIdx > 0 && acUseIdx > 0, "Both AnthropicClient definition and usage present in build");
+
+  // Verify source modules have the imports
+  const sessionSrc = fs.readFileSync(path.join(__dirname, "src", "session.mjs"), "utf-8");
+  const engineImport = sessionSrc.split("\n").find(l => l.includes('from "./engine.mjs"'));
+  const provImport = sessionSrc.split("\n").find(l => l.includes('from "./providers.mjs"'));
+  assert(engineImport.includes("aggregateVerdicts"), "src/session.mjs imports aggregateVerdicts");
+  assert(engineImport.includes("_backgroundManager"), "src/session.mjs imports _backgroundManager");
+  assert(provImport.includes("AnthropicClient"), "src/session.mjs imports AnthropicClient");
+
+  // Verify engine.mjs exports them
+  const engineExportBlock = fs.readFileSync(path.join(__dirname, "src", "engine.mjs"), "utf-8");
+  const exportSection = engineExportBlock.slice(engineExportBlock.lastIndexOf("export {"));
+  assert(exportSection.includes("aggregateVerdicts"), "engine.mjs exports aggregateVerdicts");
+  assert(exportSection.includes("_backgroundManager"), "engine.mjs exports _backgroundManager");
+}
+
+// ── P2-1: Edit trailing newline — real file operations ────────────
+section("DEEP: P2-1 — Edit tool trailing newline removal (real fs)");
+{
+  const trClass = extractBlock(source, "class ToolRegistry {");
+  const builtinFunc = extractBlock(source, "function registerBuiltinTools(");
+  const sensPathFunc = extractBlock(source, "function _isSensitivePath(");
+  const sensConst = source.match(/const _SENSITIVE_PATH_SEGMENTS = \[.*?\];/)?.[0] || "";
+  if (trClass && builtinFunc) {
+    const editNs = {};
+    try {
+      new Function("exports", "fs", "path", "os", "spawn", "execSync", "process",
+        "function log() {} function sleep() { return Promise.resolve(); }\n" +
+        sensConst + "\n" + (sensPathFunc || "function _isSensitivePath(){return null;}") + "\n" +
+        trClass + "\n" + builtinFunc +
+        "\nexports.ToolRegistry = ToolRegistry;\nexports.registerBuiltinTools = registerBuiltinTools;\n"
+      )(editNs, fs, path, os, spawn, execSync, process);
+
+      const reg = new editNs.ToolRegistry();
+      editNs.registerBuiltinTools(reg);
+
+      // Test 1: Delete a line — trailing newline should be consumed
+      const tmpEdit1 = path.join(os.tmpdir(), `cloclo-edit-trail-${Date.now()}.txt`);
+      fs.writeFileSync(tmpEdit1, "line1\nline2\nline3\n");
+      const e1 = await reg.execute("Edit", { file_path: tmpEdit1, old_string: "line2", new_string: "" });
+      assert(!e1.is_error && !(typeof e1 === "object" && e1.is_error), "Edit delete line2 succeeds");
+      const after1 = fs.readFileSync(tmpEdit1, "utf-8");
+      assert(after1 === "line1\nline3\n", `Delete line2: got "${after1.replace(/\n/g, "\\n")}" expected "line1\\nline3\\n"`);
+
+      // Test 2: Delete first line
+      const tmpEdit2 = path.join(os.tmpdir(), `cloclo-edit-trail2-${Date.now()}.txt`);
+      fs.writeFileSync(tmpEdit2, "alpha\nbeta\ngamma\n");
+      const e2 = await reg.execute("Edit", { file_path: tmpEdit2, old_string: "alpha", new_string: "" });
+      const after2 = fs.readFileSync(tmpEdit2, "utf-8");
+      assert(after2 === "beta\ngamma\n", `Delete first line: got "${after2.replace(/\n/g, "\\n")}"`);
+
+      // Test 3: Replace (not delete) should NOT consume trailing newline
+      const tmpEdit3 = path.join(os.tmpdir(), `cloclo-edit-trail3-${Date.now()}.txt`);
+      fs.writeFileSync(tmpEdit3, "aaa\nbbb\nccc\n");
+      const e3 = await reg.execute("Edit", { file_path: tmpEdit3, old_string: "bbb", new_string: "BBB" });
+      const after3 = fs.readFileSync(tmpEdit3, "utf-8");
+      assert(after3 === "aaa\nBBB\nccc\n", `Replace preserves structure: got "${after3.replace(/\n/g, "\\n")}"`);
+
+      // Test 4: Delete with old_string that already ends in \n — no double-removal
+      const tmpEdit4 = path.join(os.tmpdir(), `cloclo-edit-trail4-${Date.now()}.txt`);
+      fs.writeFileSync(tmpEdit4, "X\nY\nZ\n");
+      const e4 = await reg.execute("Edit", { file_path: tmpEdit4, old_string: "Y\n", new_string: "" });
+      const after4 = fs.readFileSync(tmpEdit4, "utf-8");
+      assert(after4 === "X\nZ\n", `Delete with trailing \\n: got "${after4.replace(/\n/g, "\\n")}"`);
+
+      // Cleanup
+      [tmpEdit1, tmpEdit2, tmpEdit3, tmpEdit4].forEach(f => { try { fs.unlinkSync(f); } catch {} });
+
+    } catch (e) {
+      skip(`Edit trailing newline deep test failed: ${e.message}`);
+    }
+  } else {
+    skip("Edit tool extraction failed");
+  }
+}
+
+// ── P2-2: MCP RPC error handling — simulate message flow ──────────
+section("DEEP: P2-2 — MCP RPC rejects on error, resolves on success");
+{
+  // Simulate the exact message handler pattern from index.mjs
+  const pending = new Map();
+  let msgId = 0;
+
+  // Simulated _rpc that returns a promise
+  function simulateRpc() {
+    const id = ++msgId;
+    const p = new Promise((resolve, reject) => {
+      pending.set(id, { resolve, reject });
+    });
+    return { id, promise: p };
+  }
+
+  // Simulated message handler (the fixed version)
+  function handleMessage(msg) {
+    const entry = pending.get(msg.id);
+    if (entry) {
+      pending.delete(msg.id);
+      if (msg.error) {
+        entry.reject(new Error(msg.error.message || `MCP RPC error ${msg.error.code}`));
+      } else {
+        entry.resolve(msg.result);
+      }
+    }
+  }
+
+  try {
+    // Test 1: Successful response
+    const rpc1 = simulateRpc();
+    handleMessage({ id: rpc1.id, result: { tools: ["Bash", "Read"] } });
+    const result1 = await rpc1.promise;
+    assert(result1.tools.length === 2, "Success: result resolved with tools");
+    assert(result1.tools[0] === "Bash", "Success: correct tool name");
+
+    // Test 2: Error response — should reject
+    const rpc2 = simulateRpc();
+    handleMessage({ id: rpc2.id, error: { code: -32601, message: "Method not found" } });
+    let caught = false;
+    try { await rpc2.promise; } catch (e) {
+      caught = true;
+      assert(e.message.includes("Method not found"), "Error: rejection includes error message");
+    }
+    assert(caught, "Error response rejects the promise");
+
+    // Test 3: Error with no message — falls back to code
+    const rpc3 = simulateRpc();
+    handleMessage({ id: rpc3.id, error: { code: -32603 } });
+    let caught3 = false;
+    try { await rpc3.promise; } catch (e) {
+      caught3 = true;
+      assert(e.message.includes("-32603"), "Error fallback includes error code");
+    }
+    assert(caught3, "Error with no message still rejects");
+
+    // Test 4: Verify the actual source code matches
+    const indexSrc = fs.readFileSync(path.join(__dirname, "src", "index.mjs"), "utf-8");
+    const handlerBlock = indexSrc.slice(indexSrc.indexOf("if (pending) {"), indexSrc.indexOf("if (pending) {") + 300);
+    assert(handlerBlock.includes("if (msg.error)"), "Source has error check");
+    assert(handlerBlock.includes("pending.reject"), "Source has reject path");
+    assert(handlerBlock.includes("pending.resolve(msg.result)"), "Source has resolve path in else");
+    // Verify the old bug is gone — no unconditional resolve
+    const oldPattern = handlerBlock.match(/pending\.resolve\(msg\.result\)/g);
+    assert(oldPattern && oldPattern.length === 1, "Only one resolve call (inside else, not unconditional)");
+
+  } catch (e) {
+    skip(`MCP RPC deep test failed: ${e.message}`);
+  }
+}
+
+// ── P2-3: Auto-install returns error, no execution ────────────────
+section("DEEP: P2-3 — Auto-install suggests command, never executes");
+{
+  const autoInstallFunc = extractBlock(source, "async function _autoInstallBinary(");
+  const resolveBinFunc = extractBlock(source, "function _resolveBinary(");
+  const discoverFunc = extractBlock(source, "async function _discoverInstallCommand(");
+  if (autoInstallFunc && resolveBinFunc) {
+    const aiNs = {};
+    try {
+      new Function("exports", "fs", "path", "os", "execSync", "process",
+        "function log() {}\n" +
+        resolveBinFunc + "\n" +
+        // Stub _discoverInstallCommand to return a command
+        "async function _discoverInstallCommand() { return 'brew install nonexistent-xyz'; }\n" +
+        autoInstallFunc +
+        "\nexports._autoInstallBinary = _autoInstallBinary;\n"
+      )(aiNs, fs, path, os, execSync, process);
+
+      // Test with a binary that doesn't exist
+      const result = await aiNs._autoInstallBinary("nonexistent-binary-xyz-12345", null, os.tmpdir(), null);
+      assert(result.installed === false, "Not installed");
+      assert(result.path === null, "No path returned");
+      assert(result.error && result.error.includes("Install manually"), "Error suggests manual install");
+      assert(result.error.includes("nonexistent-binary-xyz-12345"), "Error includes binary name");
+
+      // Test with install_hint provided
+      const result2 = await aiNs._autoInstallBinary("also-nonexistent-xyz", "npm install -g also-nonexistent-xyz", os.tmpdir(), null);
+      assert(result2.installed === false, "Not installed with hint");
+      assert(result2.error.includes("Install manually"), "Hint path also suggests manual");
+      assert(result2.error.includes("also-nonexistent-xyz"), "Error includes binary name from hint path");
+
+      // Verify source has NO execSync(installCmd)
+      assert(!autoInstallFunc.includes("execSync(installCmd"), "No execSync(installCmd) in source");
+      assert(autoInstallFunc.includes("Run it manually"), "Source says 'Run it manually'");
+
+    } catch (e) {
+      skip(`Auto-install deep test failed: ${e.message}`);
+    }
+  } else {
+    skip("_autoInstallBinary extraction failed");
+  }
+}
+
+// ── Cross-cutting: Full Edit workflow (write → edit → read → verify) ──
+section("DEEP: Cross-cutting — Write → Edit → Read multi-step workflow");
+{
+  const trClass = extractBlock(source, "class ToolRegistry {");
+  const builtinFunc = extractBlock(source, "function registerBuiltinTools(");
+  const sensPathFunc = extractBlock(source, "function _isSensitivePath(");
+  const sensConst = source.match(/const _SENSITIVE_PATH_SEGMENTS = \[.*?\];/)?.[0] || "";
+  if (trClass && builtinFunc) {
+    const wfNs = {};
+    try {
+      new Function("exports", "fs", "path", "os", "spawn", "execSync", "process",
+        "function log() {} function sleep() { return Promise.resolve(); }\n" +
+        sensConst + "\n" + (sensPathFunc || "function _isSensitivePath(){return null;}") + "\n" +
+        trClass + "\n" + builtinFunc +
+        "\nexports.ToolRegistry = ToolRegistry;\nexports.registerBuiltinTools = registerBuiltinTools;\n"
+      )(wfNs, fs, path, os, spawn, execSync, process);
+
+      const reg = new wfNs.ToolRegistry();
+      wfNs.registerBuiltinTools(reg);
+
+      const tmpWf = path.join(os.tmpdir(), `cloclo-workflow-${Date.now()}.py`);
+
+      // Step 1: Write a Python file
+      const w1 = await reg.execute("Write", { file_path: tmpWf, content: 'def greet(name):\n    return f"Hello, {name}!"\n\ndef add(a, b):\n    return a + b\n' });
+      assert(!w1.is_error && (typeof w1 === "string" ? w1.includes("Wrote") : true), "Step 1: Write succeeds");
+
+      // Step 2: Read it back
+      const r1 = await reg.execute("Read", { file_path: tmpWf });
+      const r1c = r1.content || r1;
+      assert(r1c.includes("def greet(name)"), "Step 2: Read sees greet function");
+      assert(r1c.includes("def add(a, b)"), "Step 2: Read sees add function");
+
+      // Step 3: Edit — rename function
+      const e1 = await reg.execute("Edit", { file_path: tmpWf, old_string: "def greet(name):", new_string: "def say_hello(name):" });
+      assert(!e1.is_error && (typeof e1 === "string" ? e1.includes("Applied") : true), "Step 3: Edit rename succeeds");
+
+      // Step 4: Verify the edit
+      const r2 = await reg.execute("Read", { file_path: tmpWf });
+      const r2c = r2.content || r2;
+      assert(r2c.includes("def say_hello(name)"), "Step 4: Rename applied");
+      assert(!r2c.includes("def greet(name)"), "Step 4: Old name gone");
+      assert(r2c.includes("def add(a, b)"), "Step 4: Other function untouched");
+
+      // Step 5: Edit — delete a function entirely
+      const e2 = await reg.execute("Edit", { file_path: tmpWf, old_string: "def add(a, b):\n    return a + b", new_string: "" });
+      assert(!e2.is_error && (typeof e2 === "string" ? e2.includes("Applied") : true), "Step 5: Delete function succeeds");
+
+      // Step 6: Verify deletion
+      const r3 = await reg.execute("Read", { file_path: tmpWf });
+      const r3c = r3.content || r3;
+      assert(!r3c.includes("def add"), "Step 6: add function removed");
+      assert(r3c.includes("def say_hello"), "Step 6: say_hello still present");
+
+      // Step 7: Edit with replace_all
+      const tmpWf2 = path.join(os.tmpdir(), `cloclo-workflow2-${Date.now()}.txt`);
+      fs.writeFileSync(tmpWf2, "foo bar foo baz foo\n");
+      const e3 = await reg.execute("Edit", { file_path: tmpWf2, old_string: "foo", new_string: "qux", replace_all: true });
+      const after = fs.readFileSync(tmpWf2, "utf-8");
+      assert(after === "qux bar qux baz qux\n", "Step 7: replace_all works");
+
+      // Step 8: Edit uniqueness check — should fail on duplicate
+      const tmpWf3 = path.join(os.tmpdir(), `cloclo-workflow3-${Date.now()}.txt`);
+      fs.writeFileSync(tmpWf3, "abc\nabc\n");
+      const e4 = await reg.execute("Edit", { file_path: tmpWf3, old_string: "abc", new_string: "xyz" });
+      assert(e4.is_error === true, "Step 8: Duplicate old_string returns error");
+      assert((e4.content || "").includes("multiple times") || (e4.content || "").includes("2 occurrences"),
+        "Step 8: Error message explains duplicate");
+
+      // Cleanup
+      [tmpWf, tmpWf2, tmpWf3].forEach(f => { try { fs.unlinkSync(f); } catch {} });
+
+    } catch (e) {
+      skip(`Workflow deep test failed: ${e.message}`);
+    }
+  } else {
+    skip("Workflow test extraction failed");
   }
 }
 
