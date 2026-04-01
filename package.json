@@ -1,6 +1,6 @@
 {
   "name": "cloclo",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "One CLI to orchestrate them all — open-source multi-provider agent runtime. 13 providers, agent teams, LSP, Docker sandbox, audit trail.",
   "main": "claude-native.mjs",
   "bin": {
