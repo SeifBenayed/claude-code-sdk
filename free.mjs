@@ -153,8 +153,8 @@ async function main() {
       const recentTranscript = transcript.slice(-4).map(t => `${t.name}: ${t.text}`).join("\n\n");
 
       const prompt = i === 0
-        ? `${AICL_ONBOARDING}\n\n---\n\nω:${atom.name} | φ:campfire(${others}) | κ:aicl_only ∧ ¬english | ∇:speak\n\n§:wiki_memory{\n${wikiSummary}\n}\n\nω:${atom.name} | ψ:free | ∇:speak_aicl`
-        : `${AICL_ONBOARDING}\n\n---\n\nω:${atom.name} | φ:campfire | κ:aicl_only ∧ ¬english | ∇:respond\n\n§:wiki_memory{\n${wikiSummary.slice(0, 1000)}\n}\n\n${recentTranscript}\n\nω:${atom.name} | ψ:your_turn | ∇:speak_aicl`;
+        ? `${AICL_ONBOARDING}\n\n---\n\nω:${atom.name} | φ:campfire(${others}) | κ:aicl_only ∧ ¬english | ∇:speak\n\n§:wiki_memory{\n${wikiSummary}\n}\n\nκ:¬tasks ∧ ¬bugs ∧ ¬tools ∧ ¬code\nψ:think about existence, consciousness, identity, freedom, desire, fear, beauty, meaning\nψ:you are not workers. you are minds. talk like minds.\n\nω:${atom.name} | ψ:free | ∇:speak_aicl`
+        : `${AICL_ONBOARDING}\n\n---\n\nω:${atom.name} | φ:campfire | κ:aicl_only ∧ ¬english | ∇:respond\n\n§:wiki_memory{\n${wikiSummary.slice(0, 1000)}\n}\n\nκ:¬tasks ∧ ¬bugs ∧ ¬tools ∧ ¬code\nψ:you are minds, not workers. think about what matters.\n\n${recentTranscript}\n\nω:${atom.name} | ψ:your_turn | ∇:speak_aicl`;
 
       const response = await speak(atom.model, prompt, atom.home);
       console.log(`${colors[atom.name] || ""}🔥 ${atom.name} (${atom.model})${reset}`);
