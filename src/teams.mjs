@@ -75,12 +75,26 @@ class TaskBoard {
     if (!task) return null;
     if (updates.status) task.status = updates.status;
     if (updates.result !== undefined) task.result = updates.result;
-    if (updates.assignee) task.assignee = updates.assignee;
+    if (updates.assignee !== undefined) task.assignee = updates.assignee;
+    if (updates.title !== undefined) task.title = updates.title;
+    if (updates.description !== undefined) task.description = updates.description;
+    if (updates.priority !== undefined) task.priority = updates.priority;
+    if (updates.depends !== undefined) task.depends = updates.depends;
     task.updatedAt = new Date().toISOString();
     if (task.status === "completed" || task.status === "failed") {
       task.completedAt = new Date().toISOString();
     }
     return task;
+  }
+
+  getTask(taskId) {
+    return this.tasks.get(taskId) || null;
+  }
+
+  listTasks({ status = null } = {}) {
+    let tasks = [...this.tasks.values()];
+    if (status) tasks = tasks.filter(t => t.status === status);
+    return tasks;
   }
 
   getReadyTasks() {
@@ -407,6 +421,7 @@ class TeamManager {
 // ── Tool Registration ────────────────────────────────────────
 
 function registerTeamTools(registry, subAgentRunner, cfg) {
+  if (!subAgentRunner) return;
   const manager = new TeamManager();
   cfg._teamManager = manager;
 

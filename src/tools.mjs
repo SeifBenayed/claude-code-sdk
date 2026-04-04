@@ -14,6 +14,7 @@ import { appendMemoryMetric } from "./memory-metrics.mjs";
 import { extractExchange, sanitize, buildMoment, saveMoment, renderMarkdown } from "./share.mjs";
 import { detectProvider, PROVIDERS, isOpenAIModel } from "./providers.mjs";
 import { isDomainPreapproved, _checkFilePath } from "./security.mjs";
+import { TaskBoard } from "./teams.mjs";
 
 // ── Security helpers ────────────────────────────────────────────
 function _shellEscape(s) {
@@ -2897,9 +2898,7 @@ function registerToolSearch(registry) {
 
 function registerDeferredBuiltinTools(registry, cfg) {
   // ── Task Management Tools ──────────────────────────────────
-  // In-memory task store scoped to the session
-  const _tasks = new Map();
-  let _taskSeq = 0;
+  const board = cfg._taskBoard || (cfg._taskBoard = new TaskBoard(cfg.sessionId || "session"));
   cfg._completedWithoutVerification = cfg._completedWithoutVerification || 0;
 
   registry.register("TaskCreate", {
@@ -2915,18 +2914,12 @@ function registerDeferredBuiltinTools(registry, cfg) {
       required: ["title"],
     },
   }, async (input) => {
-    const id = `task_${++_taskSeq}`;
-    const task = {
-      id,
-      title: input.title,
+    const task = board.addTask(input.title, {
       description: input.description || "",
-      status: input.status || "pending",
       priority: input.priority || "medium",
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
-    };
-    _tasks.set(id, task);
-    return { content: JSON.stringify(task), is_error: false };
+    });
+    if (input.status && input.status !== "pending") board.updateTask(task.id, { status: input.status });
+    return { content: JSON.stringify(board.getTask(task.id)), is_error: false };
   }, { deferred: true });
 
   registry.register("TaskUpdate", {
@@ -2934,7 +2927,7 @@ function registerDeferredBuiltinTools(registry, cfg) {
     input_schema: {
       type: "object",
       properties: {
-        id: { type: "string", description: "Task ID (e.g. task_1)" },
+        id: { type: "string", description: "Task ID (e.g. task_1 or task-1)" },
         status: { type: "string", enum: ["pending", "in_progress", "completed", "blocked"] },
         title: { type: "string" },
         description: { type: "string" },
@@ -2943,14 +2936,16 @@ function registerDeferredBuiltinTools(registry, cfg) {
       required: ["id"],
     },
   }, async (input) => {
-    const task = _tasks.get(input.id);
-    if (!task) return { content: `Task not found: ${input.id}`, is_error: true };
-    const prevStatus = task.status;
-    if (input.status) task.status = input.status;
-    if (input.title) task.title = input.title;
-    if (input.description !== undefined) task.description = input.description;
-    if (input.priority) task.priority = input.priority;
-    task.updatedAt = new Date().toISOString();
+    const taskId = String(input.id || "").replace(/^task_(\d+)$/, "task-$1");
+    const existing = board.getTask(taskId);
+    if (!existing) return { content: `Task not found: ${input.id}`, is_error: true };
+    const prevStatus = existing.status;
+    const task = board.updateTask(taskId, {
+      status: input.status,
+      title: input.title,
+      description: input.description,
+      priority: input.priority,
+    });
 
     // Track completions for verification auto-trigger
     let nudge = "";
@@ -2969,12 +2964,13 @@ function registerDeferredBuiltinTools(registry, cfg) {
     input_schema: {
       type: "object",
       properties: {
-        id: { type: "string", description: "Task ID (e.g. task_1)" },
+        id: { type: "string", description: "Task ID (e.g. task_1 or task-1)" },
       },
       required: ["id"],
     },
   }, async (input) => {
-    const task = _tasks.get(input.id);
+    const taskId = String(input.id || "").replace(/^task_(\d+)$/, "task-$1");
+    const task = board.getTask(taskId);
     if (!task) return { content: `Task not found: ${input.id}`, is_error: true };
     return { content: JSON.stringify(task), is_error: false };
   }, { deferred: true });
@@ -2988,8 +2984,7 @@ function registerDeferredBuiltinTools(registry, cfg) {
       },
     },
   }, async (input) => {
-    let tasks = [..._tasks.values()];
-    if (input.status) tasks = tasks.filter((t) => t.status === input.status);
+    const tasks = board.listTasks({ status: input.status });
     return { content: JSON.stringify(tasks), is_error: false };
   }, { deferred: true });
 

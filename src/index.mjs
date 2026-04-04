@@ -54,7 +54,7 @@ import { registerBrowserTools } from "./browser.mjs";
 import { PermissionManager, LLMSecurityClassifier } from "./security.mjs";
 import {
   AgentLoop, buildSystemPrompt, SkillLoader, AgentLoader, HookRunner,
-  loadSettings, applySettings, loadRules, registerAgentTool,
+  loadSettings, applySettings, loadRules, registerAgentTool, registerAgentCrudTools,
   skillList, skillInfo, skillRemove, skillUpdate, skillExport,
   skillVerify, skillSearch, skillPublish, skillImport,
 } from "./engine.mjs";
@@ -671,12 +671,12 @@ Important:
     }
   }
 
-  // Register ToolSearch if there are deferred tools (after all tools registered)
-  registerToolSearch(registry);
-
   // ── LSP Integration ──────────────────────────────────────────
   const lspManager = new LspManager();
   registerLspTools(registry, lspManager);
+
+  // Register ToolSearch after all deferred tools are registered
+  registerToolSearch(registry);
   // Start LSP servers in background (non-blocking — uses project root)
   const projectRoot = cfg.cwd || process.cwd();
   lspManager.start(projectRoot).then(() => {
