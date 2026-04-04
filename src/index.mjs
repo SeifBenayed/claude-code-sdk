@@ -461,9 +461,9 @@ async function main() {
     : provider.envKey ? (process.env[provider.envKey] || "")
     : "no-auth"; // e.g. Ollama
 
-  const providerUrl = cfg.provider
-    ? (cfg.openaiApiUrl !== "https://api.openai.com" ? cfg.openaiApiUrl : provider.defaultUrl)
-    : provider.defaultUrl;
+  const providerUrl = provider.resolveBaseUrl
+    ? provider.resolveBaseUrl(cfg)
+    : (cfg.openaiApiUrl !== "https://api.openai.com" ? cfg.openaiApiUrl : provider.defaultUrl);
 
   if (!providerKey && provider.envKey) {
     const hint = provider.name === "Anthropic"
