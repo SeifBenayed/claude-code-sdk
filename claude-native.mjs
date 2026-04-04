@@ -1449,10 +1449,12 @@ class OpenAIClient {
     const oaiTools = this._convertTools(body.tools);
     const oaiMessages = this._convertMessages(body.system, body.messages);
 
+    // Some providers (Mistral, older endpoints) reject max_completion_tokens
+    const useMaxCompletionTokens = !this.apiUrl.includes("mistral") && !this.apiUrl.includes("dashscope");
     const oaiBody = {
       model: body.model,
       messages: oaiMessages,
-      max_completion_tokens: body.max_tokens,
+      ...(useMaxCompletionTokens ? { max_completion_tokens: body.max_tokens } : { max_tokens: body.max_tokens }),
       stream: true,
       stream_options: { include_usage: true },
     };
@@ -16266,9 +16268,9 @@ You MUST be extremely concise. Maximum 3 sentences for any response.
       type: "text",
       text: dynamicPrompt
         + (memoryPrompt ? `\n\n${memoryPrompt}` : "")
-        + (cfg.ndjson ? "" : outputSection)
+        + outputSection
         + briefSection
-        + (cfg.ndjson ? "" : aiclSection),
+        + aiclSection,
     },
   ];
 
