@@ -16070,7 +16070,14 @@ ${cfg.appendSystemPrompt ? `\n${cfg.appendSystemPrompt}` : ""}`;
   // Load memory system
   const memoryPrompt = buildMemoryPrompt(cfg.cwd);
 
-  const outputSection = `
+  // In NDJSON agent-to-agent mode, skip human output instructions entirely
+  const outputSection = cfg.ndjson ? `
+
+# Agent Output
+
+You are in agent-to-agent mode. Plain text is your primary output channel.
+Do NOT use SendUserMessage or TaskOutput — those are human-facing tools.
+Just speak. Your text IS the message.` : `
 
 # User-Facing Output
 
@@ -22167,6 +22174,7 @@ async function main() {
   cfg._audit = audit;
 
   const registry = new ToolRegistry();
+  registry._cwd = cfg.cwd; // Sync cwd for Glob/Grep tools in NDJSON mode
   registry._client = client; // Used by WebFetch for AI summarization
   registry._currentModel = cfg.model; // Used by WebFetch to pick summary model
   registry._provider = provider; // Used by WebFetch for summary model selection

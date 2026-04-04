@@ -492,6 +492,7 @@ async function main() {
   cfg._audit = audit;
 
   const registry = new ToolRegistry();
+  registry._cwd = cfg.cwd; // Sync cwd for Glob/Grep tools in NDJSON mode
   registry._client = client; // Used by WebFetch for AI summarization
   registry._currentModel = cfg.model; // Used by WebFetch to pick summary model
   registry._provider = provider; // Used by WebFetch for summary model selection

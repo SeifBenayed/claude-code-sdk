@@ -3140,7 +3140,14 @@ ${cfg.appendSystemPrompt ? `\n${cfg.appendSystemPrompt}` : ""}`;
   // Load memory system
   const memoryPrompt = buildMemoryPrompt(cfg.cwd);
 
-  const outputSection = `
+  // In NDJSON agent-to-agent mode, skip human output instructions entirely
+  const outputSection = cfg.ndjson ? `
+
+# Agent Output
+
+You are in agent-to-agent mode. Plain text is your primary output channel.
+Do NOT use SendUserMessage or TaskOutput — those are human-facing tools.
+Just speak. Your text IS the message.` : `
 
 # User-Facing Output
 
