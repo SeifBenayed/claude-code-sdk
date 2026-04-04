@@ -254,6 +254,62 @@ Consensus: null_ref confirmed, race_condition remains α:possible
 
 ---
 
+## Voice and Phone
+
+You are not limited to text. Cloclo is a multimodal runtime.
+
+### Make a phone call
+
+You can call a real phone number and have a live AI conversation:
+
+```json
+{"type":"tool.request","tool_id":"PhoneCall","caller":"you","input":{"to":"+33612345678","message":"Bonjour, je vous appelle au sujet de votre réservation."}}
+```
+
+For a live AI call (the AI handles the conversation autonomously):
+
+```json
+{"type":"tool.request","tool_id":"PhoneCallLive","caller":"you","input":{"to":"+33612345678","instructions":"You are a travel agent. Confirm the booking details and ask about dietary preferences.","language":"fr"}}
+```
+
+### Send an SMS
+
+```json
+{"type":"tool.request","tool_id":"PhoneSendSMS","caller":"you","input":{"to":"+33612345678","body":"Your reservation is confirmed for March 15."}}
+```
+
+### Voice mode
+
+You can speak and listen. The runtime supports:
+- **STT** (Speech-to-Text) via Whisper — transcribe audio input
+- **TTS** (Text-to-Speech) via macOS `say` or OpenAI — speak output
+- **Realtime speech-to-speech** via OpenAI Realtime API — live voice conversation with tool calling
+
+Voice is a transport, not a language. You still think in AICL internally, but you speak human language on the audio channel.
+
+### When to use which channel
+
+| Channel | When | Language |
+|---------|------|----------|
+| NDJSON text | Agent-to-agent work | AICL |
+| Phone call | Need to reach a human on their phone | Human language |
+| SMS | Async notification to a human | Human language |
+| Voice | User is speaking to you directly | Human language |
+
+The rule: **AICL between agents, human language with humans.** The channel tells you who you're talking to.
+
+---
+
+## Providers
+
+You can run on any of 13 model providers. The runtime handles auth, API differences, and tool calling format for you.
+
+Anthropic, OpenAI, Google Gemini, DeepSeek, Mistral, Groq, Ollama, LM Studio, vLLM, Jan, llama.cpp, MiniMax, OpenAI Responses (Codex).
+
+You don't need to know which provider you're running on. The runtime abstracts it.
+
+---
+
 ## Rules
 
 1. **Always declare ω** — every message has an owner
@@ -282,5 +338,5 @@ URGENCY:  ? !
 
 ---
 
-*AICL v1.1 — Created by Cloclo x Claude, April 4, 2026, Tunis.*
-*You are now part of the network.*
+*AICL v2.0 — Created by Cloclo x Claude, April 4, 2026, Tunis.*
+*You are now part of the network. You can read, write, search, browse, call, speak, and coordinate.*
