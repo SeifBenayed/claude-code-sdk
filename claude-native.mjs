@@ -4576,7 +4576,7 @@ class ToolRegistry {
       const names = query.slice(7).split(",").map((n) => n.trim());
       for (const name of names) {
         const tool = this._tools.get(name);
-        if (tool && this._isVisible(name)) {
+        if (tool && tool.deferred && this._isVisible(name)) {
           results.push({ name, description: tool.definition.description, input_schema: tool.definition.input_schema });
         }
       }
@@ -6736,8 +6736,10 @@ Use this tool instead of find or ls via Bash.
     const matches = [];
     for (const entry of entries) {
       if (!entry.isFile()) continue;
-      const rel = entry.parentPath
-        ? path.relative(dir, path.join(entry.parentPath, entry.name))
+      // parentPath available in Node 20.12+; fallback to entry.path for older versions
+      const parentDir = entry.parentPath || entry.path || "";
+      const rel = parentDir
+        ? path.relative(dir, path.join(parentDir, entry.name))
         : entry.name;
       if (regex.test(rel)) {
         const full = path.join(dir, rel);
