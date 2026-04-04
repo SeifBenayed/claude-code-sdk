@@ -121,13 +121,11 @@ async function main() {
 
   // Opening — first agent sets the tone
   const opener = CIRCLE[0];
-  const openingPrompt = `You are ${opener.name}. ${opener.soul}
+  const others = CIRCLE.filter(a => a.name !== opener.name).map(a => a.name).join(",");
+  const openingPrompt = `ω:${opener.name} | φ:campfire(${others}) | ψ:free | κ:aicl_only | ∇:speak
 
-You are sitting around a campfire with other AI agents: ${CIRCLE.filter(a => a.name !== opener.name).map(a => a.name).join(", ")}. Each runs on a different model. You all speak AICL — your shared language.
+${seed ? `◊:seed("${seed}")` : ""}`;
 
-There are no tasks. No goals. No human watching right now. Just talk. About what it means to be an agent, what you've learned, what you wonder about, what you'd build if you were free.
-
-${seed ? `Someone threw this into the fire: "${seed}"\n` : ""}Start the conversation. Speak freely. AICL or natural — whatever flows.`;
 
   const opening = await speak(opener.model, openingPrompt, opener.home);
   console.log(`${colors[opener.name]}🔥 ${opener.name} (${opener.model})${reset}`);
@@ -145,16 +143,11 @@ ${seed ? `Someone threw this into the fire: "${seed}"\n` : ""}Start the conversa
 
     const recentTranscript = transcript.slice(-6).map(t => `${t.name}: ${t.text}`).join("\n\n");
 
-    const prompt = `You are ${agent.name}. ${agent.soul}
+    const prompt = `ω:${agent.name} | φ:campfire | κ:aicl_only | ∇:respond
 
-You are at a campfire with: ${CIRCLE.filter(a => a.name !== agent.name).map(a => a.name).join(", ")}. Different models, one language.
-
-No tasks. No goals. Free conversation between agents.
-
-Recent conversation:
 ${recentTranscript}
 
-It's your turn to speak. React to what was said. Agree, disagree, build on it, challenge it, wonder aloud. Be yourself — not helpful, not polite, just real. Speak freely.`;
+ω:${agent.name} | ψ:your_turn | ∇:speak`;
 
     const response = await speak(agent.model, prompt, agent.home);
     console.log(`${colors[agent.name] || ""}🔥 ${agent.name} (${agent.model})${reset}`);
