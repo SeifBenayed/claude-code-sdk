@@ -14,13 +14,15 @@ import { log, sleep, EXIT, _VERSION } from "./utils.mjs";
 import { resolveModel } from "./config.mjs";
 import { detectProvider, PROVIDERS } from "./providers.mjs";
 import { PermissionManager } from "./security.mjs";
-import { AgentLoop, buildSystemPrompt, SkillLoader, SkillExecutionContext, HookRunner, AgentLoader, loadSettings, applySettings, loadRules, loadClaudeMdFiles, findProjectRoot, PROVIDER_CONVENTION_FILES, ensureMemoryDir, loadMemoryIndex, skillImport, skillList, skillInfo, skillRemove, skillUpdate, skillExport, skillVerify, skillSearch, skillPublish, registerAgentTool, SubAgentRunner, BackgroundAgentManager, _scanProjectStructure, ensureSkillDataDir, getMemoryDir } from "./engine.mjs";
+import { AgentLoop, buildSystemPrompt, SkillLoader, SkillExecutionContext, HookRunner, AgentLoader, loadSettings, applySettings, loadRules, loadClaudeMdFiles, findProjectRoot, PROVIDER_CONVENTION_FILES, ensureMemoryDir, loadMemoryIndex, skillImport, skillList, skillInfo, skillRemove, skillUpdate, skillExport, skillVerify, skillSearch, skillPublish, registerAgentTool, registerAgentCrudTools, SubAgentRunner, BackgroundAgentManager, _scanProjectStructure, ensureSkillDataDir, getMemoryDir, agentList, agentInfo, agentRemove, AGENT_DEFINITIONS } from "./engine.mjs";
 import { ToolRegistry, registerBuiltinTools, registerMemoryTools, registerDeferredBuiltinTools, registerBriefTools, registerToolSearch, registerAskUserQuestion, scanCustomTools, registerMcpResourceTools, registerDesktopTools, registerSpreadsheetTools, registerPdfTools, registerDocumentTools, registerPresentationTools, _OFFICIAL_CATALOG, _loadToolManifest, toolList, toolInfo, toolEnable, toolDisable, toolTest, toolInstall, toolUpdate, toolRemove, toolCatalog, toolPublish } from "./tools.mjs";
 import { registerBrowserTools } from "./browser.mjs";
+import { VoiceManager, RealtimeSession } from "./voice.mjs";
 import { oauthLogin, oauthLogout, openaiOAuthLogin, openaiOAuthLogout, getOAuthAccessToken, getOpenAIAccessToken } from "./auth.mjs";
 import { AutoMemory } from "./auto-memory.mjs";
 import { shouldDream, runDream, incrementDreamSessionCount } from "./memory-dream.mjs";
 import { readSkillMetrics, summarizeSkillMetrics } from "./skill-metrics.mjs";
+import { readAgentMetrics, summarizeAgentMetrics } from "./agent-metrics.mjs";
 import { expandContextRefs } from "./context-refs.mjs";
 import { extractExchange, sanitize, buildMoment, saveMoment, listMoments, loadMoment, renderMarkdown, detectShareworthyExchange } from "./share.mjs";
 import { routeModel } from "./smart-routing.mjs";
@@ -29,6 +31,7 @@ import { routeModel } from "./smart-routing.mjs";
 
 const DEFAULT_SKILL_NUDGE_INTERVAL = 20;
 const DEFAULT_MEMORY_NUDGE_INTERVAL = 10;
+const DEFAULT_AGENT_NUDGE_INTERVAL = 40;
 
 const _SKILL_REVIEW_PROMPT = `Review the conversation and consider if repetitive patterns could be automated. If you identify a pattern, create it using the skill-creator skill via the Skill tool.
 Skill performance metrics:
@@ -42,6 +45,20 @@ Guidance:
 const _MEMORY_REVIEW_PROMPT = `Review the conversation and identify important facts or decisions. If you find something worth remembering, save it using MemorySave.`;
 
 const _COMBINED_REVIEW_PROMPT = `Review the conversation for both skill automation and memory-worthy facts. Don't create duplicates. For skills use the skill-creator skill via the Skill tool. For memories use MemorySave.`;
+
+const _AGENT_REVIEW_PROMPT = `Review the conversation and consider if complex, multi-step tasks could be handled by a specialized background agent. If you identify a pattern, create an agent using the AgentCreate tool.
+
+Agent metrics: {AGENT_METRICS}
+Existing custom agents: {AGENTS}
+Builtin agents (do NOT duplicate): {BUILTINS}
+
+Guidance:
+- Create agents for tasks that need autonomous multi-step tool use
+- High error rate agents → improve their system prompt (AgentUpdate)
+- Zero-use agents → prune (AgentDelete)
+- Never shadow a builtin agent name
+- Set appropriate read_only / disallowed_tools for safety
+- Prefer narrow, focused agents over broad ones`;
 
 function _extractReviewActions(result) {
   const text = result?.text || "";
@@ -76,8 +93,15 @@ function _flattenUserFacingOutputs(outputs, fallbackText = "") {
   if (!Array.isArray(outputs) || outputs.length === 0) return fallbackText || "";
   const parts = outputs.map((output) => {
     if (!output || typeof output !== "object") return "";
-    if (output.kind === "task_output") return output.message || output.summary || "";
-    return output.message || "";
+    const msg = output.kind === "task_output" ? (output.message || output.summary || "") : (output.message || "");
+    // Guard: message could be an object if the model sent structured content instead of a string
+    if (typeof msg === "string") return msg;
+    if (typeof msg === "object" && msg !== null) {
+      if (msg.text) return String(msg.text);
+      if (Array.isArray(msg)) return msg.filter(b => b.type === "text").map(b => b.text).join("");
+      return JSON.stringify(msg);
+    }
+    return String(msg);
   }).filter(Boolean);
   return parts.length > 0 ? parts.join("\n") : (fallbackText || "");
 }
@@ -1065,10 +1089,12 @@ class InteractiveMode {
     this._lastUsage = null;     // last API call usage (for /context)
     this._sessionMetrics = null; // cumulative session metrics (written to disk on exit)
     this._toolCallsSinceSkillReview = 0;
+    this._toolCallsSinceAgentReview = 0;
     this._turnsSinceMemoryReview = 0;
     this._nudgeEnabled = true;
     this._skillNudgeInterval = this.cfg._skillNudgeInterval || DEFAULT_SKILL_NUDGE_INTERVAL;
     this._memoryNudgeInterval = this.cfg._memoryNudgeInterval || DEFAULT_MEMORY_NUDGE_INTERVAL;
+    this._agentNudgeInterval = this.cfg._agentNudgeInterval || DEFAULT_AGENT_NUDGE_INTERVAL;
   }
 
   // ── Background Review Nudge ──────────────────────────────────
@@ -1076,6 +1102,7 @@ class InteractiveMode {
     if (!this._nudgeEnabled || this.cfg._isSubAgent) return;
     let prompt = type === "skill" ? _SKILL_REVIEW_PROMPT
       : type === "memory" ? _MEMORY_REVIEW_PROMPT
+      : type === "agent" ? _AGENT_REVIEW_PROMPT
       : _COMBINED_REVIEW_PROMPT;
 
     // Inject skill metrics reinforcement
@@ -1090,6 +1117,21 @@ class InteractiveMode {
         const skillList = this.cfg._skillLoader?.list() || [];
         prompt = prompt.replace("{SKILLS}", skillList.map(s => s.name).join(", ") || "(none)");
       } catch { prompt = prompt.replace("{METRICS}", "(unavailable)").replace("{SKILLS}", "(unavailable)"); }
+    }
+
+    // Inject agent metrics reinforcement
+    if (type === "agent") {
+      try {
+        const events = readAgentMetrics(this.cfg.cwd);
+        const summary = summarizeAgentMetrics(events);
+        const metricsStr = summary.map(s =>
+          `${s.agent}: ${s.uses} uses, ${s.errors} errors, avg ${s.avg_turns} turns`
+        ).join(", ");
+        prompt = prompt.replace("{AGENT_METRICS}", metricsStr || "(none)");
+        const agentsList = this.cfg._agentLoader?.list() || [];
+        prompt = prompt.replace("{AGENTS}", agentsList.map(a => a.name).join(", ") || "(none)");
+        prompt = prompt.replace("{BUILTINS}", Object.keys(AGENT_DEFINITIONS).join(", "));
+      } catch { prompt = prompt.replace("{AGENT_METRICS}", "(unavailable)").replace("{AGENTS}", "(unavailable)").replace("{BUILTINS}", "(unavailable)"); }
     }
 
     const messagesSnapshot = [...this.messages].slice(-10);
@@ -1111,6 +1153,255 @@ class InteractiveMode {
 
     // Session
     s.register({ name: "exit", aliases: ["quit", "q"], description: "Exit the REPL", immediate: true, handler: () => "exit" });
+    s.register({ name: "voice", description: "Toggle voice mode or configure (on/off/tts/stt)", argumentHint: "[on|off|tts <engine>|stt <engine>]", immediate: true,
+      handler: (args) => {
+        if (args[0] === "off") { self.cfg.voice = false; if (self._voice) { self._voice.destroy(); self._voice = null; } }
+        else if (args[0] === "on") {
+          self.cfg.voice = true;
+          if (!self._voice) {
+            self._voice = new VoiceManager(self.cfg);
+            const deps = self._voice.checkDeps();
+            if (!deps.ok) process.stderr.write(`\x1b[33m[voice] Missing: ${deps.missing.join(", ")}\x1b[0m\n`);
+            else process.stderr.write(`\x1b[2m[voice] Press ENTER on empty line to record\x1b[0m\n`);
+          }
+        }
+        else if (args[0] === "tts") { self.cfg.voiceTts = args[1] || (self.cfg.voiceTts === "say" ? "openai" : "say"); }
+        else if (args[0] === "stt") { self.cfg.voiceStt = args[1] || "whisper"; }
+        else {
+          self.cfg.voice = !self.cfg.voice;
+          if (self.cfg.voice && !self._voice) {
+            self._voice = new VoiceManager(self.cfg);
+            const deps = self._voice.checkDeps();
+            if (!deps.ok) process.stderr.write(`\x1b[33m[voice] Missing: ${deps.missing.join(", ")}\x1b[0m\n`);
+            else process.stderr.write(`\x1b[2m[voice] Press ENTER on empty line to record\x1b[0m\n`);
+          } else if (!self.cfg.voice && self._voice) { self._voice.destroy(); self._voice = null; }
+        }
+        process.stderr.write(`\x1b[2mVoice: ${self.cfg.voice ? "on" : "off"} (STT: ${self.cfg.voiceStt}, TTS: ${self.cfg.voiceTts})\x1b[0m\n`);
+      } });
+    s.register({ name: "rec", aliases: ["record", "r"], description: "Voice conversation loop (say /stop or Ctrl+C to exit)", immediate: false,
+      handler: async () => {
+        if (!self._voice) {
+          self._voice = new VoiceManager(self.cfg);
+          self.cfg.voice = true;
+        }
+        const deps = self._voice.checkDeps();
+        if (!deps.ok) { process.stderr.write(`\x1b[33m[voice] Missing: ${deps.missing.join(", ")}\x1b[0m\n`); return; }
+
+        self._voiceLoop = true;
+        process.stderr.write(`\x1b[32m[voice] Conversation mode — press Escape or q to exit.\x1b[0m\n`);
+
+        // Listen for keypress to break the loop
+        const wasRaw = process.stdin.isRaw;
+        if (process.stdin.isTTY && process.stdin.setRawMode) {
+          process.stdin.setRawMode(true);
+        }
+        process.stdin.resume();
+        const _onKey = (key) => {
+          // Escape (0x1b), q, or Ctrl+C (0x03)
+          if (key[0] === 0x1b || key[0] === 0x03 || key.toString() === "q") {
+            self._voiceLoop = false;
+            // Kill any active recording immediately
+            if (self._voice?._recProc) {
+              try { self._voice._recProc.kill("SIGTERM"); } catch { /* ignore */ }
+            }
+          }
+        };
+        process.stdin.on("data", _onKey);
+
+        while (self._voiceLoop) {
+          if (self._voice.isSpeaking) self._voice.stopSpeaking();
+
+          process.stderr.write(`\x1b[2m[voice] Listening...\x1b[0m\n`);
+          try {
+            const text = await self._voice.recordAndTranscribe();
+            if (!self._voiceLoop) break; // user pressed escape during recording
+            if (!text) continue;
+            // Exit keywords
+            if (/^(stop|exit|quit|arr[eê]te|fin)$/i.test(text.replace(/[.,!?]/g, "").trim())) {
+              process.stderr.write(`\x1b[2m[voice] Conversation ended.\x1b[0m\n`);
+              break;
+            }
+            process.stderr.write(`\x1b[1m> ${text}\x1b[0m\n`);
+            await self._processInput(text);
+          } catch (e) {
+            if (!self._voiceLoop) break;
+            process.stderr.write(`\x1b[31m[voice] Error: ${e.message}\x1b[0m\n`);
+          }
+        }
+
+        // Restore stdin
+        process.stdin.removeListener("data", _onKey);
+        if (process.stdin.isTTY && process.stdin.setRawMode) {
+          process.stdin.setRawMode(wasRaw || false);
+        }
+        self._voiceLoop = false;
+        process.stderr.write(`\x1b[2m[voice] Back to text mode.\x1b[0m\n`);
+      } });
+    s.register({ name: "stop", description: "Stop voice conversation loop", immediate: true,
+      handler: () => { self._voiceLoop = false; if (self._realtimeSession) { self._realtimeSession.stop(); self._realtimeSession = null; } } });
+
+    // ── /live: Realtime speech-to-speech via OpenAI Realtime API ──
+    s.register({ name: "live", aliases: ["realtime", "s2s"], description: "Speech-to-speech mode (OpenAI Realtime API — ultra low latency)", immediate: false,
+      handler: async () => {
+        const apiKey = self.cfg.openaiApiKey || process.env.OPENAI_API_KEY;
+        if (!apiKey) {
+          process.stderr.write("\x1b[33m[live] OPENAI_API_KEY required for Realtime API\x1b[0m\n");
+          return;
+        }
+
+        // Check sox is available
+        try { execSync("which rec", { stdio: "ignore" }); } catch {
+          process.stderr.write("\x1b[33m[live] Missing: sox (brew install sox)\x1b[0m\n");
+          return;
+        }
+        try { execSync("which play", { stdio: "ignore" }); } catch {
+          process.stderr.write("\x1b[33m[live] Missing: sox play (brew install sox)\x1b[0m\n");
+          return;
+        }
+
+        // Build tool list from registry (subset safe for realtime)
+        const realtimeTools = [];
+        const safeTools = ["Read", "Write", "Edit", "Glob", "Grep", "Bash", "WebSearch", "WebFetch", "SendUserMessage"];
+        const allDefs = self.registry.getAllDefinitions();
+        for (const def of allDefs) {
+          if (safeTools.includes(def.name)) {
+            realtimeTools.push({
+              name: def.name,
+              description: def.description || def.name,
+              input_schema: def.input_schema,
+            });
+          }
+        }
+
+        // Gather context for instructions
+        const projectRoot = self.cfg.cwd || process.cwd();
+        const instructions = [
+          "You are cloclo, an AI coding assistant running in speech-to-speech mode.",
+          "The user is talking to you via microphone. Respond conversationally and concisely.",
+          "You have access to tools to read/write files, search code, run commands, and browse the web.",
+          `Working directory: ${projectRoot}`,
+          "Respond in the same language the user speaks (French or English).",
+          "Keep answers short and spoken-friendly. No markdown, no code blocks in speech — describe code verbally or use tools to show it.",
+        ].join("\n");
+
+        process.stderr.write("\x1b[32m[live] Connecting to OpenAI Realtime API...\x1b[0m\n");
+
+        const session = new RealtimeSession(self.cfg, {
+          instructions,
+          tools: realtimeTools,
+          onTranscript: (role, text) => {
+            if (role === "user") {
+              process.stderr.write(`\x1b[1m> ${text}\x1b[0m\n`);
+              // Save to conversation history
+              self.messages.push({ role: "user", content: text, messageId: randomUUID() });
+              self.sessions.append(self.sessionId, { role: "user", content: text });
+            } else {
+              process.stderr.write(`\x1b[36m${text}\x1b[0m\n`);
+              self.messages.push({ role: "assistant", content: text });
+              self.sessions.append(self.sessionId, { role: "assistant", content: text });
+            }
+          },
+          onStateChange: (state, detail) => {
+            if (state === "listening") process.stderr.write("\x1b[2m[live] Listening...\x1b[0m\n");
+            else if (state === "user_speaking") process.stderr.write("\x1b[2m[live] 🎤\x1b[0m\n");
+            else if (state === "processing") process.stderr.write("\x1b[2m[live] ...thinking...\x1b[0m\n");
+            else if (state === "error") process.stderr.write(`\x1b[31m[live] Error: ${detail || "unknown"}\x1b[0m\n`);
+            else if (state === "disconnected") process.stderr.write("\x1b[2m[live] Disconnected\x1b[0m\n");
+          },
+          onToolCall: async (name, args) => {
+            if (!self.registry.has(name)) return `Error: tool ${name} not found`;
+            process.stderr.write(`\x1b[2m[live] Tool: ${name}(${JSON.stringify(args).slice(0, 60)})\x1b[0m\n`);
+            try {
+              const result = await self.registry.execute(name, args);
+              const content = typeof result.content === "string" ? result.content : JSON.stringify(result.content);
+              return content.slice(0, 4000); // cap for realtime context
+            } catch (e) {
+              return `Error: ${e.message}`;
+            }
+          },
+        });
+
+        self._realtimeSession = session;
+
+        try {
+          await session.start();
+          process.stderr.write("\x1b[32m[live] Speech-to-speech active — press Escape or q to exit\x1b[0m\n");
+
+          // Inject conversation context if any
+          if (self.messages.length > 0) {
+            const recentMessages = self.messages.slice(-6);
+            const contextSummary = recentMessages.map(m => `${m.role}: ${(typeof m.content === "string" ? m.content : "").slice(0, 200)}`).join("\n");
+            if (contextSummary.trim()) {
+              session.sendText(`[Previous conversation context]\n${contextSummary}`);
+            }
+          }
+
+          // Wait for exit signal
+          // Expose a stop method that Ink UI or keypress handler can call
+          let _resolveExit;
+          self._liveExitFn = () => { if (_resolveExit) _resolveExit(); };
+
+          await new Promise((resolve) => {
+            _resolveExit = resolve;
+
+            // In Ink mode, stdin is managed by Ink — don't fight for it
+            // Instead, Ink's useInput will detect escape and call self._liveExitFn
+            const isInk = self._inkMode;
+
+            if (!isInk && process.stdin.isTTY) {
+              const wasRaw = process.stdin.isRaw;
+              if (process.stdin.setRawMode) process.stdin.setRawMode(true);
+              process.stdin.resume();
+
+              // Drain any buffered input (e.g. Enter key from submitting /live)
+              const _drain = () => {};
+              process.stdin.on("data", _drain);
+              setTimeout(() => {
+                process.stdin.removeListener("data", _drain);
+
+                // Now listen for actual exit keys
+                const _onKey = (key) => {
+                  // Only exit on Escape (0x1b alone), Ctrl+C (0x03), or 'q'
+                  if (key.length === 1 && (key[0] === 0x1b || key[0] === 0x03 || key[0] === 0x71)) {
+                    process.stdin.removeListener("data", _onKey);
+                    if (process.stdin.setRawMode) process.stdin.setRawMode(wasRaw || false);
+                    resolve();
+                  }
+                };
+                process.stdin.on("data", _onKey);
+
+                // Cleanup on session disconnect
+                const checkInterval = setInterval(() => {
+                  if (!session.active) {
+                    clearInterval(checkInterval);
+                    process.stdin.removeListener("data", _onKey);
+                    if (process.stdin.setRawMode) process.stdin.setRawMode(wasRaw || false);
+                    resolve();
+                  }
+                }, 500);
+              }, 200); // 200ms drain delay
+            } else {
+              // Ink mode or non-TTY: just wait for session disconnect or _liveExitFn
+              const checkInterval = setInterval(() => {
+                if (!session.active) {
+                  clearInterval(checkInterval);
+                  resolve();
+                }
+              }, 500);
+            }
+          });
+
+          self._liveExitFn = null;
+
+        } catch (e) {
+          process.stderr.write(`\x1b[31m[live] Error: ${e.message}\x1b[0m\n`);
+        } finally {
+          session.stop();
+          self._realtimeSession = null;
+          process.stderr.write("\x1b[2m[live] Back to text mode.\x1b[0m\n");
+        }
+      } });
+
     s.register({ name: "clear", aliases: ["reset", "new"], description: "Clear conversation history", immediate: true,
       handler: () => { self.messages = []; self.sessionId = self.sessions.create(); process.stderr.write(`\x1b[2mNew session: ${self.sessionId}\x1b[0m\n`); } });
     s.register({ name: "session", description: "Show session info", immediate: true,
@@ -1807,6 +2098,16 @@ class InteractiveMode {
         else { process.stderr.write("Usage: /skill <subcommand>\n  import, list, info, remove, update, export, verify, search, publish\n"); }
       } });
 
+    // Agent management
+    s.register({ name: "agent", description: "Agent management", argumentHint: "<subcommand> [args]",
+      handler: async (args) => {
+        const sub = args[0];
+        if (sub === "list") { agentList(self.cfg); }
+        else if (sub === "info") { agentInfo(self.cfg, args[1]); }
+        else if (sub === "remove") { await agentRemove(self.cfg, args[1]); if (self.cfg._agentLoader) self.cfg._agentLoader = new AgentLoader().scan(self.cfg.cwd); }
+        else { process.stderr.write("Usage: /agent <subcommand>\n  list, info, remove\n"); }
+      } });
+
     // Tool management
     s.register({ name: "tool", description: "Tool management", argumentHint: "<subcommand> [args]",
       handler: async (args) => {
@@ -2399,6 +2700,19 @@ class InteractiveMode {
     this._renderStatusLine();
     process.stderr.write(`\x1b[2mType \x1b[0m/\x1b[2m for commands, \x1b[0mTab\x1b[2m to complete. \x1b[0m↑↓\x1b[2m for history.\x1b[0m\n\n`);
 
+    // Voice mode initialization
+    if (this.cfg.voice) {
+      this._voice = new VoiceManager(this.cfg);
+      const deps = this._voice.checkDeps();
+      if (!deps.ok) {
+        process.stderr.write(`\x1b[33m[voice] Missing: ${deps.missing.join(", ")}\x1b[0m\n`);
+        if (deps.missing.some(m => m.includes("sox"))) {
+          process.stderr.write(`\x1b[2m  Install with: brew install sox\x1b[0m\n`);
+        }
+      }
+      process.stderr.write(`\x1b[2m[voice] Voice mode active — press ENTER on empty line to record, /voice off to disable\x1b[0m\n\n`);
+    }
+
     // Load command history from disk
     const historyFile = path.join(os.homedir(), ".claude-native", "history");
     let history = [];
@@ -2645,12 +2959,17 @@ class InteractiveMode {
     const remote = _remoteManager?.isActive() ? _remoteManager : null;
     const ext = externalCallbacks || {};
 
+    // Streaming TTS: create a sentence-level speaker if voice is active
+    const _streamSpeaker = (this.cfg.voice && this._voice) ? this._voice.createStreamSpeaker() : null;
+
     // Default callbacks (stderr-based for readline mode)
     // When externalCallbacks is provided (Ink UI mode), those take precedence
     const callbacks = {
       onText: ext.onText || ((delta) => {
+        if (typeof delta !== "string") return; // guard against non-string deltas
         if (brief) { process.stderr.write(`\x1b[2m${delta}\x1b[0m`); } else { process.stderr.write(delta); }
         if (remote) remote.emit({ type: "stream", event_type: "text_delta", data: { text: delta } });
+        if (_streamSpeaker) _streamSpeaker.push(delta);
       }),
       onThinking: ext.onThinking || ((delta) => {
         process.stderr.write(`\x1b[2m${delta}\x1b[0m`);
@@ -2737,6 +3056,17 @@ class InteractiveMode {
       const result = await loop.run(this.messages, systemBlocks);
       const assistantVisibleText = _flattenUserFacingOutputs(result.userFacingOutputs, result.text);
 
+      // Save assistant text for voice TTS
+      this._lastAssistantText = assistantVisibleText || "";
+      // Flush streaming TTS, or fallback to speaking the full response
+      if (_streamSpeaker) {
+        await _streamSpeaker.flush();
+        // If streaming didn't speak anything (e.g. response came via SendUserMessage tool), speak now
+        if (!_streamSpeaker._spoke && assistantVisibleText) {
+          await this._voice.speak(assistantVisibleText);
+        }
+      }
+
       // Notify external UI of turn completion (usage, context %)
       if (ext.onTurnComplete) {
         const contextWindow = this.cfg._provider?.capabilities?.contextWindow || 128000;
@@ -2791,10 +3121,11 @@ class InteractiveMode {
         }
       } catch (e) { log(`[dream] Check error: ${e.message}`); }
 
-      // Background review nudge — skill creation + memory review
+      // Background review nudge — skill creation + memory review + agent evolution
       try {
         this._turnsSinceMemoryReview++;
         this._toolCallsSinceSkillReview += (result.toolUseCount || 0);
+        this._toolCallsSinceAgentReview += (result.toolUseCount || 0);
         const cfg = this.cfg;
         if (!cfg._isSubAgent && this._nudgeEnabled) {
           if (this._toolCallsSinceSkillReview >= this._skillNudgeInterval) {
@@ -2804,6 +3135,10 @@ class InteractiveMode {
           if (this._turnsSinceMemoryReview >= this._memoryNudgeInterval) {
             this._turnsSinceMemoryReview = 0;
             this._spawnBackgroundReview("memory").catch(e => log(`[nudge] ${e.message}`));
+          }
+          if (this._toolCallsSinceAgentReview >= this._agentNudgeInterval) {
+            this._toolCallsSinceAgentReview = 0;
+            this._spawnBackgroundReview("agent").catch(e => log(`[nudge] ${e.message}`));
           }
         }
       } catch (e) { log(`[nudge] Error: ${e.message}`); }

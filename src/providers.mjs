@@ -615,11 +615,37 @@ class OpenAIClient {
         if (Array.isArray(msg.content)) {
           const toolResults = msg.content.filter((b) => b.type === "tool_result");
           if (toolResults.length > 0) {
+            const pendingImages = []; // Images extracted from tool results — sent as user message after
             for (const tr of toolResults) {
+              // OpenAI tool messages only accept string content — extract images separately
+              let textContent;
+              if (Array.isArray(tr.content)) {
+                const textParts = [];
+                for (const block of tr.content) {
+                  if (block.type === "image" && block.source?.type === "base64") {
+                    pendingImages.push({ type: "image_url", image_url: { url: `data:${block.source.media_type};base64,${block.source.data}`, detail: "low" } });
+                  } else if (block.type === "text") {
+                    textParts.push(block.text);
+                  } else {
+                    textParts.push(JSON.stringify(block));
+                  }
+                }
+                textContent = textParts.join("\n") || "(see attached image)";
+              } else {
+                textContent = typeof tr.content === "string" ? tr.content : (tr.content == null ? "" : JSON.stringify(tr.content));
+              }
               out.push({
                 role: "tool",
                 tool_call_id: tr.tool_use_id,
-                content: typeof tr.content === "string" ? tr.content : (tr.content == null ? "" : JSON.stringify(tr.content)),
+                content: textContent,
+              });
+            }
+            // Send extracted images as a user message so the model can see them
+            if (pendingImages.length > 0) {
+              log(`[openai] Injecting ${pendingImages.length} image(s) as user message`);
+              out.push({
+                role: "user",
+                content: [{ type: "text", text: "Here is the screenshot captured by the Screenshot tool. Please describe in detail what you see in this image:" }, ...pendingImages],
               });
             }
           } else {
@@ -689,6 +715,7 @@ class OpenAIClient {
         } else {
           const text = await resp.text().catch(() => "");
           lastError = new Error(`OpenAI API error ${resp.status}: ${text}`);
+          log(`[openai] Error ${resp.status}: ${text.substring(0, 300)}`);
           retryDelayMs = _computeRetryDelay(attempt, null);
         }
         continue;
@@ -754,19 +781,33 @@ class OpenAIClient {
           const finishReason = chunk.choices?.[0]?.finish_reason;
           if (!delta && !finishReason) continue;
 
-          // Text content
+          // Text content — delta.content can be a string or an array of content parts (multimodal)
           if (delta?.content) {
-            if (textBlockIndex === null) {
-              textBlockIndex = 0;
+            let textDelta;
+            if (typeof delta.content === "string") {
+              textDelta = delta.content;
+            } else if (Array.isArray(delta.content)) {
+              // Extract text parts from multimodal content array
+              textDelta = delta.content
+                .filter((p) => p.type === "text" && p.text)
+                .map((p) => p.text)
+                .join("");
+            } else {
+              textDelta = String(delta.content);
+            }
+            if (textDelta) {
+              if (textBlockIndex === null) {
+                textBlockIndex = 0;
+                yield {
+                  event: "content_block_start",
+                  data: { index: textBlockIndex, content_block: { type: "text", text: "" } },
+                };
+              }
               yield {
-                event: "content_block_start",
-                data: { index: textBlockIndex, content_block: { type: "text", text: "" } },
+                event: "content_block_delta",
+                data: { index: textBlockIndex, delta: { type: "text_delta", text: textDelta } },
               };
             }
-            yield {
-              event: "content_block_delta",
-              data: { index: textBlockIndex, delta: { type: "text_delta", text: delta.content } },
-            };
           }
 
           // Tool calls
@@ -871,12 +912,32 @@ class OpenAIResponsesClient {
           // Tool results
           const toolResults = msg.content.filter((b) => b.type === "tool_result");
           if (toolResults.length > 0) {
+            const pendingImages = [];
             for (const tr of toolResults) {
+              // Responses API function_call_output only accepts string output
+              let output;
+              if (Array.isArray(tr.content)) {
+                const textParts = [];
+                for (const block of tr.content) {
+                  if (block.type === "text") textParts.push(block.text);
+                  else if (block.type === "image" && block.source?.type === "base64") {
+                    pendingImages.push({ type: "input_image", image_url: `data:${block.source.media_type};base64,${block.source.data}` });
+                    textParts.push("[image captured and attached below]");
+                  }
+                  else textParts.push(JSON.stringify(block));
+                }
+                output = textParts.join("\n");
+              } else {
+                output = typeof tr.content === "string" ? tr.content : (tr.content == null ? "" : JSON.stringify(tr.content));
+              }
               input.push({
                 type: "function_call_output",
                 call_id: tr.tool_use_id,
-                output: typeof tr.content === "string" ? tr.content : (tr.content == null ? "" : JSON.stringify(tr.content)),
+                output,
               });
+            }
+            if (pendingImages.length > 0) {
+              input.push({ role: "user", content: [{ type: "input_text", text: "Here is the screenshot from the tool above:" }, ...pendingImages] });
             }
           } else {
             const text = msg.content.filter((b) => b.type === "text").map((b) => b.text).join("");

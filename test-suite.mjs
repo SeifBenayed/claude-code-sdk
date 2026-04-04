@@ -2171,11 +2171,11 @@ section("UNIT: Task Tools — registered as deferred");
 
       // All in getAllDefinitions
       const all = reg.getAllDefinitions();
-      assert(all.length === 7, "7 total tools from registerDeferredBuiltinTools");
+      assert(all.length === 10, "10 total tools from registerDeferredBuiltinTools");
 
       // All in getDeferredNames
       const names = reg.getDeferredNames();
-      assert(names.length === 7, "7 deferred names");
+      assert(names.length === 10, "10 deferred names");
     } catch (e) {
       skip(`Task tools registration test failed: ${e.message}`);
     }
@@ -6736,7 +6736,7 @@ section("UNIT: LSP — language configs");
 
 {
   assert(source.includes("typescript-language-server"), "TypeScript language server configured");
-  assert(source.includes("pyright-langserver"), "Python language server configured");
+  assert(source.includes("pyright") && source.includes("--langserver"), "Python language server configured");
   assert(source.includes(".ts") && source.includes(".tsx") && source.includes(".js"), "TypeScript extensions defined");
   assert(source.includes(".py") && source.includes(".pyi"), "Python extensions defined");
 }
@@ -7965,6 +7965,845 @@ section("DEEP: Cross-cutting — Write → Edit → Read multi-step workflow");
   } else {
     skip("Workflow test extraction failed");
   }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// UNIT: Phone — audio conversion, session config, tool wiring
+// ═══════════════════════════════════════════════════════════════════
+
+section("UNIT: Phone — mulaw decode/encode roundtrip");
+{
+  const decodeFn = extractBlock(source, "function _mulawDecode(");
+  const encodeFn = extractBlock(source, "function _pcm16ToMulaw(");
+  if (decodeFn && encodeFn) {
+    const env = new Function(decodeFn + "\n" + encodeFn + "\nreturn { _mulawDecode, _pcm16ToMulaw };")();
+    // Silence (0) roundtrips exactly
+    assert(env._mulawDecode(env._pcm16ToMulaw(0)) === 0, "mulaw roundtrip: 0 → encode → decode = 0");
+    // Positive value roundtrips within mulaw quantization error
+    const enc1k = env._pcm16ToMulaw(1000);
+    const dec1k = env._mulawDecode(enc1k);
+    assert(Math.abs(dec1k - 1000) < 200, "mulaw roundtrip: 1000 → " + dec1k + " (err < 200)");
+    // Negative value roundtrips
+    const encNeg = env._pcm16ToMulaw(-5000);
+    const decNeg = env._mulawDecode(encNeg);
+    assert(decNeg < 0, "mulaw roundtrip: negative stays negative (" + decNeg + ")");
+    assert(Math.abs(decNeg + 5000) < 1000, "mulaw roundtrip: -5000 → " + decNeg + " (err < 1000)");
+    // Max positive value
+    const encMax = env._pcm16ToMulaw(32000);
+    const decMax = env._mulawDecode(encMax);
+    assert(decMax > 30000, "mulaw roundtrip: 32000 → " + decMax + " (> 30000)");
+    // Encode range: all outputs are 0-255
+    for (const v of [-32768, -1, 0, 1, 32767]) {
+      const e = env._pcm16ToMulaw(v);
+      assert(e >= 0 && e <= 255, "mulaw encode(" + v + ") = " + e + " is in byte range");
+    }
+  } else {
+    skip("mulaw functions not found in built source");
+  }
+}
+
+section("UNIT: Phone — mulaw-to-pcm24k resampling");
+{
+  const convFn = extractBlock(source, "function _mulawTopcm24k(");
+  const decodeFn = extractBlock(source, "function _mulawDecode(");
+  if (convFn && decodeFn) {
+    const env = new Function("Buffer", decodeFn + "\n" + convFn + "\nreturn { _mulawTopcm24k, _mulawDecode };");
+    const fn = env(Buffer);
+    // 10 mulaw samples → 30 PCM16 samples (3x upsample) = 60 bytes
+    const input = Buffer.alloc(10);
+    const result = fn._mulawTopcm24k(input);
+    assert(result.length === 60, "8kHz→24kHz: 10 mulaw bytes → 60 PCM16 bytes (got " + result.length + ")");
+    // 1 sample → 3 samples = 6 bytes
+    const one = fn._mulawTopcm24k(Buffer.from([0xFF]));
+    assert(one.length === 6, "8kHz→24kHz: 1 byte → 6 bytes (got " + one.length + ")");
+    // Verify interpolation: a constant signal produces constant output
+    const constant = Buffer.alloc(5).fill(0xFF); // 5x silence mulaw
+    const upsampled = fn._mulawTopcm24k(constant);
+    const s0 = upsampled.readInt16LE(0);
+    const s1 = upsampled.readInt16LE(2);
+    const s2 = upsampled.readInt16LE(4);
+    assert(s0 === s1 && s1 === s2, "Constant mulaw input → constant PCM output (interp works)");
+    // Non-silence: mulaw 0x80 = large negative. Check output has actual PCM values
+    const loud = Buffer.from([0x00, 0x80, 0x00]); // alternating
+    const loudOut = fn._mulawTopcm24k(loud);
+    assert(loudOut.length === 18, "3 mulaw samples → 18 bytes PCM");
+    // First sample should be large negative (mulaw 0x00 = ~-32124)
+    const firstSample = loudOut.readInt16LE(0);
+    assert(firstSample < -10000, "mulaw 0x00 decodes to large negative PCM (" + firstSample + ")");
+  } else {
+    skip("_mulawTopcm24k not found in built source");
+  }
+}
+
+section("UNIT: Phone — pcm24k-to-mulaw downsampling");
+{
+  const convFn = extractBlock(source, "function _pcm24kToMulaw(");
+  const encodeFn = extractBlock(source, "function _pcm16ToMulaw(");
+  if (convFn && encodeFn) {
+    const env = new Function("Buffer", encodeFn + "\n" + convFn + "\nreturn { _pcm24kToMulaw, _pcm16ToMulaw };");
+    const fn = env(Buffer);
+    // 30 PCM16 samples (60 bytes) → 10 mulaw bytes (3x downsample)
+    const input = Buffer.alloc(60);
+    const result = fn._pcm24kToMulaw(input);
+    assert(result.length === 10, "24kHz→8kHz: 60 bytes → 10 mulaw bytes (got " + result.length + ")");
+    // Odd number rounds down
+    const odd = Buffer.alloc(14); // 7 samples → floor(7/3) = 2
+    const oddResult = fn._pcm24kToMulaw(odd);
+    assert(oddResult.length === 2, "24kHz→8kHz: 7 samples → 2 mulaw bytes (got " + oddResult.length + ")");
+    // Empty buffer → empty output
+    const empty = fn._pcm24kToMulaw(Buffer.alloc(0));
+    assert(empty.length === 0, "24kHz→8kHz: 0 bytes → 0 mulaw bytes");
+    // Silence PCM → mulaw silence (~0xFF)
+    const silencePcm = Buffer.alloc(6); // 3 zero samples
+    const silenceMulaw = fn._pcm24kToMulaw(silencePcm);
+    assert(silenceMulaw.length === 1, "3 PCM silence samples → 1 mulaw byte");
+    assert(silenceMulaw[0] === fn._pcm16ToMulaw(0), "PCM silence → mulaw silence value");
+    // Loud signal preserved through downsample
+    const loudPcm = Buffer.alloc(6);
+    loudPcm.writeInt16LE(10000, 0); loudPcm.writeInt16LE(10000, 2); loudPcm.writeInt16LE(10000, 4);
+    const loudMulaw = fn._pcm24kToMulaw(loudPcm);
+    assert(loudMulaw[0] === fn._pcm16ToMulaw(10000), "Downsample picks first of every 3 samples");
+  } else {
+    skip("_pcm24kToMulaw not found in built source");
+  }
+}
+
+section("UNIT: Phone — full audio pipeline roundtrip (mulaw→pcm24k→mulaw)");
+{
+  const d = extractBlock(source, "function _mulawDecode(");
+  const e = extractBlock(source, "function _pcm16ToMulaw(");
+  const up = extractBlock(source, "function _mulawTopcm24k(");
+  const down = extractBlock(source, "function _pcm24kToMulaw(");
+  if (d && e && up && down) {
+    const env = new Function("Buffer", d+"\n"+e+"\n"+up+"\n"+down+"\nreturn{_mulawTopcm24k,_pcm24kToMulaw,_mulawDecode,_pcm16ToMulaw};");
+    const fn = env(Buffer);
+    // Full roundtrip: mulaw → PCM16 24kHz → mulaw
+    const orig = Buffer.from([0xFF, 0xC0, 0xA0, 0x80, 0x40, 0x20, 0x10, 0x00]);
+    const pcm24 = fn._mulawTopcm24k(orig);
+    assert(pcm24.length === orig.length * 6, "Pipeline: mulaw → pcm24k correct size");
+    const back = fn._pcm24kToMulaw(pcm24);
+    assert(back.length === orig.length, "Pipeline: pcm24k → mulaw same number of samples");
+    // Since downsample picks the first of every 3, and upsample sets first = original,
+    // the roundtrip should be exact for the first sample of each group
+    let exactMatches = 0;
+    for (let i = 0; i < orig.length; i++) {
+      if (back[i] === orig[i]) exactMatches++;
+    }
+    assert(exactMatches >= orig.length - 2, "Pipeline roundtrip: " + exactMatches + "/" + orig.length + " exact matches");
+  } else {
+    skip("Audio pipeline functions not found");
+  }
+}
+
+section("UNIT: Phone — PhoneManager instantiation and config validation");
+{
+  const PMBlock = extractBlock(source, "class PhoneManager");
+  if (PMBlock) {
+    const PM = new Function("log", "fetch", "Buffer", "spawn", "execSync",
+      PMBlock + "\nreturn PhoneManager;");
+    const PhoneManager = PM(() => {}, () => {}, Buffer, () => {}, () => {});
+
+    // No creds → all 3 missing
+    const pm1 = new PhoneManager({});
+    const check1 = pm1.checkConfig();
+    assert(check1.ok === false, "checkConfig: no creds → not ok");
+    assert(check1.missing.length === 3, "checkConfig: 3 missing fields");
+    assert(check1.missing.includes("TWILIO_ACCOUNT_SID"), "checkConfig: missing SID");
+    assert(check1.missing.includes("TWILIO_AUTH_TOKEN"), "checkConfig: missing token");
+    assert(check1.missing.includes("TWILIO_PHONE_NUMBER"), "checkConfig: missing number");
+
+    // Partial creds → only missing ones listed
+    const pm2 = new PhoneManager({ twilioAccountSid: "AC123", twilioAuthToken: "tok" });
+    const check2 = pm2.checkConfig();
+    assert(check2.ok === false, "checkConfig: partial creds → not ok");
+    assert(check2.missing.length === 1, "checkConfig: 1 missing");
+    assert(check2.missing[0] === "TWILIO_PHONE_NUMBER", "checkConfig: missing phone number");
+
+    // Full creds → ok
+    const pm3 = new PhoneManager({ twilioAccountSid: "AC123", twilioAuthToken: "tok", twilioPhoneNumber: "+1" });
+    const check3 = pm3.checkConfig();
+    assert(check3.ok === true, "checkConfig: full creds → ok");
+    assert(check3.missing.length === 0, "checkConfig: 0 missing");
+  } else {
+    skip("PhoneManager class not found in bundle");
+  }
+}
+
+section("UNIT: Phone — language detection");
+{
+  const PMBlock = extractBlock(source, "class PhoneManager");
+  if (PMBlock) {
+    const PM = new Function("log", "fetch", "Buffer", "spawn", "execSync",
+      PMBlock + "\nreturn PhoneManager;");
+    const PhoneManager = PM(() => {}, () => {}, Buffer, () => {}, () => {});
+    const pm = new PhoneManager({});
+
+    assert(pm._detectLanguage("bonjour comment allez-vous") === "fr-FR", "detectLanguage: French");
+    assert(pm._detectLanguage("hola como estas") === "es-ES", "detectLanguage: Spanish");
+    assert(pm._detectLanguage("hallo wie geht es Ihnen") === "de-DE", "detectLanguage: German");
+    assert(pm._detectLanguage("ciao come stai") === "it-IT", "detectLanguage: Italian");
+    assert(pm._detectLanguage("hello how are you") === "en-US", "detectLanguage: English default");
+    assert(pm._detectLanguage("こんにちは") === "ja-JP", "detectLanguage: Japanese");
+    assert(pm._detectLanguage("مرحبا") === "ar-SA", "detectLanguage: Arabic");
+    assert(pm._detectLanguage("你好世界") === "zh-CN", "detectLanguage: Chinese");
+  } else {
+    skip("PhoneManager class not found");
+  }
+}
+
+section("UNIT: Phone — XML escaping");
+{
+  const PMBlock = extractBlock(source, "class PhoneManager");
+  if (PMBlock) {
+    const PM = new Function("log", "fetch", "Buffer", "spawn", "execSync",
+      PMBlock + "\nreturn PhoneManager;");
+    const PhoneManager = PM(() => {}, () => {}, Buffer, () => {}, () => {});
+    const pm = new PhoneManager({});
+
+    assert(pm._escapeXml("hello & world") === "hello &amp; world", "escapeXml: ampersand");
+    assert(pm._escapeXml("<script>") === "&lt;script&gt;", "escapeXml: angle brackets");
+    assert(pm._escapeXml('"test"') === "&quot;test&quot;", "escapeXml: double quotes");
+    assert(pm._escapeXml("it's") === "it&apos;s", "escapeXml: single quote/apostrophe");
+    assert(pm._escapeXml("plain text") === "plain text", "escapeXml: no special chars unchanged");
+    assert(pm._escapeXml('a & b < c > d "e" f\'g') === "a &amp; b &lt; c &gt; d &quot;e&quot; f&apos;g", "escapeXml: all specials combined");
+  } else {
+    skip("PhoneManager class not found");
+  }
+}
+
+section("UNIT: Phone — voice resolution by language");
+{
+  const PMBlock = extractBlock(source, "class PhoneManager");
+  if (PMBlock) {
+    const PM = new Function("log", "fetch", "Buffer", "spawn", "execSync",
+      PMBlock + "\nreturn PhoneManager;");
+    const PhoneManager = PM(() => {}, () => {}, Buffer, () => {}, () => {});
+    const pm = new PhoneManager({});
+
+    assert(pm._resolveVoice("fr-FR") === "Polly.Lea", "resolveVoice: French → Polly.Lea");
+    assert(pm._resolveVoice("es-ES") === "Polly.Lucia", "resolveVoice: Spanish → Polly.Lucia");
+    assert(pm._resolveVoice("de-DE") === "Polly.Vicki", "resolveVoice: German → Polly.Vicki");
+    assert(pm._resolveVoice("en-US") === "Polly.Joanna", "resolveVoice: English → Polly.Joanna");
+    assert(pm._resolveVoice("ja-JP") === "Polly.Mizuki", "resolveVoice: Japanese → Polly.Mizuki");
+    assert(pm._resolveVoice(null) === "Polly.Joanna", "resolveVoice: null → default Joanna");
+    assert(pm._resolveVoice() === "Polly.Joanna", "resolveVoice: undefined → default Joanna");
+  } else {
+    skip("PhoneManager class not found");
+  }
+}
+
+section("UNIT: Phone — PhoneLiveSession config defaults");
+{
+  // Use direct import instead of extractBlock (class depends on _WsServerClient)
+  try {
+    const { PhoneLiveSession } = await import("./src/phone.mjs");
+    // Default config
+    const s1 = new PhoneLiveSession({}, { to: "+33612345678" });
+    assert(s1._to === "+33612345678", "PhoneLiveSession stores target number");
+    assert(s1._model === "gpt-4o-realtime-preview", "Default model is gpt-4o-realtime-preview");
+    assert(s1._voice === "alloy", "Default voice is alloy");
+    assert(s1._maxDuration === 300, "Default max duration is 300s");
+    assert(s1._active === false, "Starts inactive");
+    assert(Array.isArray(s1._transcript), "Has transcript array");
+    assert(s1._transcript.length === 0, "Transcript starts empty");
+    assert(s1._instructions.includes("helpful"), "Default instructions mention helpful");
+    // Custom config
+    const s2 = new PhoneLiveSession({}, { to: "+1555", instructions: "Book a table", voice: "echo", model: "gpt-4o-mini-realtime", maxDuration: 120 });
+    assert(s2._instructions === "Book a table", "Custom instructions stored");
+    assert(s2._voice === "echo", "Custom voice stored");
+    assert(s2._model === "gpt-4o-mini-realtime", "Custom model stored");
+    assert(s2._maxDuration === 120, "Custom maxDuration stored");
+    // Tools and callback
+    const tools = [{ name: "search", description: "Search web", input_schema: {} }];
+    const cb = () => {};
+    const s3 = new PhoneLiveSession({}, { to: "+1", tools, onToolCall: cb });
+    assert(s3._tools.length === 1, "Tools passed through");
+    assert(s3._tools[0].name === "search", "Tool name preserved");
+    assert(s3._onToolCall === cb, "onToolCall callback stored");
+  } catch (e) {
+    skip("PhoneLiveSession import failed: " + e.message);
+  }
+}
+
+section("UNIT: Phone — WS server starts and accepts HTTP");
+{
+  try {
+    const { PhoneLiveSession } = await import("./src/phone.mjs");
+    const session = new PhoneLiveSession(
+      { twilioAccountSid: "AC", twilioAuthToken: "tok", twilioPhoneNumber: "+1" },
+      { to: "+123" }
+    );
+    const port = await session._startServer();
+    assert(typeof port === "number" && port > 0, "WS server returns a valid port (" + port + ")");
+    const resp = await fetch("http://127.0.0.1:" + port);
+    assert(resp.status === 200, "WS server health check returns 200");
+    const body = await resp.text();
+    assert(body.includes("phone-live"), "Health check body mentions phone-live");
+    session._server.close();
+  } catch (e) {
+    skip("WS server test failed: " + e.message);
+  }
+}
+
+section("UNIT: Phone — Twilio message handler dispatches correctly");
+{
+  try {
+    const { PhoneLiveSession } = await import("./src/phone.mjs");
+    const session = new PhoneLiveSession({}, { to: "+1" });
+    session._realtimeWs = { readyState: 1, send: () => {} };
+    // Stub _connectRealtime to prevent real HTTPS connection
+    session._connectRealtime = () => {};
+
+    // Test "start" event stores streamSid
+    session._handleTwilioMessage(JSON.stringify({ event: "start", start: { streamSid: "MZ123", callSid: "CA456" } }));
+    assert(session._streamSid === "MZ123", "start event stores streamSid");
+
+    // Test "media" event converts and forwards audio
+    let sentToRealtime = null;
+    session._realtimeWs.send = (data) => { sentToRealtime = JSON.parse(data); };
+    session._streamSid = "MZ123";
+    const mulawSilence = Buffer.alloc(10).fill(0xFF).toString("base64");
+    session._handleTwilioMessage(JSON.stringify({ event: "media", media: { payload: mulawSilence } }));
+    assert(sentToRealtime !== null, "media event forwards audio to Realtime");
+    assert(sentToRealtime.type === "input_audio_buffer.append", "Forwarded as input_audio_buffer.append");
+    assert(typeof sentToRealtime.audio === "string", "Audio payload is base64 string");
+    const audioBytes = Buffer.from(sentToRealtime.audio, "base64");
+    assert(audioBytes.length === 10, "10 mulaw bytes passed through directly as g711_ulaw (got " + audioBytes.length + ")");
+
+    // Test "stop" event triggers stop
+    let stopCalled = false;
+    session.stop = () => { stopCalled = true; };
+    session._handleTwilioMessage(JSON.stringify({ event: "stop" }));
+    assert(stopCalled, "stop event triggers session.stop()");
+
+    // Test invalid JSON handled gracefully
+    let threw = false;
+    try { session._handleTwilioMessage("not json {{{"); } catch { threw = true; }
+    assert(!threw, "Invalid JSON in Twilio message doesn't throw");
+  } catch (e) {
+    skip("Twilio handler test failed: " + e.message);
+  }
+}
+
+section("UNIT: Phone — Realtime event handler tracks transcript");
+{
+  try {
+    const { PhoneLiveSession } = await import("./src/phone.mjs");
+    const session = new PhoneLiveSession({}, { to: "+1" });
+    let emittedTranscripts = [];
+    session.on("transcript", (role, text) => emittedTranscripts.push({ role, text }));
+
+    // User transcription
+    session._handleRealtimeEvent({ type: "conversation.item.input_audio_transcription.completed", transcript: "  hello world  " });
+    assert(session._transcript.length === 1, "User transcript added");
+    assert(session._transcript[0].role === "human", "User transcript role is human");
+    assert(session._transcript[0].text === "hello world", "User transcript trimmed");
+    assert(emittedTranscripts.length === 1, "Transcript event emitted for user");
+
+    // Assistant response
+    session._handleRealtimeEvent({ type: "response.created" });
+    session._handleRealtimeEvent({ type: "response.audio_transcript.delta", delta: "Hi " });
+    session._handleRealtimeEvent({ type: "response.audio_transcript.delta", delta: "there!" });
+    session._handleRealtimeEvent({ type: "response.audio_transcript.done" });
+    assert(session._transcript.length === 2, "Assistant transcript added");
+    assert(session._transcript[1].role === "assistant", "Assistant transcript role");
+    assert(session._transcript[1].text === "Hi there!", "Assistant transcript concatenated");
+
+    // Empty transcript ignored
+    session._handleRealtimeEvent({ type: "conversation.item.input_audio_transcription.completed", transcript: "   " });
+    assert(session._transcript.length === 2, "Empty user transcript ignored");
+  } catch (e) {
+    skip("Transcript test failed: " + e.message);
+  }
+}
+
+section("UNIT: Phone — Realtime audio bridge sends to Twilio");
+{
+  try {
+    const { PhoneLiveSession } = await import("./src/phone.mjs");
+    const session = new PhoneLiveSession({}, { to: "+1" });
+    session._streamSid = "MZ999";
+
+    let twilioMessages = [];
+    session._twilioWs = { send: (d) => twilioMessages.push(JSON.parse(d)) };
+
+    // g711_ulaw audio from OpenAI passed directly to Twilio (no conversion)
+    const audioData = Buffer.alloc(20);
+    for (let i = 0; i < 20; i++) audioData[i] = i * 10;
+    const b64 = audioData.toString("base64");
+    session._handleRealtimeEvent({ type: "response.audio.delta", delta: b64 });
+
+    assert(twilioMessages.length === 1, "Audio delta forwarded to Twilio");
+    assert(twilioMessages[0].event === "media", "Twilio message is media event");
+    assert(twilioMessages[0].streamSid === "MZ999", "Twilio message has correct streamSid");
+    assert(twilioMessages[0].media.payload === b64, "g711_ulaw payload passed through directly (no conversion)");
+  } catch (e) {
+    skip("Audio bridge test failed: " + e.message);
+  }
+}
+
+section("UNIT: Phone — barge-in interrupts and cancels response");
+{
+  try {
+    const { PhoneLiveSession } = await import("./src/phone.mjs");
+    const session = new PhoneLiveSession({}, { to: "+1" });
+    session._streamSid = "MZ";
+    session._responseActive = true;
+
+    let sentEvents = [];
+    session._realtimeWs = { readyState: 1, send: (d) => sentEvents.push(JSON.parse(d)) };
+    let clearedTwilio = [];
+    session._twilioWs = { send: (d) => clearedTwilio.push(JSON.parse(d)) };
+
+    session._handleRealtimeEvent({ type: "input_audio_buffer.speech_started" });
+
+    const cancelEvent = sentEvents.find(e => e.type === "response.cancel");
+    assert(cancelEvent, "Barge-in sends response.cancel");
+    const clearEvent = clearedTwilio.find(e => e.event === "clear");
+    assert(clearEvent, "Barge-in sends clear to Twilio");
+    assert(session._responseActive === false, "responseActive set to false after interrupt");
+  } catch (e) {
+    skip("Barge-in test failed: " + e.message);
+  }
+}
+
+section("UNIT: Phone — tool call handling in live session");
+{
+  try {
+    const { PhoneLiveSession } = await import("./src/phone.mjs");
+    let toolCallReceived = null;
+    const session = new PhoneLiveSession({}, {
+      to: "+1",
+      onToolCall: async (name, args) => { toolCallReceived = { name, args }; return "tool result data"; },
+    });
+
+    let sentEvents = [];
+    session._realtimeWs = { readyState: 1, send: (d) => sentEvents.push(JSON.parse(d)) };
+
+    session._handleRealtimeEvent({ type: "response.function_call_arguments.done", call_id: "call_abc", name: "WebSearch", arguments: '{"query":"test"}' });
+    await new Promise(r => setTimeout(r, 50));
+
+    assert(toolCallReceived !== null, "onToolCall callback invoked");
+    assert(toolCallReceived.name === "WebSearch", "Tool name passed correctly");
+    assert(toolCallReceived.args.query === "test", "Tool args parsed from JSON");
+
+    const outputEvent = sentEvents.find(e => e.type === "conversation.item.create" && e.item?.type === "function_call_output");
+    assert(outputEvent, "Tool result sent back as function_call_output");
+    assert(outputEvent.item.call_id === "call_abc", "call_id matches");
+    assert(outputEvent.item.output === "tool result data", "Tool output forwarded");
+
+    const respCreate = sentEvents.find(e => e.type === "response.create");
+    assert(respCreate, "response.create sent after tool result");
+  } catch (e) {
+    skip("Tool call test failed: " + e.message);
+  }
+}
+
+// ── Agent Metrics ────────────────────────────────────────────────
+
+section("UNIT: Agent Metrics — appendAgentMetric / readAgentMetrics / summarizeAgentMetrics");
+
+{
+  try {
+    const tmpDir = path.join(os.tmpdir(), `agent-metrics-test-${Date.now()}`);
+    fs.mkdirSync(tmpDir, { recursive: true });
+    const testCwd = tmpDir;
+
+    const fnStart = source.indexOf("const AGENT_METRICS_FILE =");
+    const fnEnd = source.indexOf("function summarizeAgentMetrics(");
+    const fnEndFull = source.indexOf("\n}", source.indexOf("sort((a, b) => b.uses - a.uses)", fnEnd));
+    assert(fnStart > 0 && fnEnd > 0, "Agent metrics functions found in source");
+
+    const fnSource = source.slice(fnStart, fnEndFull + 2);
+    const ns = {};
+
+    // Provide ensureMemoryDir stub used by _agentMetricsDir
+    const ensureMemoryDir = (cwd) => {
+      const dir = path.join(cwd, "memory");
+      fs.mkdirSync(dir, { recursive: true });
+      return dir;
+    };
+
+    new Function("exports", "fs", "path", "os", "log", "ensureMemoryDir",
+      fnSource + `
+      exports.appendAgentMetric = appendAgentMetric;
+      exports.readAgentMetrics = readAgentMetrics;
+      exports.summarizeAgentMetrics = summarizeAgentMetrics;
+    `)(ns, fs, path, os, () => {}, ensureMemoryDir);
+
+    // Test append + read
+    ns.appendAgentMetric(testCwd, {
+      agent_name: "pr-reviewer", agent_source: "custom", found: true,
+      is_error: false, run_in_background: false, turns: 5, duration_ms: 3000,
+      stop_reason: "completed", session_id: "test-session",
+    });
+    ns.appendAgentMetric(testCwd, {
+      agent_name: "Explore", agent_source: "builtin", found: true,
+      is_error: true, run_in_background: true, turns: 2, duration_ms: 1000,
+      stop_reason: "error", session_id: "test-session",
+    });
+    ns.appendAgentMetric(testCwd, {
+      agent_name: "pr-reviewer", agent_source: "custom", found: true,
+      is_error: false, run_in_background: false, turns: 8, duration_ms: 5000,
+      stop_reason: "completed", session_id: "test-session",
+    });
+
+    const events = ns.readAgentMetrics(testCwd);
+    assert(events.length === 3, `Read returns 3 events (got ${events.length})`);
+    assert(events[0].agent_name === "pr-reviewer", "First event is pr-reviewer");
+    assert(events[1].agent_name === "Explore", "Second event is Explore");
+    assert(events[0].session_id === "test-session", "Session ID preserved");
+
+    // Test summarize
+    const summary = ns.summarizeAgentMetrics(events);
+    assert(summary.length === 2, `Summary has 2 agents (got ${summary.length})`);
+    assert(summary[0].agent === "pr-reviewer", "Most used agent first: pr-reviewer");
+    assert(summary[0].uses === 2, "pr-reviewer: 2 uses");
+    assert(summary[0].errors === 0, "pr-reviewer: 0 errors");
+    assert(summary[0].avg_turns === 7, `pr-reviewer: avg_turns=7 (got ${summary[0].avg_turns})`);
+    assert(summary[0].avg_duration_ms === 4000, `pr-reviewer: avg_duration=4000 (got ${summary[0].avg_duration_ms})`);
+    assert(summary[1].agent === "Explore", "Second agent: Explore");
+    assert(summary[1].errors === 1, "Explore: 1 error");
+
+    // Test since filter
+    const future = new Date(Date.now() + 60000).toISOString();
+    const filtered = ns.readAgentMetrics(testCwd, { since: future });
+    assert(filtered.length === 0, "since filter excludes all past events");
+
+    // Cleanup
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  } catch (e) { skip(`Agent metrics eval failed: ${e.message}`); }
+}
+
+section("UNIT: Agent Metrics — module exists in source");
+
+{
+  assert(source.includes("function appendAgentMetric("), "appendAgentMetric exists");
+  assert(source.includes("function readAgentMetrics("), "readAgentMetrics exists");
+  assert(source.includes("function summarizeAgentMetrics("), "summarizeAgentMetrics exists");
+  assert(source.includes("agent-metrics.jsonl"), "Uses agent-metrics.jsonl storage");
+  assert(source.includes("AGENT_MAX_LINES"), "Has rotation limit");
+  assert(source.includes("AGENT_TRIM_TO"), "Has trim target");
+}
+
+// ── Agent CRUD Tools ─────────────────────────────────────────────
+
+section("UNIT: Agent CRUD — registerAgentCrudTools exists");
+
+{
+  assert(source.includes("function registerAgentCrudTools("), "registerAgentCrudTools function exists");
+  assert(source.includes("function _buildAgentMd("), "_buildAgentMd helper exists");
+  assert(source.includes("function _loadAgentManifest("), "_loadAgentManifest exists");
+  assert(source.includes("function _saveAgentManifest("), "_saveAgentManifest exists");
+  assert(source.includes("function _computeAgentChecksum("), "_computeAgentChecksum exists");
+}
+
+section("UNIT: Agent CRUD — tool registrations");
+
+{
+  assert(source.includes('"AgentCreate"'), "AgentCreate tool registered");
+  assert(source.includes('"AgentList"'), "AgentList tool registered");
+  assert(source.includes('"AgentUpdate"'), "AgentUpdate tool registered");
+  assert(source.includes('"AgentDelete"'), "AgentDelete tool registered");
+}
+
+section("UNIT: Agent CRUD — _buildAgentMd generates valid AGENT.md");
+
+{
+  try {
+    const fnStart = source.indexOf("function _buildAgentMd(");
+    const fnEnd = source.indexOf("\n}", fnStart);
+    const fnSource = source.slice(fnStart, fnEnd + 2);
+    const ns = {};
+    new Function("exports", fnSource + "\nexports._buildAgentMd = _buildAgentMd;")(ns);
+
+    const result = ns._buildAgentMd({
+      name: "test-agent",
+      description: "A test agent",
+      model: "sonnet",
+      read_only: true,
+      disallowed_tools: ["Bash", "Write"],
+    }, "You are a test agent.\n\nBe helpful.");
+
+    assert(result.includes("---"), "Contains frontmatter delimiters");
+    assert(result.includes("name: test-agent"), "Contains name");
+    assert(result.includes("description: A test agent"), "Contains description");
+    assert(result.includes("model: sonnet"), "Contains model");
+    assert(result.includes("read_only: true"), "Contains read_only");
+    assert(result.includes("  - Bash"), "Contains disallowed Bash");
+    assert(result.includes("  - Write"), "Contains disallowed Write");
+    assert(result.includes("You are a test agent."), "Contains system prompt body");
+  } catch (e) { skip(`_buildAgentMd eval failed: ${e.message}`); }
+}
+
+section("UNIT: Agent CRUD — collision check blocks builtins");
+
+{
+  // The AgentCreate handler checks AGENT_DEFINITIONS — verify AGENT_DEFINITIONS is populated
+  assert(source.includes("AGENT_DEFINITIONS[name]"), "Collision check against AGENT_DEFINITIONS");
+  assert(source.includes("conflicts with builtin agent"), "Collision error message present");
+  assert(source.includes("Cannot delete builtin agent"), "Delete collision check present");
+  assert(source.includes("Cannot update builtin agent"), "Update collision check present");
+}
+
+section("UNIT: Agent CRUD — deferred registration");
+
+{
+  // CRUD tools should be registered as deferred
+  const createIdx = source.indexOf('"AgentCreate"');
+  const listIdx = source.indexOf('"AgentList"');
+  const updateIdx = source.indexOf('"AgentUpdate"');
+  const deleteIdx = source.indexOf('"AgentDelete"');
+
+  // Check deferred: true is nearby each registration (large closures need wider window)
+  const nearCreate = source.slice(createIdx, createIdx + 4000);
+  const nearList = source.slice(listIdx, listIdx + 2000);
+  const nearUpdate = source.slice(updateIdx, updateIdx + 4000);
+  const nearDelete = source.slice(deleteIdx, deleteIdx + 2000);
+
+  assert(nearCreate.includes("deferred: true"), "AgentCreate is deferred");
+  assert(nearList.includes("deferred: true"), "AgentList is deferred");
+  assert(nearUpdate.includes("deferred: true"), "AgentUpdate is deferred");
+  assert(nearDelete.includes("deferred: true"), "AgentDelete is deferred");
+}
+
+// ── Agent Instrumentation ────────────────────────────────────────
+
+section("UNIT: Agent Instrumentation — metrics in executor");
+
+{
+  assert(source.includes("appendAgentMetric(cfg.cwd"), "appendAgentMetric called in Agent executor");
+  const agentExecIdx = source.indexOf("const agentStartTime = Date.now()");
+  assert(agentExecIdx > 0, "Timer started in Agent executor");
+  const agentMetricIdx = source.indexOf("appendAgentMetric(cfg.cwd", agentExecIdx);
+  assert(agentMetricIdx > 0, "appendAgentMetric called after run");
+  assert(agentMetricIdx - agentExecIdx < 2000, "Metric call is near timer start");
+}
+
+// ── Agent CLI Commands ───────────────────────────────────────────
+
+section("UNIT: Agent CLI — functions exist");
+
+{
+  assert(source.includes("function agentList("), "agentList function exists");
+  assert(source.includes("function agentInfo("), "agentInfo function exists");
+  assert(source.includes("function agentRemove("), "agentRemove function exists");
+}
+
+section("UNIT: Agent CLI — config subcommands");
+
+{
+  const configSrc = fs.readFileSync(path.join(__dirname, "src", "config.mjs"), "utf-8");
+  assert(configSrc.includes('"agent-list"'), "config.mjs handles agent-list subcommand");
+  assert(configSrc.includes('"agent-info"'), "config.mjs handles agent-info subcommand");
+  assert(configSrc.includes('"agent-remove"'), "config.mjs handles agent-remove subcommand");
+}
+
+section("UNIT: Agent CLI — index.mjs dispatch");
+
+{
+  const indexSrc = fs.readFileSync(path.join(__dirname, "src", "index.mjs"), "utf-8");
+  assert(indexSrc.includes('"agent-list"'), "index.mjs dispatches agent-list");
+  assert(indexSrc.includes('"agent-info"'), "index.mjs dispatches agent-info");
+  assert(indexSrc.includes('"agent-remove"'), "index.mjs dispatches agent-remove");
+  assert(indexSrc.includes("registerAgentCrudTools"), "index.mjs calls registerAgentCrudTools");
+}
+
+section("UNIT: Agent CLI — /agent slash command in session.mjs");
+
+{
+  const sessionSrc = fs.readFileSync(path.join(__dirname, "src", "session.mjs"), "utf-8");
+  assert(sessionSrc.includes('name: "agent"'), "/agent slash command registered");
+  assert(sessionSrc.includes("agentList("), "slash command calls agentList");
+  assert(sessionSrc.includes("agentInfo("), "slash command calls agentInfo");
+  assert(sessionSrc.includes("agentRemove("), "slash command calls agentRemove");
+}
+
+// ── Agent Nudge ──────────────────────────────────────────────────
+
+section("UNIT: Agent Nudge — RL review system");
+
+{
+  const sessionSrc = fs.readFileSync(path.join(__dirname, "src", "session.mjs"), "utf-8");
+  assert(sessionSrc.includes("DEFAULT_AGENT_NUDGE_INTERVAL"), "Agent nudge interval constant exists");
+  assert(sessionSrc.includes("_AGENT_REVIEW_PROMPT"), "Agent review prompt exists");
+  assert(sessionSrc.includes("_toolCallsSinceAgentReview"), "Agent review counter exists");
+  assert(sessionSrc.includes("_agentNudgeInterval"), "Agent nudge interval property exists");
+  assert(sessionSrc.includes('"agent"'), "_spawnBackgroundReview handles agent type");
+  assert(sessionSrc.includes("{AGENT_METRICS}"), "Prompt has agent metrics placeholder");
+  assert(sessionSrc.includes("{BUILTINS}"), "Prompt has builtins placeholder");
+}
+
+// ── Agent Creator Skill ──────────────────────────────────────────
+
+section("UNIT: Agent Creator Skill — SKILL.md exists");
+
+{
+  const skillPath = path.join(os.homedir(), ".claude", "skills", "agent-creator", "SKILL.md");
+  try {
+    const content = fs.readFileSync(skillPath, "utf-8");
+    assert(content.includes("name: agent-creator"), "Skill has correct name");
+    assert(content.includes("AgentCreate"), "Skill references AgentCreate tool");
+    assert(content.includes("Agent vs Skill"), "Skill explains agent vs skill decision");
+    assert(content.includes("$ARGUMENTS"), "Skill supports arguments");
+  } catch (e) {
+    skip(`Agent creator skill not found: ${e.message}`);
+  }
+}
+
+// ── Agent Manifest ───────────────────────────────────────────────
+
+section("UNIT: Agent Manifest — path and format");
+
+{
+  assert(source.includes(".cloclo-agents.json"), "Manifest uses .cloclo-agents.json");
+  assert(source.includes("AGENT_MANIFEST_PATH"), "Manifest path constant exists");
+}
+
+// ── AICL Protocol ────────────────────────────────────────────────
+
+section("UNIT: AICL — module exists in source");
+
+{
+  assert(source.includes("AICL_VERSION"), "AICL_VERSION constant exists");
+  assert(source.includes("AICL_INSTRUCTION_BLOCK"), "AICL_INSTRUCTION_BLOCK exists");
+  assert(source.includes("function buildAiclPromptFrame("), "buildAiclPromptFrame exists");
+  assert(source.includes("function parseAiclResponse("), "parseAiclResponse exists");
+  assert(source.includes("function enrichResultWithAicl("), "enrichResultWithAicl exists");
+  assert(source.includes('"_aicl"'), "_aicl version field referenced");
+}
+
+section("UNIT: AICL — parseAiclResponse fallback chain");
+
+{
+  try {
+    const fnStart = source.indexOf("function parseAiclResponse(");
+    const fnEnd = source.indexOf("\n}", source.indexOf("_fallback: true", fnStart + 1000));
+    const fnSource = source.slice(fnStart, fnEnd + 2);
+    const ns = {};
+    new Function("exports", "log",
+      fnSource + "\nexports.parseAiclResponse = parseAiclResponse;"
+    )(ns, () => {});
+
+    // Strategy 1: raw JSON
+    const raw = JSON.stringify({ _aicl: 1, from: "test", human_summary: "hello", confidence: 0.9 });
+    const r1 = ns.parseAiclResponse(raw, "test-agent");
+    assert(r1._aicl === 1, "Raw JSON: _aicl parsed");
+    assert(r1._fallback === false, "Raw JSON: not fallback");
+    assert(r1.confidence === 0.9, "Raw JSON: confidence preserved");
+    assert(r1.from === "test", "Raw JSON: from preserved");
+
+    // Strategy 2: ```json code block
+    const codeBlock = "Here are my findings:\n\n```json\n" + raw + "\n```\n\nAll done.";
+    const r2 = ns.parseAiclResponse(codeBlock, "test-agent");
+    assert(r2._aicl === 1, "Code block: _aicl parsed");
+    assert(r2._fallback === false, "Code block: not fallback");
+    assert(r2.human_summary === "hello", "Code block: human_summary from frame");
+
+    // Strategy 3: generic code block (no json hint)
+    const genericBlock = "Summary:\n\n```\n" + raw + "\n```";
+    const r3 = ns.parseAiclResponse(genericBlock, "test-agent");
+    assert(r3._aicl === 1, "Generic block: _aicl parsed");
+    assert(r3._fallback === false, "Generic block: not fallback");
+
+    // Strategy 4: plain text fallback
+    const plainText = "I found 3 bugs in the auth module. Here are the details...";
+    const r4 = ns.parseAiclResponse(plainText, "explore-agent");
+    assert(r4._aicl === null, "Plain text: _aicl is null");
+    assert(r4._fallback === true, "Plain text: is fallback");
+    assert(r4.human_summary === plainText, "Plain text: human_summary is the raw text");
+    assert(r4.from === "explore-agent", "Plain text: from set to agent type");
+
+    // Edge case: null/empty input
+    const r5 = ns.parseAiclResponse(null, "agent");
+    assert(r5._fallback === true, "Null input: fallback");
+    const r6 = ns.parseAiclResponse("", "agent");
+    assert(r6._fallback === true, "Empty input: fallback");
+
+    // Edge case: JSON without _aicl field
+    const noAicl = JSON.stringify({ result: "done", confidence: 0.8 });
+    const r7 = ns.parseAiclResponse(noAicl, "agent");
+    assert(r7._fallback === true, "JSON without _aicl: fallback");
+
+    // Edge case: code block with text outside — human_summary from outside text
+    const mixedBlock = "```json\n" + JSON.stringify({ _aicl: 1, from: "x", confidence: 0.5 }) + "\n```\n\nExtra context for the human.";
+    const r8 = ns.parseAiclResponse(mixedBlock, "agent");
+    assert(r8._fallback === false, "Mixed: not fallback");
+    assert(r8.human_summary === "Extra context for the human.", "Mixed: human_summary from outside text");
+
+  } catch (e) { skip(`AICL parseAiclResponse eval failed: ${e.message}`); }
+}
+
+section("UNIT: AICL — enrichResultWithAicl");
+
+{
+  try {
+    // Extract enrichResultWithAicl + parseAiclResponse
+    const parseStart = source.indexOf("function parseAiclResponse(");
+    const parseEnd = source.indexOf("\n}", source.indexOf("_fallback: true", parseStart + 1000));
+    const enrichStart = source.indexOf("function enrichResultWithAicl(");
+    const enrichEnd = source.indexOf("\n}", enrichStart);
+    const fnSource = source.slice(parseStart, parseEnd + 2) + "\n" + source.slice(enrichStart, enrichEnd + 2);
+    const ns = {};
+    new Function("exports", "log",
+      fnSource + "\nexports.enrichResultWithAicl = enrichResultWithAicl;"
+    )(ns, () => {});
+
+    // With AICL frame
+    const frame = JSON.stringify({ _aicl: 1, from: "reviewer", confidence: 0.95, human_summary: "Found 2 issues" });
+    const result1 = { content: "```json\n" + frame + "\n```", turns: 3 };
+    ns.enrichResultWithAicl(result1, "reviewer");
+    assert(result1.aicl_frame === true, "Enrich: aicl_frame=true when frame present");
+    assert(result1.content === "Found 2 issues", "Enrich: content replaced with human_summary");
+    assert(result1.content_original.includes("```json"), "Enrich: content_original preserved");
+    assert(result1.aicl.confidence === 0.95, "Enrich: aicl.confidence accessible");
+
+    // Without AICL frame
+    const result2 = { content: "Just plain text results", turns: 1 };
+    ns.enrichResultWithAicl(result2, "explorer");
+    assert(result2.aicl_frame === false, "Enrich: aicl_frame=false for plain text");
+    assert(result2.content === "Just plain text results", "Enrich: content unchanged for plain text");
+    assert(!result2.content_original, "Enrich: no content_original for plain text");
+
+  } catch (e) { skip(`AICL enrichResultWithAicl eval failed: ${e.message}`); }
+}
+
+section("UNIT: AICL — injected into SubAgentRunner system prompt");
+
+{
+  assert(source.includes("AICL_INSTRUCTION_BLOCK"), "AICL instruction block referenced");
+  // Check it's pushed to systemBlocks in SubAgentRunner
+  const runnerBlock = source.slice(source.indexOf("class SubAgentRunner"), source.indexOf("class SubAgentRunner") + 15000);
+  assert(runnerBlock.includes("aiclBlock"), "AICL block variable created in runner");
+  assert(runnerBlock.includes("systemBlocks.push(aiclBlock)"), "AICL block pushed to system prompt");
+}
+
+section("UNIT: AICL — enrichResultWithAicl called in SubAgentRunner return");
+
+{
+  const returnArea = source.slice(source.indexOf("enrichResultWithAicl(agentResult"), source.indexOf("enrichResultWithAicl(agentResult") + 200);
+  assert(returnArea.includes("enrichResultWithAicl"), "enrichResultWithAicl called on agent result");
+  assert(returnArea.includes("agentDef.agentType"), "Agent type passed for logging");
+}
+
+section("UNIT: AICL — aicl_frame tracked in agent metrics");
+
+{
+  const metricsArea = source.slice(source.indexOf("appendAgentMetric(cfg.cwd"), source.indexOf("appendAgentMetric(cfg.cwd") + 500);
+  assert(metricsArea.includes("aicl_frame"), "aicl_frame field in agent metrics");
+}
+
+section("UNIT: AICL — instruction block content quality");
+
+{
+  const blockStart = source.indexOf("AICL_INSTRUCTION_BLOCK");
+  const blockArea = source.slice(blockStart, blockStart + 3000);
+  assert(blockArea.includes("_aicl"), "Instruction block mentions _aicl field");
+  assert(blockArea.includes("human_summary"), "Instruction block mentions human_summary");
+  assert(blockArea.includes("confidence"), "Instruction block mentions confidence");
+  assert(blockArea.includes("evidence"), "Instruction block mentions evidence");
+  assert(blockArea.includes("verified"), "Instruction block mentions verified");
+  assert(blockArea.includes("```json"), "Instruction block has JSON example");
 }
 
 // ═══════════════════════════════════════════════════════════════════

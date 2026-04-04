@@ -248,6 +248,14 @@ Options:
   --disallowed-tools <list>   Comma-separated tool denylist
   --permission-mode <mode>    auto|default|plan|acceptEdits|bypassPermissions|dontAsk
   --brief                     Enable brief mode (stricter terse user-facing output guidance)
+  --voice                     Enable voice mode (STT + TTS in REPL)
+  --voice-tts <engine>        TTS engine: say (default, macOS) or openai
+  --voice-stt <engine>        STT engine: whisper (default, OpenAI API)
+  --voice-voice <name>        Voice name (macOS: Samantha, OpenAI: nova/alloy/echo/etc.)
+  --voice-speed <n>           TTS speed multiplier (default: 1.0)
+  --twilio-account-sid <sid>  Twilio Account SID (or TWILIO_ACCOUNT_SID env)
+  --twilio-auth-token <tok>   Twilio Auth Token (or TWILIO_AUTH_TOKEN env)
+  --twilio-phone-number <num> Twilio From number (or TWILIO_PHONE_NUMBER env)
   --verbose                   Debug logging to stderr
   -h, --help                  Show this help
 

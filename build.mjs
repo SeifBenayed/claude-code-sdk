@@ -27,9 +27,13 @@ const modules = [
   "sandbox.mjs",
   "context-refs.mjs",
   "smart-routing.mjs",
+  "voice.mjs",
   ...(fs.existsSync(path.join(srcDir, "skill-metrics.mjs")) ? ["skill-metrics.mjs"] : []),
+  ...(fs.existsSync(path.join(srcDir, "agent-metrics.mjs")) ? ["agent-metrics.mjs"] : []),
+  ...(fs.existsSync(path.join(srcDir, "aicl.mjs")) ? ["aicl.mjs"] : []),
   "cron.mjs",
   "engine.mjs",
+  "phone.mjs",
   "session.mjs",
   "index.mjs",
 ];
@@ -38,7 +42,8 @@ const modules = [
 // We hardcode them to avoid dedup complexity.
 const BUILTIN_IMPORTS = `import { spawn, execSync } from "node:child_process";
 import { createInterface } from "node:readline";
-import { randomUUID, createHash } from "node:crypto";
+import { randomUUID, createHash, randomBytes } from "node:crypto";
+import { EventEmitter } from "node:events";
 import { createServer } from "node:http";
 import _http from "node:http";
 import _https from "node:https";
@@ -48,9 +53,9 @@ import os from "node:os";`;
 
 // Known node built-in module names (with and without node: prefix)
 const BUILTINS = new Set([
-  "fs", "path", "os", "http", "https", "child_process", "crypto", "readline", "url",
+  "fs", "path", "os", "http", "https", "child_process", "crypto", "readline", "url", "events",
   "node:fs", "node:path", "node:os", "node:http", "node:https",
-  "node:child_process", "node:crypto", "node:readline", "node:url",
+  "node:child_process", "node:crypto", "node:readline", "node:url", "node:events",
 ]);
 
 function isBuiltinOrLocalImport(line) {

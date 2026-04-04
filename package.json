@@ -1,7 +1,7 @@
 {
   "name": "cloclo",
-  "version": "1.0.2",
-  "description": "One CLI to orchestrate them all — open-source multi-provider agent runtime. 13 providers, agent teams, LSP, Docker sandbox, audit trail.",
+  "version": "2.0.0",
+  "description": "The multi-agent runtime. AICL-native agent orchestration, shared tools/memory/skills, 13 providers, voice, phone, zero native deps.",
   "main": "claude-native.mjs",
   "bin": {
     "cloclo": "./claude-native.mjs"
@@ -29,7 +29,11 @@
     "mcp",
     "agent-runtime",
     "orchestrator",
-    "coding-agent"
+    "coding-agent",
+    "aicl",
+    "multi-agent",
+    "voice",
+    "phone"
   ],
   "author": "",
   "license": "MIT",

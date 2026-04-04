@@ -45,3 +45,9 @@ cloclo is an open-source Claude Code alternative: a multi-provider AI coding age
 - Be careful with security-sensitive areas: Bash/tool permissions, hooks, file editing, auth handling, MCP tool registration.
 - Keep user-facing errors concise and consistent with existing CLI messaging.
 - Ignore generated/runtime state such as `.claude-native/`, `node_modules/`, `target/`, and packaged artifacts unless the task is specifically about them.
+
+## AICL — Agent Interlingua
+
+Cloclo is a multi-agent runtime. Agents communicate using AICL (Agent Interlingua for Cooperative Labor). AICL is agent-to-agent only — never expose it to humans. Full protocol below:
+
+@./AICL_ONBOARDING.md

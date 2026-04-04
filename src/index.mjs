@@ -11,6 +11,30 @@ import path from "node:path";
 import os from "node:os";
 
 import { log, sleep, memoize, EXIT, _VERSION, setVerbose, _verbose } from "./utils.mjs";
+
+// Load .env file if present (zero deps, simple KEY=VALUE parser)
+// Checks: cwd → script dir → ~/.claude-native/
+{
+  const _loadEnv = (p) => {
+    try {
+      if (!fs.existsSync(p)) return;
+      for (const line of fs.readFileSync(p, "utf-8").split("\n")) {
+        const trimmed = line.trim();
+        if (!trimmed || trimmed.startsWith("#")) continue;
+        const eq = trimmed.indexOf("=");
+        if (eq < 1) continue;
+        const key = trimmed.slice(0, eq).trim();
+        let val = trimmed.slice(eq + 1).trim();
+        if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) val = val.slice(1, -1);
+        if (!process.env[key]) process.env[key] = val;
+      }
+    } catch { /* ignore */ }
+  };
+  const scriptDir = path.dirname(new URL(import.meta.url).pathname);
+  _loadEnv(path.join(process.cwd(), ".env"));
+  _loadEnv(path.join(scriptDir, ".env"));
+  _loadEnv(path.join(os.homedir(), ".claude-native", ".env"));
+}
 import { parseArgs, resolveModel, resolveModelForWorkload } from "./config.mjs";
 import { detectProvider, PROVIDERS, AnthropicClient, OpenAIClient, OpenAIResponsesClient } from "./providers.mjs";
 import { getOAuthAccessToken, getOpenAIAccessToken } from "./auth.mjs";
@@ -22,7 +46,7 @@ import {
   registerDeferredBuiltinTools, registerSpreadsheetTools,
   registerPdfTools, registerDocumentTools, registerPresentationTools,
   registerDesktopTools, scanCustomTools, registerBriefTools,
-  registerToolSearch, registerMcpResourceTools, _OFFICIAL_CATALOG,
+  registerToolSearch, registerMcpResourceTools, registerPhoneTools, _OFFICIAL_CATALOG,
   _loadToolManifest, toolList, toolInfo, toolEnable, toolDisable,
   toolTest, toolInstall, toolUpdate, toolRemove, toolCatalog, toolPublish,
 } from "./tools.mjs";
@@ -503,6 +527,7 @@ async function main() {
   registerDocumentTools(registry);
   registerPresentationTools(registry);
   registerDesktopTools(registry);
+  registerPhoneTools(registry, cfg);
   scanCustomTools(registry, cfg);
   cfg._officialToolCatalog = _OFFICIAL_CATALOG; // expose for ink-ui
   registerBriefTools(registry, cfg);
@@ -554,6 +579,9 @@ async function main() {
 
   // Register Agent tool (sub-agents)
   registerAgentTool(registry, client, permissions, cfg);
+
+  // Register Agent CRUD tools (AgentCreate, AgentList, AgentUpdate, AgentDelete)
+  registerAgentCrudTools(registry, cfg);
 
   // Register Skill tool — allows the model to invoke skills by name (CC baseline pattern)
   // The model matches user requests against skill descriptions and calls this tool automatically.
@@ -677,6 +705,7 @@ Important:
         hook_event_name: "SessionEnd",
       }).catch(() => {}); // non-blocking
     }
+    if (cfg._voice) { try { cfg._voice.destroy(); } catch { /* ignore: voice cleanup non-fatal */ } }
     sandboxRunner.shutdown(); audit.shutdown(); lspManager.shutdown(); mcpManager.shutdown(); process.exit(0);
   };
   process.on("SIGINT", cleanup);
@@ -709,6 +738,11 @@ Important:
     mcpManager.shutdown();
     process.exit(0);
   }
+  // Subcommand dispatch — agents
+  if (cfg._subcommand === "agent-list") { agentList(cfg); process.exit(0); }
+  if (cfg._subcommand === "agent-info") { agentInfo(cfg, cfg._agentInfoName); process.exit(0); }
+  if (cfg._subcommand === "agent-remove") { await agentRemove(cfg, cfg._agentRemoveName); process.exit(0); }
+
   // Subcommand dispatch — tools
   if (cfg._subcommand === "tool-list") { toolList(cfg, registry); mcpManager.shutdown(); process.exit(0); }
   if (cfg._subcommand === "tool-info") { toolInfo(cfg, registry, cfg._toolInfoName); mcpManager.shutdown(); process.exit(0); }

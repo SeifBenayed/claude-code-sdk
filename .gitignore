@@ -4,6 +4,10 @@ __pycache__/
 *.pyc
 target/
 
+# Secrets
+.env
+.env.*
+
 # Sessions & state
 .claude-native/
 

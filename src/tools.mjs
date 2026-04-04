@@ -9,6 +9,7 @@ import _http from "node:http";
 import _https from "node:https";
 
 import { log, sleep, EXIT, _VERSION, _httpGet, getMemoryDir, ensureMemoryDir, getUserMemoryDir, ensureUserMemoryDir } from "./utils.mjs";
+import { PhoneManager, PhoneLiveSession } from "./phone.mjs";
 import { appendMemoryMetric } from "./memory-metrics.mjs";
 import { extractExchange, sanitize, buildMoment, saveMoment, renderMarkdown } from "./share.mjs";
 import { detectProvider, PROVIDERS, isOpenAIModel } from "./providers.mjs";
@@ -248,7 +249,7 @@ function _buildManifestEntry(toolDef, source, existing = {}, extras = {}) {
 
 function _classifyToolType(name) {
   if (name.startsWith("mcp__")) return "connector";
-  if (["Bash","Read","Write","Edit","Glob","Grep","WebFetch","WebSearch","ToolSearch","NotebookEdit","AskUserQuestion","SendUserMessage","TaskOutput","Agent","Browser","MemoryList","MemoryRead","MemorySave","MemoryForget","MemoryShare"].includes(name)) return "builtin";
+  if (["Bash","Read","Write","Edit","Glob","Grep","WebFetch","WebSearch","ToolSearch","NotebookEdit","AskUserQuestion","SendUserMessage","TaskOutput","Agent","Browser","MemoryList","MemoryRead","MemorySave","MemoryForget","MemoryShare","PhoneCall","SendSMS","Screenshot"].includes(name)) return "builtin";
   if (name.startsWith("Task") || name.startsWith("Enter") || name.startsWith("Exit") || name.startsWith("ListMcp") || name.startsWith("ReadMcp")) return "builtin";
   return "custom";
 }
@@ -2783,7 +2784,8 @@ function registerBriefTools(registry, cfg) {
       required: ["message"],
     },
   }, async (input) => {
-    const message = input.message;
+    // Guard: some models send message as object instead of string
+    const message = typeof input.message === "string" ? input.message : (input.message?.text || JSON.stringify(input.message));
     const status = input.status || "normal";
     const attachmentResult = resolveAttachments(input.attachments);
     if (attachmentResult.error) return { content: attachmentResult.error, is_error: true };
@@ -3073,6 +3075,143 @@ function registerDeferredBuiltinTools(registry, cfg) {
     }
   }, { deferred: true });
 
+  // ── PhoneCall ─────────────────────────────────────────────
+  registry.register("PhoneCall", {
+    description: "Make a phone call to deliver a message. Uses Twilio to call a phone number and speak a message via TTS. Can optionally record the recipient's response and transcribe it. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER. Language and voice are auto-detected from the message content.",
+    input_schema: {
+      type: "object",
+      properties: {
+        to: { type: "string", description: "Phone number to call (E.164 format preferred, e.g. +33612345678)" },
+        message: { type: "string", description: "Message to speak to the recipient" },
+        language: { type: "string", description: "Language code (auto-detected if omitted, e.g. fr-FR, en-US, es-ES)" },
+        voice: { type: "string", description: "Twilio voice name (auto-selected if omitted, e.g. Polly.Lea for French)" },
+        record: { type: "boolean", description: "Record the recipient's response after the message (default false)" },
+      },
+      required: ["to", "message"],
+    },
+  }, async (input) => {
+    try {
+      const phone = new PhoneManager(cfg);
+      const result = await phone.call({
+        to: input.to,
+        message: input.message,
+        language: input.language || undefined,
+        voice: input.voice || undefined,
+        record: input.record || false,
+      });
+
+      const lines = [
+        `Call ${result.status}: ${result.to}`,
+        `Duration: ${result.duration}s`,
+      ];
+      if (result.answeredBy) lines.push(`Answered by: ${result.answeredBy}`);
+      if (result.recordings && result.recordings.length > 0) {
+        for (const rec of result.recordings) {
+          lines.push(`Recording (${rec.duration}s): ${rec.status}`);
+          if (rec.transcription) lines.push(`Transcription: ${rec.transcription}`);
+        }
+      }
+      return { content: lines.join("\n"), is_error: false };
+    } catch (e) {
+      return { content: `Phone call failed: ${e.message}`, is_error: true };
+    }
+  }, { deferred: true });
+
+  // ── SendSMS ───────────────────────────────────────────────
+  registry.register("SendSMS", {
+    description: "Send an SMS text message via Twilio. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER.",
+    input_schema: {
+      type: "object",
+      properties: {
+        to: { type: "string", description: "Phone number to text (E.164 format, e.g. +33612345678)" },
+        message: { type: "string", description: "SMS message body (max 1600 chars)" },
+      },
+      required: ["to", "message"],
+    },
+  }, async (input) => {
+    try {
+      const phone = new PhoneManager(cfg);
+      const result = await phone.sendSms({ to: input.to, message: input.message });
+      return { content: `SMS sent to ${result.to} (status: ${result.status}, sid: ${result.messageSid})`, is_error: false };
+    } catch (e) {
+      return { content: `SMS failed: ${e.message}`, is_error: true };
+    }
+  }, { deferred: true });
+
+  // ── Screenshot ────────────────────────────────────────────
+  registry.register("Screenshot", {
+    description: "Capture a screenshot of the desktop screen or a specific window. Returns the image as a base64-encoded PNG that can be analyzed visually. macOS only (uses screencapture).",
+    input_schema: {
+      type: "object",
+      properties: {
+        mode: { type: "string", enum: ["fullscreen", "window", "region"], description: "Capture mode: fullscreen (default), window (frontmost window), or region (interactive selection)" },
+        display: { type: "number", description: "Display number for multi-monitor (default: main display)" },
+      },
+    },
+  }, async (input) => {
+    const { execSync } = await import("node:child_process");
+    const tmpPng = path.join(os.tmpdir(), `cloclo-ss-${Date.now()}.png`);
+    const tmpJpg = path.join(os.tmpdir(), `cloclo-ss-${Date.now()}.jpg`);
+
+    try {
+      const mode = input.mode || "fullscreen";
+      const args = ["-x"]; // no sound
+
+      if (mode === "window") {
+        args.push("-l");
+        try {
+          const winId = execSync(`osascript -e 'tell application "System Events" to set fw to first window of (first process whose frontmost is true)' -e 'tell application "System Events" to return id of fw'`, { encoding: "utf-8", timeout: 5000 }).trim();
+          args.push(winId);
+        } catch {
+          args.length = 0;
+          args.push("-x", "-w");
+        }
+      } else if (mode === "region") {
+        args.push("-i");
+      }
+
+      if (input.display) {
+        args.push("-D", String(input.display));
+      }
+
+      args.push(tmpPng);
+      execSync(`screencapture ${args.join(" ")}`, { timeout: 15000 });
+
+      if (!fs.existsSync(tmpPng)) {
+        return { content: "Screenshot cancelled or failed (no file created).", is_error: true };
+      }
+
+      // Resize to max 1280px wide + convert to JPEG for smaller size (uses sips, built-in macOS)
+      try {
+        execSync(`sips --resampleWidth 800 --setProperty format jpeg --setProperty formatOptions 40 "${tmpPng}" --out "${tmpJpg}"`, { timeout: 10000, stdio: "ignore" });
+      } catch {
+        // Fallback: use PNG as-is if sips fails
+        fs.copyFileSync(tmpPng, tmpJpg);
+      }
+
+      const imgFile = fs.existsSync(tmpJpg) ? tmpJpg : tmpPng;
+      const mediaType = imgFile === tmpJpg ? "image/jpeg" : "image/png";
+      const imgData = fs.readFileSync(imgFile);
+      const base64 = imgData.toString("base64");
+
+      // Clean up
+      try { fs.unlinkSync(tmpPng); } catch { /* already cleaned */ }
+      try { fs.unlinkSync(tmpJpg); } catch { /* already cleaned */ }
+
+      return {
+        content: [
+          { type: "image", source: { type: "base64", media_type: mediaType, data: base64 } },
+          { type: "text", text: `Screenshot captured (${mode}, ${(imgData.length / 1024).toFixed(0)}KB, 1280px wide JPEG)` },
+        ],
+        is_error: false,
+      };
+    } catch (e) {
+      try { fs.unlinkSync(tmpPng); } catch { /* already cleaned */ }
+      try { fs.unlinkSync(tmpJpg); } catch { /* already cleaned */ }
+      return { content: `Screenshot failed: ${e.message}`, is_error: true };
+    }
+  }, { deferred: true });
+
 }
 
 // ── MCP Resource Tools ──────────────────────────────────────
@@ -3149,6 +3288,103 @@ function registerMcpResourceTools(registry) {
   }, { deferred: true });
 }
 
+// ── Phone Tools (Twilio) ─────────────────────────────────────────
+
+function registerPhoneTools(registry, cfg) {
+  const _phone = () => new PhoneManager(cfg);
+
+  registry.register("PhoneCall", {
+    description: "Make a phone call via Twilio. Two modes:\n\n**Live AI mode** (provide `instructions`): An AI sub-agent handles a full voice conversation on the phone. The sub-agent follows your instructions autonomously — it listens (Twilio STT), thinks (any LLM), and speaks (Twilio TTS). Supports tool calling. Works with any provider (Anthropic, OpenAI, Gemini, Mistral, Qwen, Ollama...). Returns the full transcript when the call ends.\n\n**Simple TTS mode** (provide `message`): Speaks a pre-written message, optionally records and transcribes the response.\n\nRequires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_PHONE_NUMBER in .env.",
+    input_schema: {
+      type: "object",
+      properties: {
+        to: { type: "string", description: "Phone number to call (E.164 format, e.g. +14155551234)" },
+        message: { type: "string", description: "Simple TTS mode: message to speak to the recipient" },
+        instructions: { type: "string", description: "Live AI mode: context and instructions for the AI sub-agent. Describe who it's calling, why, what to say/ask, and any constraints. The AI will handle the full conversation autonomously." },
+        voice: { type: "string", description: "TTS voice. Simple mode: Polly.Joanna etc. Live mode: alloy, echo, shimmer, etc." },
+        language: { type: "string", description: "Language code (e.g. en-US, fr-FR). Auto-detected if omitted." },
+        model: { type: "string", description: "LLM model for the phone sub-agent (default: inherits from parent). Any provider works: claude-sonnet-4-5-20250514, gpt-4o, gemini-2.0-flash, etc." },
+        record: { type: "boolean", description: "Simple mode only: record the recipient's response (default: false)" },
+        maxDuration: { type: "number", description: "Live mode: max call duration in seconds (default: 300)" },
+      },
+      required: ["to"],
+    },
+  }, async (input) => {
+    if (!input.message && !input.instructions) {
+      return { content: "Either `message` (simple TTS) or `instructions` (live AI) is required.", is_error: true };
+    }
+    try {
+      const pm = _phone();
+
+      // Live AI mode — spin up full agent sub-agent
+      if (input.instructions) {
+        const result = await pm.liveCall({
+          to: input.to,
+          instructions: input.instructions,
+          voice: input.voice || "Polly.Joanna",
+          language: input.language,
+          model: input.model,
+          maxDuration: input.maxDuration || 300,
+          registry, // pass full tool registry — agent has access to everything
+        });
+        return { content: JSON.stringify(result, null, 2), is_error: false };
+      }
+
+      // Simple TTS mode
+      const result = await pm.call({
+        to: input.to,
+        message: input.message,
+        voice: input.voice,
+        language: input.language,
+        record: input.record || false,
+        machineDetection: true,
+      });
+      return { content: JSON.stringify(result, null, 2), is_error: false };
+    } catch (e) {
+      return { content: `Phone call failed: ${e.message}`, is_error: true };
+    }
+  }, { deferred: true });
+
+  registry.register("SendSMS", {
+    description: "Send an SMS text message via Twilio. Requires TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, and TWILIO_PHONE_NUMBER.",
+    input_schema: {
+      type: "object",
+      properties: {
+        to: { type: "string", description: "Phone number (E.164 format, e.g. +14155551234)" },
+        message: { type: "string", description: "SMS message text" },
+      },
+      required: ["to", "message"],
+    },
+  }, async (input) => {
+    try {
+      const pm = _phone();
+      const result = await pm.sendSms({ to: input.to, message: input.message });
+      return { content: JSON.stringify(result, null, 2), is_error: false };
+    } catch (e) {
+      return { content: `SMS failed: ${e.message}`, is_error: true };
+    }
+  }, { deferred: true });
+
+  registry.register("PhoneStatus", {
+    description: "Check the status of a previous phone call by its Call SID.",
+    input_schema: {
+      type: "object",
+      properties: {
+        callSid: { type: "string", description: "The Twilio Call SID (e.g. CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx)" },
+      },
+      required: ["callSid"],
+    },
+  }, async (input) => {
+    try {
+      const pm = _phone();
+      const result = await pm.getCallStatus(input.callSid);
+      return { content: JSON.stringify(result, null, 2), is_error: false };
+    } catch (e) {
+      return { content: `Status check failed: ${e.message}`, is_error: true };
+    }
+  }, { deferred: true });
+}
+
 // ── Exports ──────────────────────────────────────────────────────
 
 export {
@@ -3183,6 +3419,7 @@ export {
   registerToolSearch,
   registerDeferredBuiltinTools,
   registerMcpResourceTools,
+  registerPhoneTools,
   globToRegex,
   htmlToText,
   commandExists,

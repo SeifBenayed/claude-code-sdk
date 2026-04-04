@@ -524,11 +524,19 @@ function OutputArea({ lines }) {
         if (typeof line === "object" && line.type === "thinking") {
           return React.createElement(Box, { key: i }, React.createElement(ThinkingBlock, { text: line.text, duration: line.duration, isActive: false }));
         }
-        return React.createElement(Text, { key: i, wrap: "wrap" }, String(line));
+        return React.createElement(Text, { key: i, wrap: "wrap" }, typeof line === "string" ? line : (line.text || ""));
       }
     ),
-    activeLine ? React.createElement(Text, { wrap: "wrap" },
-      typeof activeLine === "string" ? activeLine : activeLine.text || String(activeLine)
+    activeLine ? (
+      typeof activeLine === "object" && activeLine.type === "markdown"
+        ? React.createElement(Box, {}, React.createElement(MarkdownRenderer, { text: activeLine.text }))
+        : typeof activeLine === "object" && activeLine.type === "diff"
+          ? React.createElement(Box, {}, React.createElement(DiffRenderer, { text: activeLine.text }))
+          : typeof activeLine === "object" && activeLine.type === "usage"
+            ? React.createElement(Box, {}, React.createElement(TokenUsageLine, { usage: activeLine.usage }))
+            : typeof activeLine === "object" && activeLine.type === "thinking"
+              ? React.createElement(Box, {}, React.createElement(ThinkingBlock, { text: activeLine.text, duration: activeLine.duration, isActive: false }))
+              : React.createElement(Text, { wrap: "wrap" }, typeof activeLine === "string" ? activeLine : activeLine.text || "")
     ) : null,
   );
 }
@@ -794,6 +802,7 @@ function App({ interactiveMode, onSubmit, onExit }) {
   const [isProcessing, setIsProcessing] = useState(false);
   const [streamBuffer, setStreamBuffer] = useState("");
   const [isStreaming, setIsStreaming] = useState(false);
+  const streamBufferRef = useRef("");
   const [activeTools, setActiveTools] = useState(new Map());
   const [pendingPermission, setPendingPermission] = useState(null);
   const [thinkingText, setThinkingText] = useState("");
@@ -848,6 +857,7 @@ function App({ interactiveMode, onSubmit, onExit }) {
       }
       return "";
     });
+    streamBufferRef.current = "";
     setIsStreaming(false);
   }, []);
 
@@ -879,6 +889,14 @@ function App({ interactiveMode, onSubmit, onExit }) {
         onExit?.();
       }
       // If processing, SIGINT handler deals with it
+      return;
+    }
+
+    // During /live (speech-to-speech), allow escape/q to exit
+    if (isProcessing && interactiveMode._liveExitFn) {
+      if (key.escape || ch === "q" || (key.ctrl && ch === "c")) {
+        interactiveMode._liveExitFn();
+      }
       return;
     }
 
@@ -952,7 +970,9 @@ function App({ interactiveMode, onSubmit, onExit }) {
       await onSubmit(trimmed, addOutput, {
         // Event-driven callbacks for Ink UI
         onText: (delta) => {
+          if (typeof delta !== "string") return;
           setIsStreaming(true);
+          streamBufferRef.current += delta;
           setStreamBuffer(prev => prev + delta);
         },
         onThinking: (delta) => {
@@ -970,7 +990,10 @@ function App({ interactiveMode, onSubmit, onExit }) {
           // Show tool result summary
           const content = typeof result.content === "string" ? result.content : JSON.stringify(result.content);
           if (result.is_error) {
-            addOutput("\x1b[31m[" + toolName + " error]\x1b[0m");
+            // Skip [stderr] header and show the actual error message
+            const lines = content.split("\n").filter(l => l.trim() && l.trim() !== "[stderr]");
+            const errMsg = (lines[lines.length - 1] || lines[0] || "unknown error").slice(0, 150);
+            addOutput("\x1b[31m[" + toolName + " error] " + errMsg + "\x1b[0m");
           } else if (content.includes("\n+") || content.includes("\n-") || content.includes("\n@@")) {
             // Diff output
             addOutput({ type: "diff", text: content.slice(0, 2000) });
@@ -989,7 +1012,13 @@ function App({ interactiveMode, onSubmit, onExit }) {
         },
         onTurnComplete: (info) => {
           // Flush stream to output
+          const hadStream = streamBufferRef.current.length > 0;
           flushStream();
+          streamBufferRef.current = "";
+          // If no streamed text but we have a text response (e.g. from SendUserMessage tool), display it
+          if (!hadStream && info.text && typeof info.text === "string" && info.text.trim()) {
+            addOutput({ type: "markdown", text: info.text });
+          }
           // Thinking block
           if (thinkingText) {
             const duration = thinkingStart ? ((Date.now() - thinkingStart) / 1000).toFixed(1) : "?";
@@ -1173,13 +1202,28 @@ export function startInkUI(interactiveMode) {
           if (cmd.handler) {
             im._inkMode = true; // Tell handler we're in Ink mode (skip text fallback)
             const origWrite = process.stderr.write.bind(process.stderr);
-            let captured = "";
-            process.stderr.write = (data) => { captured += data; return true; };
-            try { await cmd.handler(args); }
-            finally { process.stderr.write = origWrite; im._inkMode = false; }
-            // Only show captured text if no overlay data (overlay is handled in App.handleSubmit)
-            if (!im._overlayData && captured.trim()) {
-              for (const line of captured.split("\n")) { if (line.trim()) addOutput(line); }
+            // Live/streaming commands (rec, live) need real-time output
+            const isStreaming = cmd.name === "rec" || cmd.name === "live";
+            if (isStreaming) {
+              let buffer = "";
+              process.stderr.write = (data) => {
+                buffer += data;
+                const lines = buffer.split("\n");
+                buffer = lines.pop() || "";
+                for (const line of lines) { if (line.trim()) addOutput(line); }
+                return true;
+              };
+              try { await cmd.handler(args); }
+              finally { process.stderr.write = origWrite; im._inkMode = false; if (buffer.trim()) addOutput(buffer); }
+            } else {
+              let captured = "";
+              process.stderr.write = (data) => { captured += data; return true; };
+              try { await cmd.handler(args); }
+              finally { process.stderr.write = origWrite; im._inkMode = false; }
+              // Only show captured text if no overlay data (overlay is handled in App.handleSubmit)
+              if (!im._overlayData && captured.trim()) {
+                for (const line of captured.split("\n")) { if (line.trim()) addOutput(line); }
+              }
             }
             return;
           }

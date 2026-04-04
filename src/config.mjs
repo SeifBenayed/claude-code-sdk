@@ -41,6 +41,14 @@ async function parseArgs(argv = process.argv.slice(2)) {
     timeout: 0,                 // global timeout in seconds (0 = no limit)
     jsonSchema: null,            // JSON Schema for structured output validation
     sandboxMode: "host",           // "host" | "docker" | "auto" — Bash isolation mode (opt-in: --sandbox docker)
+    voice: false,                    // --voice enables voice mode (STT + TTS)
+    voiceTts: "auto",                // "auto" (detect from provider), "say" (macOS), or "openai" (API)
+    voiceStt: "whisper",             // "whisper" (OpenAI Whisper API)
+    voiceVoice: null,                // TTS voice name (macOS: "Samantha", OpenAI: "nova"/"alloy"/etc.)
+    voiceSpeed: 1.0,                 // TTS speed multiplier
+    twilioAccountSid: null,          // TWILIO_ACCOUNT_SID
+    twilioAuthToken: null,           // TWILIO_AUTH_TOKEN
+    twilioPhoneNumber: null,         // TWILIO_PHONE_NUMBER
     _subcommand: null,           // "skill-import" or null
     _skillImportSource: null,    // source for skill import
     cwd: process.cwd(),
@@ -54,6 +62,8 @@ async function parseArgs(argv = process.argv.slice(2)) {
     "--max-tokens", "--mcp-config", "--allowed-tools", "--disallowed-tools",
     "--permission-mode", "--output", "--output-version", "--timeout",
     "--sandbox", "--json-schema",
+    "--voice-tts", "--voice-stt", "--voice-voice", "--voice-speed",
+    "--twilio-account-sid", "--twilio-auth-token", "--twilio-phone-number",
   ]);
 
   // Flags that are boolean (no value)
@@ -61,6 +71,7 @@ async function parseArgs(argv = process.argv.slice(2)) {
     "--oauth", "--ndjson", "--resume", "--verbose", "--permission-callbacks",
     "--brief", "--json", "--yes", "-y", "--openai", "--login", "--logout",
     "--openai-login", "--openai-logout", "--onboarding", "--help", "-h", "--version",
+    "--voice",
   ]);
 
   // Helper: require next argv value or die
@@ -102,6 +113,15 @@ async function parseArgs(argv = process.argv.slice(2)) {
     else if (sub === "search") { cfg._subcommand = "skill-search"; cfg._skillSearchQuery = argv.slice(2).join(" "); if (!cfg._skillSearchQuery) { process.stderr.write("Error: skill search requires a query\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
     else if (sub === "publish") { cfg._subcommand = "skill-publish"; cfg._skillPublishName = argv[2]; if (!cfg._skillPublishName) { process.stderr.write("Error: skill publish requires a skill name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
     else { process.stderr.write(`Error: Unknown skill subcommand "${sub || ""}"\n  Available: import, list, info, remove, update, export, verify, search, publish\n`); process.exit(EXIT.BAD_ARGS); }
+  }
+
+  // Agent subcommands: cloclo agent [list|info|remove]
+  if (argv[0] === "agent") {
+    const sub = argv[1];
+    if (sub === "list") { cfg._subcommand = "agent-list"; cfg.interactive = false; return cfg; }
+    else if (sub === "info") { cfg._subcommand = "agent-info"; cfg._agentInfoName = argv[2]; if (!cfg._agentInfoName) { process.stderr.write("Error: agent info requires an agent name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; return cfg; }
+    else if (sub === "remove") { cfg._subcommand = "agent-remove"; cfg._agentRemoveName = argv[2]; if (!cfg._agentRemoveName) { process.stderr.write("Error: agent remove requires an agent name\n"); process.exit(EXIT.BAD_ARGS); } cfg.interactive = false; for (let j = 3; j < argv.length; j++) { if (argv[j] === "--yes" || argv[j] === "-y") cfg.permissionMode = "bypassPermissions"; } return cfg; }
+    else { process.stderr.write(`Error: Unknown agent subcommand "${sub || ""}"\n  Available: list, info, remove\n`); process.exit(EXIT.BAD_ARGS); }
   }
 
   // Cron: cloclo cron [add|list|remove|run|enable|disable]
@@ -200,6 +220,14 @@ async function parseArgs(argv = process.argv.slice(2)) {
       }
       case "--permission-callbacks": cfg.permissionCallbacks = true; break;
       case "--brief": cfg.briefMode = true; break;
+      case "--voice": cfg.voice = true; break;
+      case "--voice-tts": cfg.voiceTts = needValue(a, ++i); break;
+      case "--voice-stt": cfg.voiceStt = needValue(a, ++i); break;
+      case "--voice-voice": cfg.voiceVoice = needValue(a, ++i); break;
+      case "--voice-speed": { const v = needValue(a, ++i); const n = parseFloat(v); if (isNaN(n) || n <= 0) { process.stderr.write(`Error: --voice-speed must be positive, got "${v}"\n`); process.exit(EXIT.BAD_ARGS); } cfg.voiceSpeed = n; break; }
+      case "--twilio-account-sid": cfg.twilioAccountSid = needValue(a, ++i); break;
+      case "--twilio-auth-token": cfg.twilioAuthToken = needValue(a, ++i); break;
+      case "--twilio-phone-number": cfg.twilioPhoneNumber = needValue(a, ++i); break;
       case "--output": {
         const v = needValue(a, ++i);
         if (!VALID_OUTPUT_FORMATS.has(v)) {

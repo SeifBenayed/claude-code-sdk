@@ -33,7 +33,7 @@ const LANG_CONFIGS = {
   python: {
     extensions: [".py", ".pyi"],
     command: "npx",
-    args: ["--yes", "pyright-langserver", "--stdio"],
+    args: ["--yes", "pyright", "--langserver", "--stdio"],
     initOptions: {},
     rootPatterns: ["pyrightconfig.json", "pyproject.toml", "setup.py", "setup.cfg", "requirements.txt"],
   },
@@ -169,6 +169,30 @@ class LspClient {
     if (this._proc) return;
 
     this._rootUri = `file://${rootPath}`;
+
+    // Pre-check: skip if required dependencies aren't available
+    if (this.lang === "typescript") {
+      // typescript-language-server needs a local or global typescript install
+      try {
+        const tsPath = path.join(rootPath, "node_modules", "typescript");
+        if (!fs.existsSync(tsPath)) {
+          // Check global
+          const { execSync } = await import("node:child_process");
+          execSync("npx --no-install tsc --version", { timeout: 5000, stdio: "ignore" });
+        }
+      } catch {
+        log(`[lsp:${this.lang}] skipped — no typescript installation found`);
+        return false;
+      }
+    }
+    if (this.lang === "python") {
+      try {
+        const { execSync } = await import("node:child_process");
+        execSync("npx --no-install pyright --version", { timeout: 5000, stdio: "ignore" });
+      } catch {
+        // pyright not installed — will be fetched via npx --yes, that's fine
+      }
+    }
 
     try {
       this._proc = spawn(this.config.command, this.config.args, {

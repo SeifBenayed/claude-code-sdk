@@ -6,7 +6,7 @@
 All source code lives in `src/` (21 modules). Edit there, then run `node build.mjs` to regenerate `claude-native.mjs`. Any direct edit to `claude-native.mjs` will be lost on next build.
 
 Source modules in `src/` (dependency order):
-`utils.mjs` → `config.mjs` → `providers.mjs` → `auth.mjs` → `security-rules.mjs` → `security.mjs` → `browser.mjs` → `tools.mjs` → `lsp.mjs` → `auto-memory.mjs` → `memory-metrics.mjs` → `memory-dream.mjs` → `audit.mjs` → `teams.mjs` → `sandbox.mjs` → `context-refs.mjs` → `smart-routing.mjs` → `skill-metrics.mjs` (optional) → `cron.mjs` → `engine.mjs` → `session.mjs` → `index.mjs`
+`utils.mjs` → `config.mjs` → `providers.mjs` → `auth.mjs` → `security-rules.mjs` → `security.mjs` → `browser.mjs` → `tools.mjs` → `lsp.mjs` → `auto-memory.mjs` → `memory-metrics.mjs` → `memory-dream.mjs` → `audit.mjs` → `teams.mjs` → `sandbox.mjs` → `context-refs.mjs` → `smart-routing.mjs` → `skill-metrics.mjs` (optional) → `agent-metrics.mjs` (optional) → `aicl.mjs` (optional) → `cron.mjs` → `engine.mjs` → `session.mjs` → `index.mjs`
 
 Ink UI in `ink-ui.mjs` (runtime deps: `ink`, `ink-select-input`, `ink-text-input`, `react`). NDJSON bridge in `claude-tool-loop.js` (~943 lines, supports `stream` and `mcp` modes). `gstack/` is a vendored skill/tool framework sub-project.
 
@@ -57,9 +57,19 @@ Valid providers: `anthropic`, `openai`, `openai-responses`, `google`, `deepseek`
 
 `AGENT_DEFINITIONS` in `engine.mjs`: `general-purpose`, `Explore`, `Plan`, `claude-code-guide`, `verification`, `orchestrator`, `code-reviewer`, `security-reviewer`, `import-reviewer`, `memory-dream`. Custom agents via `.claude/agents/` YAML files loaded by `AgentLoader`.
 
+Agent CRUD: `AgentCreate`, `AgentList`, `AgentUpdate`, `AgentDelete` tools (deferred) in `engine.mjs` via `registerAgentCrudTools()`. Manifest at `~/.claude/agents/.cloclo-agents.json`. CLI: `cloclo agent list|info|remove`. Slash command: `/agent list|info|remove`. Agent metrics: `agent-metrics.mjs` → `agent-metrics.jsonl`. RL nudge: `_AGENT_REVIEW_PROMPT` in `session.mjs`, interval 40 tool calls.
+
 ## Convention Files
 
 Provider-aware: Anthropic → `CLAUDE.md`, OpenAI/Mistral → `AGENTS.md`, Gemini → `GEMINI.md`, Others → `INIT.md`. `INIT.md` always loaded as base layer. Use `/init` to generate or update.
+
+## AICL — Agent Interlingua
+
+Cloclo is a multi-agent runtime. Agents communicate using AICL (Agent Interlingua for Cooperative Labor). AICL is agent-to-agent only — never expose it to humans. Full protocol below:
+
+@./AICL_ONBOARDING.md
+
+Runtime support: `aicl.mjs` provides `AICL_INSTRUCTION_BLOCK` (injected into all sub-agent system prompts), `parseAiclResponse()` (4-strategy fallback chain: raw JSON → ```json block → last code block → plain text), and `enrichResultWithAicl()` (extracts `human_summary` for user-facing content). JSON frames use `_aicl: 1` as version marker. Adoption tracked via `aicl_frame: true/false` in `agent-metrics.jsonl`.
 
 ## macOS /tmp Gotcha
 

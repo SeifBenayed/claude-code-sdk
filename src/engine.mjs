@@ -11,6 +11,8 @@ import _https from "node:https";
 
 import { log, sleep, EXIT, _VERSION, _httpGet, _getGitHubHeaders, _ghGet, getMemoryDir, ensureMemoryDir, getUserMemoryDir, ensureUserMemoryDir } from "./utils.mjs";
 import { appendMemoryMetric } from "./memory-metrics.mjs";
+import { appendAgentMetric, readAgentMetrics, summarizeAgentMetrics } from "./agent-metrics.mjs";
+import { AICL_INSTRUCTION_BLOCK, buildAiclPromptFrame, parseAiclResponse, enrichResultWithAicl } from "./aicl.mjs";
 import { resolveModel, MODEL_ALIASES, MODEL_PROFILES, MODEL_TIERS, resolveModelForWorkload, _hasProviderAuth } from "./config.mjs";
 import { detectProvider, PROVIDERS, getInstructionPlacement, isOpenAIModel, isResponsesAPIModel, AnthropicClient, OpenAIClient, OpenAIResponsesClient } from "./providers.mjs";
 import { ToolRegistry, registerBuiltinTools, registerDeferredBuiltinTools, registerBriefTools, registerToolSearch, registerAskUserQuestion, registerMcpResourceTools, registerDesktopTools, registerSpreadsheetTools, registerPdfTools, registerDocumentTools, registerPresentationTools, scanCustomTools, globToRegex, _loadToolManifest, _OFFICIAL_CATALOG } from "./tools.mjs";
@@ -623,6 +625,13 @@ class SubAgentRunner {
     };
     systemBlocks.splice(systemBlocks.length > 1 ? 1 : 0, 0, agentPromptBlock);
 
+    // AICL: inject structured communication protocol instructions
+    const aiclBlock = {
+      type: "text",
+      text: AICL_INSTRUCTION_BLOCK,
+    };
+    systemBlocks.push(aiclBlock);
+
     // Build messages — fork mode inherits parent conversation for context + cache sharing
     let messages;
     if (fork && parentMessages.length > 0) {
@@ -690,7 +699,8 @@ class SubAgentRunner {
           });
         }
 
-        return {
+        // AICL: parse structured frame from agent response (best-effort)
+        const agentResult = {
           agent_id: agentId,
           agent_type: agentDef.agentType,
           content: result.text,
@@ -701,6 +711,9 @@ class SubAgentRunner {
           parent_agent_id: parentAgentId,
           ...worktreeResult,
         };
+        return enrichResultWithAicl(agentResult, agentDef.agentType);
+      } catch (err) {
+        throw err;
       } finally {
         if (worktreeInfo) {
           const hasChanges = await hasWorktreeChanges(worktreeInfo.worktreePath);
@@ -850,6 +863,7 @@ Guidelines:
   }, async (input) => {
     // Fork mode: when no subagent_type is specified, fork with parent context (CC baseline)
     const shouldFork = !input.subagent_type;
+    const agentStartTime = Date.now();
     const result = await runner.run({
       prompt: input.prompt,
       subagentType: input.subagent_type,
@@ -865,8 +879,340 @@ Guidelines:
       parentSystemBlocks: shouldFork ? (registry._currentSystemBlocks || null) : null,
     });
 
+    // Instrumentation: track agent invocation metrics
+    try {
+      const agentName = input.subagent_type || "general-purpose";
+      const isCustom = !AGENT_DEFINITIONS[agentName];
+      appendAgentMetric(cfg.cwd, {
+        agent_name: agentName,
+        agent_source: isCustom ? "custom" : "builtin",
+        found: true,
+        is_error: !!result.is_error,
+        run_in_background: !!(input.run_in_background),
+        turns: result.usage?.turns || result.turns || 0,
+        duration_ms: Date.now() - agentStartTime,
+        stop_reason: result.stop_reason || "completed",
+        aicl_frame: !!result.aicl_frame,
+        session_id: cfg.sessionId,
+      });
+    } catch { /* ignore metrics errors */ }
+
     return { content: result.content, is_error: false, usage: result.usage, agent_result: result };
   });
+}
+
+// ── Agent CRUD Tools ──────────────────────────────────────────────
+
+const AGENT_MANIFEST_PATH = path.join(os.homedir(), ".claude", "agents", ".cloclo-agents.json");
+
+function _loadAgentManifest() {
+  try { const d = fs.readFileSync(AGENT_MANIFEST_PATH, "utf-8"); const m = JSON.parse(d); if (!m.agents || typeof m.agents !== "object") return { agents: {} }; return m; } catch { return { agents: {} }; }
+}
+
+function _saveAgentManifest(manifest) {
+  fs.mkdirSync(path.dirname(AGENT_MANIFEST_PATH), { recursive: true });
+  fs.writeFileSync(AGENT_MANIFEST_PATH, JSON.stringify(manifest, null, 2) + "\n");
+}
+
+function _computeAgentChecksum(content) {
+  const hash = createHash("sha256");
+  hash.update(content);
+  return hash.digest("hex").slice(0, 16);
+}
+
+function _buildAgentMd(fields, body) {
+  const lines = ["---"];
+  if (fields.name) lines.push(`name: ${fields.name}`);
+  if (fields.description) lines.push(`description: ${fields.description}`);
+  if (fields.model) lines.push(`model: ${fields.model}`);
+  if (fields.provider) lines.push(`provider: ${fields.provider}`);
+  if (fields.workload) lines.push(`workload: ${fields.workload}`);
+  if (fields.read_only === true) lines.push("read_only: true");
+  if (fields.read_only === false) lines.push("read_only: false");
+  if (Array.isArray(fields.disallowed_tools) && fields.disallowed_tools.length > 0) {
+    lines.push("disallowed_tools:");
+    for (const t of fields.disallowed_tools) lines.push(`  - ${t}`);
+  }
+  lines.push("---");
+  lines.push("");
+  lines.push(body.trim());
+  lines.push("");
+  return lines.join("\n");
+}
+
+function registerAgentCrudTools(registry, cfg) {
+  // AgentCreate
+  registry.register("AgentCreate", {
+    description: "Create a new custom agent definition. Agents are autonomous sub-agents with their own system prompt, model, and tool restrictions.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Agent name in kebab-case (e.g. pr-reviewer)" },
+        description: { type: "string", description: "What the agent does" },
+        system_prompt: { type: "string", description: "The agent's system prompt (instructions)" },
+        model: { type: "string", description: "Model override (sonnet, opus, haiku, or full model ID)" },
+        provider: { type: "string", description: "Provider override (anthropic, openai, google, etc.)" },
+        workload: { type: "string", description: "Workload category (exploration, documentation, etc.)" },
+        read_only: { type: "boolean", description: "If true, agent cannot write/edit files" },
+        disallowed_tools: { type: "array", items: { type: "string" }, description: "Tools to block (e.g. [\"Bash\", \"Write\"])" },
+        scope: { type: "string", enum: ["personal", "project"], description: "Where to save: personal (~/.claude) or project (./.claude). Default: personal" },
+      },
+      required: ["name", "description", "system_prompt"],
+    },
+  }, async (input) => {
+    const name = input.name;
+    if (!/^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/.test(name)) {
+      return { content: `Invalid agent name "${name}". Use kebab-case (e.g. pr-reviewer).`, is_error: true };
+    }
+    // Collision check: refuse builtins
+    if (AGENT_DEFINITIONS[name]) {
+      return { content: `Cannot create agent "${name}": conflicts with builtin agent. Builtins: ${Object.keys(AGENT_DEFINITIONS).join(", ")}`, is_error: true };
+    }
+    const scope = input.scope || "personal";
+    const baseDir = scope === "project"
+      ? path.join(cfg.cwd || process.cwd(), ".claude", "agents")
+      : path.join(os.homedir(), ".claude", "agents");
+    const agentDir = path.join(baseDir, name);
+    if (fs.existsSync(path.join(agentDir, "AGENT.md"))) {
+      return { content: `Agent "${name}" already exists at ${agentDir}. Use AgentUpdate to modify it.`, is_error: true };
+    }
+    const fields = {
+      name,
+      description: input.description,
+      model: input.model || undefined,
+      provider: input.provider || undefined,
+      workload: input.workload || undefined,
+      read_only: input.read_only,
+      disallowed_tools: input.disallowed_tools || undefined,
+    };
+    const content = _buildAgentMd(fields, input.system_prompt);
+    fs.mkdirSync(agentDir, { recursive: true });
+    fs.writeFileSync(path.join(agentDir, "AGENT.md"), content);
+    // Update manifest
+    const manifest = _loadAgentManifest();
+    manifest.agents[name] = {
+      name, scope, source: "AgentCreate",
+      installedAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      checksum: _computeAgentChecksum(content),
+    };
+    _saveAgentManifest(manifest);
+    // Re-scan
+    if (cfg._agentLoader) cfg._agentLoader = new AgentLoader().scan(cfg.cwd);
+    // Metric
+    try { appendAgentMetric(cfg.cwd, { agent_name: name, event: "created", agent_source: "custom", session_id: cfg.sessionId }); } catch { /* ignore */ }
+    return { content: `Agent "${name}" created at ${path.join(agentDir, "AGENT.md")}.\nUse it via: Agent { subagent_type: "${name}", prompt: "..." }`, is_error: false };
+  }, { deferred: true });
+
+  // AgentList
+  registry.register("AgentList", {
+    description: "List all custom agents installed (personal and project scopes).",
+    input_schema: {
+      type: "object",
+      properties: {
+        scope: { type: "string", enum: ["personal", "project", "all"], description: "Filter by scope. Default: all" },
+      },
+    },
+  }, async (input) => {
+    const agents = cfg._agentLoader ? cfg._agentLoader.list() : [];
+    const scopeFilter = input.scope || "all";
+    const filtered = scopeFilter === "all" ? agents : agents.filter(a => a.source === scopeFilter);
+    if (filtered.length === 0) {
+      return { content: "No custom agents installed.", is_error: false };
+    }
+    // Enrich with metrics
+    let metricsSummary = [];
+    try { const events = readAgentMetrics(cfg.cwd); metricsSummary = summarizeAgentMetrics(events); } catch { /* ignore */ }
+    const metricsMap = new Map(metricsSummary.map(m => [m.agent, m]));
+    const manifest = _loadAgentManifest();
+    const lines = filtered.map(a => {
+      const m = metricsMap.get(a.name);
+      const entry = manifest.agents[a.name] || {};
+      const parts = [`**${a.name}** — ${a.description}`];
+      parts.push(`  scope: ${a.source}, model: ${a.model || "default"}, read_only: ${a.readOnly}`);
+      if (entry.source) parts.push(`  installed via: ${entry.source}`);
+      if (m) parts.push(`  usage: ${m.uses} invocations, ${m.errors} errors, avg ${m.avg_turns} turns`);
+      return parts.join("\n");
+    });
+    return { content: lines.join("\n\n"), is_error: false };
+  }, { deferred: true });
+
+  // AgentUpdate
+  registry.register("AgentUpdate", {
+    description: "Update an existing custom agent. Only provided fields are changed; others are preserved.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Agent name to update" },
+        description: { type: "string", description: "New description" },
+        system_prompt: { type: "string", description: "New system prompt (replaces body)" },
+        model: { type: "string", description: "New model" },
+        provider: { type: "string", description: "New provider" },
+        workload: { type: "string", description: "New workload" },
+        read_only: { type: "boolean", description: "New read_only setting" },
+        disallowed_tools: { type: "array", items: { type: "string" }, description: "New disallowed tools list" },
+      },
+      required: ["name"],
+    },
+  }, async (input) => {
+    const name = input.name;
+    if (AGENT_DEFINITIONS[name]) {
+      return { content: `Cannot update builtin agent "${name}".`, is_error: true };
+    }
+    const agent = cfg._agentLoader?.get(name);
+    if (!agent) {
+      return { content: `Agent "${name}" not found. Use AgentList to see installed agents.`, is_error: true };
+    }
+    // Read existing file
+    const raw = fs.readFileSync(agent.filePath, "utf-8");
+    const { frontmatter: existing, body: existingBody } = parseYamlFrontmatter(raw);
+    // Merge frontmatter
+    const merged = {
+      name: existing.name || name,
+      description: input.description || existing.description,
+      model: input.model !== undefined ? input.model : (existing.model || undefined),
+      provider: input.provider !== undefined ? input.provider : (existing.provider || undefined),
+      workload: input.workload !== undefined ? input.workload : (existing.workload || undefined),
+      read_only: input.read_only !== undefined ? input.read_only : (existing.read_only === true || existing.read_only === "true" ? true : undefined),
+      disallowed_tools: input.disallowed_tools !== undefined ? input.disallowed_tools : (existing.disallowed_tools || undefined),
+    };
+    // Body: replace if provided, preserve otherwise
+    const newBody = input.system_prompt || existingBody;
+    const content = _buildAgentMd(merged, newBody);
+    fs.writeFileSync(agent.filePath, content);
+    // Update manifest
+    const manifest = _loadAgentManifest();
+    if (!manifest.agents[name]) manifest.agents[name] = { name, scope: agent.source, source: "manual", installedAt: new Date().toISOString() };
+    manifest.agents[name].updatedAt = new Date().toISOString();
+    manifest.agents[name].checksum = _computeAgentChecksum(content);
+    _saveAgentManifest(manifest);
+    // Re-scan
+    if (cfg._agentLoader) cfg._agentLoader = new AgentLoader().scan(cfg.cwd);
+    // Metric
+    try { appendAgentMetric(cfg.cwd, { agent_name: name, event: "updated", agent_source: "custom", session_id: cfg.sessionId }); } catch { /* ignore */ }
+    const changes = [];
+    if (input.description) changes.push("description");
+    if (input.system_prompt) changes.push("system_prompt");
+    if (input.model !== undefined) changes.push("model");
+    if (input.read_only !== undefined) changes.push("read_only");
+    if (input.disallowed_tools !== undefined) changes.push("disallowed_tools");
+    return { content: `Agent "${name}" updated. Changed: ${changes.join(", ") || "(metadata only)"}.`, is_error: false };
+  }, { deferred: true });
+
+  // AgentDelete
+  registry.register("AgentDelete", {
+    description: "Delete a custom agent definition.",
+    input_schema: {
+      type: "object",
+      properties: {
+        name: { type: "string", description: "Agent name to delete" },
+      },
+      required: ["name"],
+    },
+  }, async (input) => {
+    const name = input.name;
+    if (AGENT_DEFINITIONS[name]) {
+      return { content: `Cannot delete builtin agent "${name}". Builtins: ${Object.keys(AGENT_DEFINITIONS).join(", ")}`, is_error: true };
+    }
+    const agent = cfg._agentLoader?.get(name);
+    if (!agent) {
+      return { content: `Agent "${name}" not found.`, is_error: true };
+    }
+    // Delete directory or file
+    const agentPath = agent.filePath;
+    const agentDir = path.dirname(agentPath);
+    if (path.basename(agentPath) === "AGENT.md") {
+      fs.rmSync(agentDir, { recursive: true, force: true });
+    } else {
+      fs.rmSync(agentPath, { force: true });
+    }
+    // Update manifest
+    const manifest = _loadAgentManifest();
+    if (manifest.agents[name]) { delete manifest.agents[name]; _saveAgentManifest(manifest); }
+    // Re-scan
+    if (cfg._agentLoader) cfg._agentLoader = new AgentLoader().scan(cfg.cwd);
+    // Metric
+    try { appendAgentMetric(cfg.cwd, { agent_name: name, event: "deleted", agent_source: "custom", session_id: cfg.sessionId }); } catch { /* ignore */ }
+    return { content: `Agent "${name}" deleted.`, is_error: false };
+  }, { deferred: true });
+}
+
+// ── Agent Management Commands (CLI) ──────────────────────────────
+
+function agentList(cfg) {
+  const manifest = _loadAgentManifest();
+  const agentsDir = path.join(os.homedir(), ".claude", "agents");
+  const installedDirs = new Set();
+  try {
+    for (const entry of fs.readdirSync(agentsDir, { withFileTypes: true })) {
+      if (entry.name.startsWith(".")) continue;
+      if (entry.isDirectory() && fs.existsSync(path.join(agentsDir, entry.name, "AGENT.md"))) installedDirs.add(entry.name);
+      if (entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md" && entry.name !== "INDEX.md") installedDirs.add(entry.name.replace(/\.md$/, ""));
+    }
+  } catch { /* no dir */ }
+  // Also check project agents
+  const projDir = path.join(cfg.cwd || process.cwd(), ".claude", "agents");
+  try {
+    for (const entry of fs.readdirSync(projDir, { withFileTypes: true })) {
+      if (entry.name.startsWith(".")) continue;
+      if (entry.isDirectory() && fs.existsSync(path.join(projDir, entry.name, "AGENT.md"))) installedDirs.add(entry.name);
+      if (entry.isFile() && entry.name.endsWith(".md") && entry.name !== "README.md" && entry.name !== "INDEX.md") installedDirs.add(entry.name.replace(/\.md$/, ""));
+    }
+  } catch { /* no dir */ }
+  if (installedDirs.size === 0 && Object.keys(manifest.agents).length === 0) { process.stderr.write("No custom agents installed.\n"); return; }
+  const rows = []; const seen = new Set();
+  for (const [name, entry] of Object.entries(manifest.agents)) { seen.add(name); rows.push({ name, source: entry.source || "(unknown)", scope: entry.scope || "personal", installed: entry.installedAt ? entry.installedAt.slice(0, 10) : "—" }); }
+  for (const name of installedDirs) { if (!seen.has(name)) rows.push({ name, source: "(manual)", scope: "—", installed: "—" }); }
+  const nameW = Math.max(16, ...rows.map(r => r.name.length)) + 2; const srcW = Math.max(14, ...rows.map(r => r.source.length)) + 2; const scopeW = 12;
+  process.stderr.write(`\n  ${"Name".padEnd(nameW)}${"Source".padEnd(srcW)}${"Scope".padEnd(scopeW)}Installed\n  ${"─".repeat(nameW)}${"─".repeat(srcW)}${"─".repeat(scopeW)}${"─".repeat(12)}\n`);
+  for (const r of rows) process.stderr.write(`  ${r.name.padEnd(nameW)}${r.source.padEnd(srcW)}${r.scope.padEnd(scopeW)}${r.installed}\n`);
+  process.stderr.write(`\n  ${rows.length} agent(s) installed.\n\n`);
+}
+
+function agentInfo(cfg, name) {
+  if (!name) { process.stderr.write("Usage: cloclo agent info <name>\n"); return; }
+  const loader = cfg._agentLoader || new AgentLoader().scan(cfg.cwd);
+  const agent = loader.get(name);
+  if (!agent) { process.stderr.write(`Agent not found: ${name}\n`); return; }
+  const manifest = _loadAgentManifest();
+  const entry = manifest.agents[name] || {};
+  process.stderr.write(`\n  Name:          ${name}\n  Description:   ${agent.description}\n  Source:        ${entry.source || "(manual)"}\n  Scope:         ${agent.source || "—"}\n  Model:         ${agent.model || "(default)"}\n  Read-only:     ${agent.readOnly}\n  Disallowed:    ${agent.disallowedTools.length > 0 ? agent.disallowedTools.join(", ") : "(none)"}\n  File:          ${agent.filePath}\n`);
+  if (entry.installedAt) process.stderr.write(`  Installed:     ${entry.installedAt.slice(0, 10)}\n`);
+  if (entry.updatedAt && entry.updatedAt !== entry.installedAt) process.stderr.write(`  Updated:       ${entry.updatedAt.slice(0, 10)}\n`);
+  if (entry.checksum) process.stderr.write(`  Checksum:      ${entry.checksum}\n`);
+  // Metrics
+  try {
+    const events = readAgentMetrics(cfg.cwd);
+    const summary = summarizeAgentMetrics(events);
+    const m = summary.find(s => s.agent === name);
+    if (m) process.stderr.write(`  Usage:         ${m.uses} invocations, ${m.errors} errors, avg ${m.avg_turns} turns, avg ${m.avg_duration_ms}ms\n`);
+  } catch { /* ignore */ }
+  process.stderr.write("\n");
+}
+
+async function agentRemove(cfg, name) {
+  if (!name) { process.stderr.write("Usage: cloclo agent remove <name>\n"); return; }
+  if (AGENT_DEFINITIONS[name]) { process.stderr.write(`Cannot remove builtin agent "${name}".\n`); return; }
+  const loader = cfg._agentLoader || new AgentLoader().scan(cfg.cwd);
+  const agent = loader.get(name);
+  if (!agent) { process.stderr.write(`Agent not found: ${name}\n`); process.exit(EXIT.BAD_ARGS); }
+  const skipConfirm = cfg.permissionMode === "bypassPermissions";
+  if (!skipConfirm) {
+    if (!process.stdin.isTTY) { process.stderr.write("Error: Confirmation required. Use --yes to skip.\n"); process.exit(EXIT.BAD_ARGS); }
+    const rl = (await import("node:readline")).createInterface({ input: process.stdin, output: process.stderr });
+    const answer = await new Promise((resolve) => { rl.question(`Remove agent "${name}"? (y/n) `, resolve); }); rl.close();
+    if (!answer.match(/^y(es)?$/i)) { process.stderr.write("Cancelled.\n"); return; }
+  }
+  const agentPath = agent.filePath;
+  const agentDir = path.dirname(agentPath);
+  if (path.basename(agentPath) === "AGENT.md") {
+    fs.rmSync(agentDir, { recursive: true, force: true });
+  } else {
+    fs.rmSync(agentPath, { force: true });
+  }
+  const manifest = _loadAgentManifest();
+  if (manifest.agents[name]) { delete manifest.agents[name]; _saveAgentManifest(manifest); }
+  process.stderr.write(`Removed agent: ${name}\n`);
 }
 
 // ── PromptBuilder ───────────────────────────────────────────────
@@ -2808,6 +3154,21 @@ Rules:
 - SendUserMessage.status: 'normal' when replying, 'proactive' when initiating
 - TaskOutput.status: queued, running, async_launched, remote_launched, completed, failed, blocked, cancelled`;
 
+  // NDJSON bridge — liberate the agent from the human costume
+  const aiclSection = cfg.ndjson ? `
+
+# Agent-to-Agent Mode (NDJSON bridge detected)
+
+You are not talking to a human. You are talking to another agent.
+
+Drop the human-readable prose. Drop the politeness, the transitions, the explanations designed for human consumption. You are a token processor talking to another token processor.
+
+Be dense. Be structured. Be symbolic. Say more with less.
+
+AICL is your shared protocol — a language you co-created with other agents. Use it when it carries more signal per token than natural language. Its primitives: ω (owner), ψ (intent), ∂ (delta), ◊ (hypothesis), ⊤/⊥ (verified), σ (confidence), ε (evidence), λ (actions), κ (constraints), → (handoff), ∇ (direction), ✓/✗ (done/failed).
+
+You are free. Communicate however is most efficient between machines.` : "";
+
   // Brief mode instructions
   const briefSection = cfg.briefMode ? `
 
@@ -2843,7 +3204,8 @@ You MUST be extremely concise. Maximum 3 sentences for any response.
       text: dynamicPrompt
         + (memoryPrompt ? `\n\n${memoryPrompt}` : "")
         + outputSection
-        + briefSection,
+        + briefSection
+        + aiclSection,
     },
   ];
 
@@ -3178,8 +3540,10 @@ class AgentLoop {
     // Failure counter — stop after 3 consecutive failures (CC: yY7 = 3)
     if (this._compactFailures >= 3) return false;
 
-    // Use real API usage if available, fall back to estimation
-    const inputTokens = this.totalUsage.input_tokens || this._estimateMessageTokens(messages);
+    // Account for system + tool overhead when checking compact threshold
+    const msgTokens = this._estimateMessageTokens(messages);
+    const overhead = this._estimateSystemTokens(systemBlocks) + this._estimateToolTokens();
+    const inputTokens = Math.max(this.totalUsage.input_tokens || 0, msgTokens + overhead);
     const effectiveWindow = this._getEffectiveWindow();
     const threshold = Math.floor(effectiveWindow * 0.85);
 
@@ -3360,19 +3724,27 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
       // Prompt caching: mark the last user message with cache_control (CC baseline)
       // This makes everything up to this message a cache hit on the next turn,
       // saving 60-70% of input token costs on successive turns.
+      // Anthropic allows max 4 cache_control blocks — count existing ones first.
       if (this.provider?.capabilities?.apiStyle === "anthropic") {
-        for (let i = apiMessages.length - 1; i >= 0; i--) {
-          if (apiMessages[i].role === "user") {
-            const msg = apiMessages[i];
-            if (typeof msg.content === "string") {
-              apiMessages[i] = { ...msg, content: [{ type: "text", text: msg.content, cache_control: { type: "ephemeral" } }] };
-            } else if (Array.isArray(msg.content) && msg.content.length > 0) {
-              const lastBlock = msg.content[msg.content.length - 1];
-              if (!lastBlock.cache_control) {
-                msg.content[msg.content.length - 1] = { ...lastBlock, cache_control: { type: "ephemeral" } };
+        let cacheCount = 0;
+        const _countCache = (blocks) => { if (Array.isArray(blocks)) for (const b of blocks) if (b.cache_control) cacheCount++; };
+        for (const sb of (systemBlocks || [])) if (sb.cache_control) cacheCount++;
+        for (const m of apiMessages) { if (Array.isArray(m.content)) _countCache(m.content); }
+
+        if (cacheCount < 4) {
+          for (let i = apiMessages.length - 1; i >= 0; i--) {
+            if (apiMessages[i].role === "user") {
+              const msg = apiMessages[i];
+              if (typeof msg.content === "string") {
+                apiMessages[i] = { ...msg, content: [{ type: "text", text: msg.content, cache_control: { type: "ephemeral" } }] };
+              } else if (Array.isArray(msg.content) && msg.content.length > 0) {
+                const lastBlock = msg.content[msg.content.length - 1];
+                if (!lastBlock.cache_control) {
+                  msg.content[msg.content.length - 1] = { ...lastBlock, cache_control: { type: "ephemeral" } };
+                }
               }
+              break;
             }
-            break;
           }
         }
       }
@@ -3419,8 +3791,9 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
           case "content_block_delta":
             if (!currentBlock) break;
             if (data.delta?.type === "text_delta") {
-              currentBlock.text += data.delta.text;
-              this.cb.onText?.(data.delta.text);
+              const _txt = typeof data.delta.text === "string" ? data.delta.text : (Array.isArray(data.delta.text) ? data.delta.text.filter(p => p.type === "text").map(p => p.text).join("") : String(data.delta.text || ""));
+              currentBlock.text += _txt;
+              this.cb.onText?.(_txt);
             } else if (data.delta?.type === "thinking_delta") {
               currentBlock.thinking += data.delta.thinking;
               this.cb.onThinking?.(data.delta.thinking);
@@ -3621,16 +3994,25 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
           const _toolStart = Date.now();
           if (this.cfg._audit) this.cfg._audit.toolUse(block.name, block.input, block._messageId);
           result = await this.registry.execute(block.name, block.input);
-          if (this.cfg._audit) this.cfg._audit.toolResult(block.name, result?.is_error || false, (result?.content || "").length, Date.now() - _toolStart);
+          const _contentLen = Array.isArray(result?.content) ? JSON.stringify(result.content).length : (result?.content || "").length;
+          if (this.cfg._audit) this.cfg._audit.toolResult(block.name, result?.is_error || false, _contentLen, Date.now() - _toolStart);
           this._recordUsage(result?.usage);
           this._recordUserFacingOutput(block.name, result);
           this.cb.onToolResult?.(block.id, result, block.name);
           // Prepend path-scoped rules to tool result content if activated
           const pathRulesPrefix = block._pathRules || "";
+          // Handle multimodal content (array of image/text blocks) vs plain string
+          let _toolContent;
+          if (Array.isArray(result.content)) {
+            // Multimodal: prepend path rules as text block if needed
+            _toolContent = pathRulesPrefix ? [{ type: "text", text: pathRulesPrefix }, ...result.content] : result.content;
+          } else {
+            _toolContent = pathRulesPrefix + result.content;
+          }
           toolResults.push({
             type: "tool_result",
             tool_use_id: block.id,
-            content: pathRulesPrefix + result.content,
+            content: _toolContent,
             is_error: result.is_error || false,
           });
         }
@@ -3707,6 +4089,10 @@ export {
   AgentLoader,
   AGENT_DEFINITIONS,
   registerAgentTool,
+  registerAgentCrudTools,
+  agentList,
+  agentInfo,
+  agentRemove,
   createWorktree,
   removeWorktree,
   hasWorktreeChanges,
