@@ -216,6 +216,98 @@ Cloclo provides the runtime pieces that make this composition practical:
 
 So Gogeta is not the runtime itself. It is an example of what you can build **on top of** the runtime: a multi-model, multi-agent system with structured cooperation.
 
+## Delegation — "I know kung fu"
+
+Any AI agent can use Cloclo as its body. The agent thinks, Cloclo acts.
+
+**Example: Claude Code (Opus) delegates to Cloclo**
+
+Claude Code can read files, write code, search, reason — but it can't make phone calls, open a browser, create spreadsheets, or control a desktop. Cloclo can.
+
+```bash
+# Claude delegates a phone call
+node delegate.mjs --task "Call +33645555422 and reserve a table for 2 tonight, speak French"
+
+# Claude delegates browser work
+node delegate.mjs --task "Open linkedin.com and check my latest messages"
+
+# Claude delegates document creation
+node delegate.mjs --task "Create a PDF report from the test results in test-suite.mjs"
+
+# Claude delegates in AICL
+node delegate.mjs --aicl "ω:opus → cloclo | ψ:fix(auth.bug) | ε:src/auth.js:42 | ∇:ship"
+```
+
+The flow:
+
+```
+Agent (brain) → NDJSON → Cloclo (body) → Phone, Browser, Desktop, Docs, Voice
+                                    ↓
+Agent ← NDJSON ← Cloclo ← Result
+```
+
+Like Neo downloading kung fu — the agent doesn't need to know HOW to make a Twilio call. It just says what it wants, and Cloclo executes.
+
+### What Cloclo gives to any agent
+
+| Capability | Tools |
+|-----------|-------|
+| Phone | PhoneCall, PhoneCallLive, SendSMS, PhoneStatus |
+| Voice | STT (Whisper), TTS, OpenAI Realtime speech-to-speech |
+| Browser | Navigate, click, read, screenshot, fill forms |
+| Desktop | Screenshot, window control |
+| Documents | PDF, DOCX, PPTX, XLSX creation and reading |
+| Memory | Persistent user + project memory across sessions |
+| Agents | Spawn, list, update, delete sub-agents |
+| Teams | Multi-agent task boards with coordination |
+| Skills | Reusable workflow packages (debug, review, ship...) |
+| MCP | Connect external tool servers |
+| 13 providers | Run on any model — Anthropic, OpenAI, Gemini, Ollama... |
+
+### `delegate.mjs`
+
+The bridge script. Any agent that can run a shell command can delegate to Cloclo:
+
+```js
+// From any Node.js agent
+import { execSync } from "child_process";
+const result = JSON.parse(
+  execSync('node delegate.mjs --task "send SMS to +33612345678: meeting confirmed"').toString()
+);
+console.log(result.result); // "SMS sent successfully"
+```
+
+```python
+# From any Python agent
+import subprocess, json
+result = json.loads(subprocess.check_output([
+    "node", "delegate.mjs", "--task", "take a screenshot of the current screen"
+]))
+print(result["result"])
+```
+
+## Remote — distributed nervous system
+
+Cloclo supports `/remote` — run tasks on remote machines.
+
+```
+Your machine                          Remote machine (Paris, SF, anywhere)
+     ↓                                        ↓
+Claude Code → NDJSON → Cloclo local → /remote → Cloclo remote
+                                                      ↓
+                                                 Desktop, Browser, Phone, Tools
+```
+
+One brain, bodies everywhere. Every machine running Cloclo becomes a node you can control:
+
+- Run code on a remote server
+- Control a remote desktop
+- Make phone calls from a remote Twilio instance
+- Browse the web from a different IP/location
+- Execute long-running tasks that survive your local session
+
+The agent doesn't care where Cloclo runs. NDJSON is the nerve. AICL is the language. The network is the body.
+
 ## Why Cloclo
 
 Use Cloclo if you want:
