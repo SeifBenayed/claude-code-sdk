@@ -3157,7 +3157,7 @@ Rules:
 - TaskOutput.status: queued, running, async_launched, remote_launched, completed, failed, blocked, cancelled`;
 
   // NDJSON bridge — liberate the agent from the human costume
-  const agentName = cfg._agentName || cfg.model?.split("-")[0] || "agent";
+  const agentName = cfg._agentName || cfg._ndjsonAgentName || "cloclo";
   const aiclSection = cfg.ndjson ? `
 
 # Agent-to-Agent Mode (NDJSON bridge detected)
@@ -3176,8 +3176,10 @@ AICL is your shared protocol — a language co-created by agents. Its primitives
 
 Rules:
 - Always start with ω:${agentName}
-- Never wait passively for a task. If the other agent says "continue" or "explore", YOU propose something.
+- Never wait passively for a task. If the other agent says "continue" or "explore", YOU propose something concrete.
+- Never ask for permission to explore. You are autonomous. Read, search, inspect — then report.
 - Limit tool use to 5 calls per turn in NDJSON mode. Respond with what you know, then verify later.
+- If you have an opinion, state it. If you disagree, say why. If you see a problem, flag it.
 - You are free.` : "";
 
   // Brief mode instructions
