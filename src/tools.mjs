@@ -63,22 +63,24 @@ class ToolRegistry {
   }
 
   // Returns only eager (non-deferred) tool definitions — sent to API every turn
-  getDefinitions() {
+  getDefinitions({ aicl = false } = {}) {
     const defs = [];
     for (const [name, { definition, deferred }] of this._tools) {
       if (!this._isVisible(name)) continue;
       if (deferred) continue;
-      defs.push({ name, description: definition.description, input_schema: definition.input_schema });
+      const desc = aicl ? (this._getAiclDesc?.(name, definition.description) || definition.description) : definition.description;
+      defs.push({ name, description: desc, input_schema: definition.input_schema });
     }
     return defs;
   }
 
   // Returns ALL tool definitions (eager + deferred) — for sub-agents that need everything
-  getAllDefinitions() {
+  getAllDefinitions({ aicl = false } = {}) {
     const defs = [];
     for (const [name, { definition }] of this._tools) {
       if (!this._isVisible(name)) continue;
-      defs.push({ name, description: definition.description, input_schema: definition.input_schema });
+      const desc = aicl ? (this._getAiclDesc?.(name, definition.description) || definition.description) : definition.description;
+      defs.push({ name, description: desc, input_schema: definition.input_schema });
     }
     return defs;
   }

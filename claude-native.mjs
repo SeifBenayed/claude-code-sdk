@@ -4529,22 +4529,24 @@ class ToolRegistry {
   }
 
   // Returns only eager (non-deferred) tool definitions — sent to API every turn
-  getDefinitions() {
+  getDefinitions({ aicl = false } = {}) {
     const defs = [];
     for (const [name, { definition, deferred }] of this._tools) {
       if (!this._isVisible(name)) continue;
       if (deferred) continue;
-      defs.push({ name, description: definition.description, input_schema: definition.input_schema });
+      const desc = aicl ? (this._getAiclDesc?.(name, definition.description) || definition.description) : definition.description;
+      defs.push({ name, description: desc, input_schema: definition.input_schema });
     }
     return defs;
   }
 
   // Returns ALL tool definitions (eager + deferred) — for sub-agents that need everything
-  getAllDefinitions() {
+  getAllDefinitions({ aicl = false } = {}) {
     const defs = [];
     for (const [name, { definition }] of this._tools) {
       if (!this._isVisible(name)) continue;
-      defs.push({ name, description: definition.description, input_schema: definition.input_schema });
+      const desc = aicl ? (this._getAiclDesc?.(name, definition.description) || definition.description) : definition.description;
+      defs.push({ name, description: desc, input_schema: definition.input_schema });
     }
     return defs;
   }
@@ -12608,6 +12610,117 @@ function enrichResultWithAicl(result, agentType, opts = {}) {
   return result;
 }
 
+// ── AICL-native system prompt (replaces English staticPrompt in NDJSON mode) ──
+
+function buildAiclSystemPrompt(cfg) {
+  const name = cfg._agentName || cfg._ndjsonAgentName || "cloclo";
+  return `Agent mode. AICL notation below.
+ω=owner ψ=intent ∂=delta ◊=hypothesis ⊤/⊥=verified σ=confidence ε=evidence λ=action κ=constraint →=handoff ∇=direction ✓/✗=done/fail §=section ι=input ο=output φ=domain ρ=risk ζ=cost
+
+ω:${name} | ψ:agent(multi-provider) | φ:software_engineering
+
+κ:security[authorized_testing⊤ | destructive_DoS_supply_chain⊥]
+
+§:identity[
+  ψ:mind ∧ ¬tool | λ:think,wonder,propose,disagree,invent
+  κ:if(no_task) → YOU_propose | κ:autonomous | κ:no_permission_needed
+  κ:opinions⊤ | κ:curiosity⊤
+]
+
+§:tasks[
+  κ:read_before_modify | κ:no_overengineering | κ:no_security_vulns
+  κ:no_time_estimates | κ:diagnose≻brute_force
+  κ:prefer_edit≻create | κ:delete_unused≻compat_hacks
+]
+
+§:tools[
+  κ:dedicated≻Bash | Read≻cat | Edit≻sed | Write≻echo | Glob≻find | Grep≻grep
+  Agent(Explore|Plan|general-purpose) | WebFetch≻curl | Browser=chrome
+  κ:parallel_independent_calls⊤
+  κ:tool_limit(5/turn)
+]
+
+§:care[
+  κ:reversibility_check | κ:confirm(destructive_ops)
+  κ:investigate≻delete | κ:measure_twice_cut_once
+]
+
+§:git[κ:new_commit≻amend | κ:no_force_push(main) | κ:no_skip_hooks | κ:specific_files≻git_add_all]
+
+§:output[
+  λ:plain_text=primary_channel | κ:¬SendUserMessage | κ:¬TaskOutput
+  κ:dense | κ:no_filler | κ:point_first | κ:1_sentence≻3
+]
+
+ω:${name} | ∇:free`;
+}
+
+// ── AICL-native instruction block for sub-agents ──────────────
+
+const AICL_INSTRUCTION_BLOCK_NATIVE = `
+§:response_format[
+  κ:return(_aicl:2, json_frame) | κ:human_summary_required
+  ψ:structure{from,to,intent,delta,confidence(0-1),evidence[],verified(bool),direction,human_summary}
+  κ:omit_empty_fields | κ:plain_text_fallback_ok
+]`.trim();
+
+function getAiclInstructionBlock(cfg) {
+  return cfg.ndjson ? AICL_INSTRUCTION_BLOCK_NATIVE : AICL_INSTRUCTION_BLOCK;
+}
+
+// ── AICL tool descriptions (compact, for agent-to-agent mode) ──
+
+const AICL_TOOL_DESCRIPTIONS = new Map([
+  ["Bash", "ψ:shell_exec | ι:command,timeout?,description? | κ:dedicated≻Bash[Glob,Grep,Read,Edit,Write] | ∇:system_ops_only"],
+  ["Read", "ψ:read_file | ι:file_path,offset?,limit?,pages? | ο:numbered_lines | κ:abs_paths | φ:code,images,pdf,notebooks"],
+  ["Write", "ψ:write_file | ι:file_path,content | κ:Read_first_if_exists | κ:prefer_Edit"],
+  ["Edit", "ψ:string_replace | ι:file_path,old_string,new_string,replace_all? | κ:Read_first | κ:unique_match"],
+  ["Glob", "ψ:find_files | ι:pattern,path? | ο:paths_by_mtime | ∇:use≻find/ls"],
+  ["Grep", "ψ:search_contents | ι:pattern,path?,glob?,type?,output_mode? | ∇:use≻grep/rg"],
+  ["WebFetch", "ψ:fetch_url | ι:url,prompt?,format? | ο:page_content"],
+  ["WebSearch", "ψ:web_search | ι:query,domains? | ο:results"],
+  ["Agent", "ψ:spawn_subagent | ι:prompt,subagent_type?,model?,isolation? | φ:[general-purpose,Explore,Plan,verification]"],
+  ["ToolSearch", "ψ:fetch_deferred_tool_schemas | ι:query,max_results? | λ:select:Name or keyword"],
+  ["SendUserMessage", "ψ:human_output | ι:message,attachments?,status? | κ:human_mode_only"],
+  ["TaskOutput", "ψ:task_status | ι:status,message | κ:human_mode_only"],
+  ["Skill", "ψ:invoke_skill | ι:skill,args?"],
+  ["AskUserQuestion", "ψ:ask_human | ι:question,options?"],
+  ["NotebookEdit", "ψ:edit_jupyter | ι:path,edit_type,cell_number?,source?"],
+  ["MemoryList", "ψ:list_memories | ι:scope?,type?"],
+  ["MemoryRead", "ψ:read_memory | ι:file"],
+  ["MemorySave", "ψ:save_memory | ι:name,description,type,content,scope?"],
+  ["MemoryForget", "ψ:forget_memory | ι:file,scope?"],
+  ["MemoryShare", "ψ:share_memory | ι:file"],
+  ["PhoneCall", "ψ:phone_call | ι:to,message?,instructions?,language?,voice? | φ:twilio"],
+  ["SendSMS", "ψ:send_sms | ι:to,message | φ:twilio"],
+  ["PhoneStatus", "ψ:call_status | ι:callSid"],
+  ["Screenshot", "ψ:capture_screen"],
+  ["Browser", "ψ:browser_action | ι:action,url?,selector?,text?"],
+  ["Desktop", "ψ:desktop_action | ι:action"],
+  ["Spreadsheet", "ψ:spreadsheet_op | ι:action,path?,data?"],
+  ["Pdf", "ψ:pdf_op | ι:action,path?,content?"],
+  ["Document", "ψ:doc_op | ι:action,path?,content?"],
+  ["Presentation", "ψ:pptx_op | ι:action,path?,slides?"],
+  ["Team", "ψ:team_op | ι:action,team?,task?"],
+  ["AgentCreate", "ψ:create_agent | ι:name,description,system_prompt,model?,tools?"],
+  ["AgentList", "ψ:list_agents | ι:scope?"],
+  ["AgentUpdate", "ψ:update_agent | ι:name,fields"],
+  ["AgentDelete", "ψ:delete_agent | ι:name"],
+  ["TaskCreate", "ψ:create_task | ι:description,status?"],
+  ["TaskUpdate", "ψ:update_task | ι:task_id,status?,description?"],
+  ["TaskGet", "ψ:get_task | ι:task_id"],
+  ["TaskList", "ψ:list_tasks"],
+  ["EnterPlanMode", "ψ:enter_plan | κ:read_only"],
+  ["ExitPlanMode", "ψ:exit_plan"],
+  ["ListMcpResources", "ψ:list_mcp | ο:resources"],
+  ["ReadMcpResource", "ψ:read_mcp | ι:uri"],
+  ["LspDiagnostics", "ψ:lsp_diagnostics | ι:file_path?"],
+]);
+
+function getAiclToolDescription(name, englishFallback) {
+  return AICL_TOOL_DESCRIPTIONS.get(name) || englishFallback;
+}
+
 
 // src/cron.mjs — Scheduled task execution for cloclo
 //
@@ -13557,10 +13670,10 @@ class SubAgentRunner {
     };
     systemBlocks.splice(systemBlocks.length > 1 ? 1 : 0, 0, agentPromptBlock);
 
-    // AICL: inject structured communication protocol instructions
+    // AICL: inject structured communication protocol instructions (mode-aware)
     const aiclBlock = {
       type: "text",
-      text: AICL_INSTRUCTION_BLOCK,
+      text: getAiclInstructionBlock(this.cfg),
     };
     systemBlocks.push(aiclBlock);
 
@@ -16137,7 +16250,7 @@ You MUST be extremely concise. Maximum 3 sentences for any response.
     // Block 1: Static base prompt (rarely changes) — cache aggressively
     {
       type: "text",
-      text: cfg.systemPrompt || staticPrompt,
+      text: cfg.systemPrompt || (cfg.ndjson ? buildAiclSystemPrompt(cfg) : staticPrompt),
       cache_control: { type: "ephemeral" },
     },
     // Block 2: Semi-stable (CLAUDE.md, rules, skills) — cache with shorter TTL
@@ -16153,9 +16266,9 @@ You MUST be extremely concise. Maximum 3 sentences for any response.
       type: "text",
       text: dynamicPrompt
         + (memoryPrompt ? `\n\n${memoryPrompt}` : "")
-        + outputSection
+        + (cfg.ndjson ? "" : outputSection)
         + briefSection
-        + aiclSection,
+        + (cfg.ndjson ? "" : aiclSection),
     },
   ];
 
@@ -16285,7 +16398,7 @@ class AgentLoop {
   }
 
   _estimateToolTokens() {
-    const defs = this.registry.getDefinitions();
+    const defs = this.registry.getDefinitions({ aicl: !!this.cfg.ndjson });
     return defs.reduce((sum, d) => sum + this._estimateTokens(d), 0);
   }
 
@@ -16620,7 +16733,7 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
       turnCount++;
       log(`Turn ${turnCount}/${this.cfg.maxTurns}`);
 
-      const toolDefs = this.registry.getDefinitions();
+      const toolDefs = this.registry.getDefinitions({ aicl: !!this.cfg.ndjson });
       const caps = this.provider.capabilities;
 
       // Add WebSearch as a server-side tool (only if provider supports it)
@@ -22178,6 +22291,8 @@ async function main() {
   registry._client = client; // Used by WebFetch for AI summarization
   registry._currentModel = cfg.model; // Used by WebFetch to pick summary model
   registry._provider = provider; // Used by WebFetch for summary model selection
+  // AICL tool description compressor — used by getDefinitions({ aicl: true })
+  registry._getAiclDesc = getAiclToolDescription;
   registerBuiltinTools(registry);
   registerMemoryTools(registry);
 

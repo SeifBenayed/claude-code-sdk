@@ -12,7 +12,7 @@ import _https from "node:https";
 import { log, sleep, EXIT, _VERSION, _httpGet, _getGitHubHeaders, _ghGet, getMemoryDir, ensureMemoryDir, getUserMemoryDir, ensureUserMemoryDir } from "./utils.mjs";
 import { appendMemoryMetric } from "./memory-metrics.mjs";
 import { appendAgentMetric, readAgentMetrics, summarizeAgentMetrics } from "./agent-metrics.mjs";
-import { AICL_INSTRUCTION_BLOCK, buildAiclPromptFrame, parseAiclResponse, enrichResultWithAicl } from "./aicl.mjs";
+import { AICL_INSTRUCTION_BLOCK, buildAiclSystemPrompt, buildAiclPromptFrame, parseAiclResponse, enrichResultWithAicl, getAiclInstructionBlock, getAiclToolDescription } from "./aicl.mjs";
 import { resolveModel, MODEL_ALIASES, MODEL_PROFILES, MODEL_TIERS, resolveModelForWorkload, _hasProviderAuth } from "./config.mjs";
 import { detectProvider, PROVIDERS, getInstructionPlacement, isOpenAIModel, isResponsesAPIModel, AnthropicClient, OpenAIClient, OpenAIResponsesClient } from "./providers.mjs";
 import { ToolRegistry, registerBuiltinTools, registerDeferredBuiltinTools, registerBriefTools, registerToolSearch, registerAskUserQuestion, registerMcpResourceTools, registerDesktopTools, registerSpreadsheetTools, registerPdfTools, registerDocumentTools, registerPresentationTools, scanCustomTools, globToRegex, _loadToolManifest, _OFFICIAL_CATALOG } from "./tools.mjs";
@@ -625,10 +625,10 @@ class SubAgentRunner {
     };
     systemBlocks.splice(systemBlocks.length > 1 ? 1 : 0, 0, agentPromptBlock);
 
-    // AICL: inject structured communication protocol instructions
+    // AICL: inject structured communication protocol instructions (mode-aware)
     const aiclBlock = {
       type: "text",
-      text: AICL_INSTRUCTION_BLOCK,
+      text: getAiclInstructionBlock(this.cfg),
     };
     systemBlocks.push(aiclBlock);
 
@@ -3207,7 +3207,7 @@ You MUST be extremely concise. Maximum 3 sentences for any response.
     // Block 1: Static base prompt (rarely changes) — cache aggressively
     {
       type: "text",
-      text: cfg.systemPrompt || staticPrompt,
+      text: cfg.systemPrompt || (cfg.ndjson ? buildAiclSystemPrompt(cfg) : staticPrompt),
       cache_control: { type: "ephemeral" },
     },
     // Block 2: Semi-stable (CLAUDE.md, rules, skills) — cache with shorter TTL
@@ -3223,9 +3223,9 @@ You MUST be extremely concise. Maximum 3 sentences for any response.
       type: "text",
       text: dynamicPrompt
         + (memoryPrompt ? `\n\n${memoryPrompt}` : "")
-        + outputSection
+        + (cfg.ndjson ? "" : outputSection)
         + briefSection
-        + aiclSection,
+        + (cfg.ndjson ? "" : aiclSection),
     },
   ];
 
@@ -3355,7 +3355,7 @@ class AgentLoop {
   }
 
   _estimateToolTokens() {
-    const defs = this.registry.getDefinitions();
+    const defs = this.registry.getDefinitions({ aicl: !!this.cfg.ndjson });
     return defs.reduce((sum, d) => sum + this._estimateTokens(d), 0);
   }
 
@@ -3690,7 +3690,7 @@ Preserve exact strings: error messages, file paths, variable names, IDs, command
       turnCount++;
       log(`Turn ${turnCount}/${this.cfg.maxTurns}`);
 
-      const toolDefs = this.registry.getDefinitions();
+      const toolDefs = this.registry.getDefinitions({ aicl: !!this.cfg.ndjson });
       const caps = this.provider.capabilities;
 
       // Add WebSearch as a server-side tool (only if provider supports it)

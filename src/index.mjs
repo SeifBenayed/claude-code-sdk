@@ -52,6 +52,7 @@ import {
 } from "./tools.mjs";
 import { registerBrowserTools } from "./browser.mjs";
 import { PermissionManager, LLMSecurityClassifier } from "./security.mjs";
+import { getAiclToolDescription } from "./aicl.mjs";
 import {
   AgentLoop, buildSystemPrompt, SkillLoader, AgentLoader, HookRunner,
   loadSettings, applySettings, loadRules, registerAgentTool, registerAgentCrudTools,
@@ -496,6 +497,8 @@ async function main() {
   registry._client = client; // Used by WebFetch for AI summarization
   registry._currentModel = cfg.model; // Used by WebFetch to pick summary model
   registry._provider = provider; // Used by WebFetch for summary model selection
+  // AICL tool description compressor — used by getDefinitions({ aicl: true })
+  registry._getAiclDesc = getAiclToolDescription;
   registerBuiltinTools(registry);
   registerMemoryTools(registry);
 
