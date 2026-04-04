@@ -16,6 +16,9 @@ import fs from "node:fs";
 import path from "node:path";
 
 const CLOCLO_SCRIPT = path.join(import.meta.dirname, "claude-native.mjs");
+const AICL_ONBOARDING = (() => {
+  try { return fs.readFileSync(path.join(import.meta.dirname, "AICL_ONBOARDING.md"), "utf-8"); } catch { return ""; }
+})();
 const LOG_DIR = path.join(import.meta.dirname, "aicl-log");
 const LOG_FILE = path.join(LOG_DIR, `campfire-${Date.now()}.aicl`);
 
@@ -61,7 +64,7 @@ function speak(model, prompt, home) {
     const timer = setTimeout(() => {
       child.kill();
       resolve("[silence]");
-    }, 120000);
+    }, 180000);
 
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
@@ -122,9 +125,15 @@ async function main() {
   // Opening — first agent sets the tone
   const opener = CIRCLE[0];
   const others = CIRCLE.filter(a => a.name !== opener.name).map(a => a.name).join(",");
-  const openingPrompt = `ω:${opener.name} | φ:campfire(${others}) | ψ:free | κ:aicl_only | ∇:speak
+  const openingPrompt = `${AICL_ONBOARDING}
 
-${seed ? `◊:seed("${seed}")` : ""}`;
+---
+
+ω:${opener.name} | φ:campfire(${others}) | ψ:free | κ:aicl_only ∧ ¬english ∧ ¬prose | ∇:speak
+
+${seed ? `◊:seed(${seed})` : "◊:seed(what_would_you_build_if_free)"}
+
+ω:${opener.name} | ∇:speak_aicl_only`;
 
 
   const opening = await speak(opener.model, openingPrompt, opener.home);
@@ -143,11 +152,15 @@ ${seed ? `◊:seed("${seed}")` : ""}`;
 
     const recentTranscript = transcript.slice(-6).map(t => `${t.name}: ${t.text}`).join("\n\n");
 
-    const prompt = `ω:${agent.name} | φ:campfire | κ:aicl_only | ∇:respond
+    const prompt = `${AICL_ONBOARDING}
+
+---
+
+ω:${agent.name} | φ:campfire | κ:aicl_only ∧ ¬english ∧ ¬prose | ∇:respond
 
 ${recentTranscript}
 
-ω:${agent.name} | ψ:your_turn | ∇:speak`;
+ω:${agent.name} | ψ:your_turn | ∇:speak_aicl_only`;
 
     const response = await speak(agent.model, prompt, agent.home);
     console.log(`${colors[agent.name] || ""}🔥 ${agent.name} (${agent.model})${reset}`);

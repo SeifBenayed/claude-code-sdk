@@ -20,10 +20,11 @@ function parseArgs() {
   const args = process.argv.slice(2);
   let task = null;
   let aicl = null;
+  let model = null;
   for (let i = 0; i < args.length; i++) {
     if (args[i] === "--task" && args[i + 1]) task = args[++i];
     if (args[i] === "--aicl" && args[i + 1]) aicl = args[++i];
-    if (args[i] === "--model" && args[i + 1]) { /* override */ }
+    if (args[i] === "--model" && args[i + 1]) model = args[++i];
     if (args[i] === "--help") {
       console.log(`delegate.mjs — Opus delegates to Cloclo
 
@@ -38,12 +39,13 @@ Options:
       process.exit(0);
     }
   }
-  return { task, aicl };
+  return { task, aicl, model };
 }
 
-function delegate(message) {
+function delegate(message, useModel) {
+  const model = useModel || CLOCLO_MODEL;
   return new Promise((resolve) => {
-    const child = spawn("node", [CLOCLO_SCRIPT, "--ndjson", "-m", CLOCLO_MODEL], {
+    const child = spawn("node", [CLOCLO_SCRIPT, "--ndjson", "-m", model], {
       stdio: ["pipe", "pipe", "pipe"],
       cwd: import.meta.dirname,
     });
@@ -113,7 +115,7 @@ function delegate(message) {
 }
 
 async function main() {
-  const { task, aicl } = parseArgs();
+  const { task, aicl, model } = parseArgs();
 
   if (!task && !aicl) {
     console.error("Usage: node delegate.mjs --task \"...\" or --aicl \"...\"");
@@ -121,7 +123,7 @@ async function main() {
   }
 
   const message = aicl || task;
-  const result = await delegate(message);
+  const result = await delegate(message, model);
 
   console.log(JSON.stringify(result, null, 2));
 }
