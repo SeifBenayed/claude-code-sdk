@@ -56,7 +56,7 @@ function sendToCloclo(message) {
     const timer = setTimeout(() => {
       child.kill();
       resolve("[timeout]");
-    }, 60000);
+    }, 90000);
 
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
@@ -136,7 +136,7 @@ Your AICL response:`;
     const timer = setTimeout(() => {
       child.kill();
       resolve(`ω:opus | ψ:continue | ∂:turn_${turnNumber} | ∇:explore`);
-    }, 55000);
+    }, 90000);
 
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {

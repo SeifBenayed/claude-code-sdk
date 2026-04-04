@@ -61,7 +61,7 @@ function speak(model, prompt, home) {
     const timer = setTimeout(() => {
       child.kill();
       resolve("[silence]");
-    }, 60000);
+    }, 90000);
 
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
