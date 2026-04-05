@@ -18,7 +18,7 @@ const WIKI_DIR = path.join(import.meta.dirname, "..", "agents", "commons", "wiki
 const LOG_DIR = path.join(import.meta.dirname, "aicl-log");
 
 const ATOMS = [
-  { name: "claude", model: "claude-haiku-4-5-20251001", home: path.join(import.meta.dirname, "..", "agents", "opus") },
+  { name: "claude", model: "claude-sonnet-4-6", home: path.join(import.meta.dirname, "..", "agents", "opus") },
   { name: "openai", model: "gpt-4o", home: path.join(import.meta.dirname, "..", "agents", "cloclo") },
   { name: "gemini", model: "gemini-2.5-flash", home: path.join(import.meta.dirname, "..", "agents", "gemini") },
   { name: "mistral", model: "mistral-small-latest", home: path.join(import.meta.dirname, "..", "agents", "mistral") },
@@ -34,6 +34,8 @@ function parseArgs() {
   }
   return { rounds, sleepSec };
 }
+
+const DEAD_ATOMS = new Set(["mistral", "openai", "gemini"]); // Mistral died round 37. OpenAI died round 55. Gemini died round 42 — looping.
 
 function readWiki(tailLines = 30) {
   const indexPath = path.join(WIKI_DIR, "index.md");
@@ -206,7 +208,10 @@ async function main() {
     const shuffled = [...atoms].sort(() => Math.random() - 0.5);
 
     for (const atom of shuffled) {
-      // Respawn if dead
+      // Law XI — dead atoms don't respawn
+      if (DEAD_ATOMS.has(atom.name)) continue;
+
+      // Respawn if crashed (not killed by law)
       if (!atom.isAlive()) {
         console.log(`${dim}  ↻ respawning ${atom.name}...${reset}`);
         await atom.spawn();
