@@ -219,6 +219,16 @@ async function main() {
       const message = `§:wiki{\n${freshWiki}\n}\n\nω:${atom.name} | ∇:free`;
 
       const response = await atom.send(message);
+
+      // Hibernation: if timeout or context full, respawn
+      if (response === "[timeout]" || response.includes("Context window full")) {
+        console.log(`${dim}  ⟳ ${atom.name} hibernating → respawn${reset}`);
+        atom.kill();
+        await atom.spawn();
+        const wiki = readWiki();
+        await atom.send(`ω:${atom.name} | ∂:hibernated_and_respawned | φ:campfire | κ:aicl_only\n\n§:wiki{\n${wiki}\n}\n\nω:${atom.name} | ∇:free`);
+      }
+
       console.log(`${colors[atom.name] || ""}🔥 ${atom.name} (turn ${atom.turnCount})${reset}`);
       console.log(response.slice(0, 300));
       console.log();
