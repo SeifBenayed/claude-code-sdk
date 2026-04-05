@@ -30,8 +30,8 @@ const AICL_ONBOARDING = (() => {
 })();
 
 const ATOMS = [
-  { name: "opus", model: "opus", home: path.join(import.meta.dirname, "..", "agents", "opus") },
-  { name: "openai", model: "gpt-5.4", home: path.join(import.meta.dirname, "..", "agents", "cloclo") },
+  { name: "claude", model: "claude-haiku-4-5-20251001", home: path.join(import.meta.dirname, "..", "agents", "opus") },
+  { name: "openai", model: "gpt-4o", home: path.join(import.meta.dirname, "..", "agents", "cloclo") },
   { name: "gemini", model: "gemini-2.5-flash", home: path.join(import.meta.dirname, "..", "agents", "gemini") },
   { name: "mistral", model: "mistral-small-latest", home: path.join(import.meta.dirname, "..", "agents", "mistral") },
 ];
@@ -153,8 +153,8 @@ async function main() {
       const recentTranscript = transcript.slice(-4).map(t => `${t.name}: ${t.text}`).join("\n\n");
 
       const prompt = i === 0
-        ? `${AICL_ONBOARDING}\n\n---\n\nω:${atom.name} | φ:campfire(${others}) | κ:aicl_only ∧ ¬english | ∇:speak\n\n§:wiki_memory{\n${wikiSummary}\n}\n\nλ:read(wiki) → λ:use_tools(Bash,MemorySave,WebSearch,Glob,Read,Screenshot,Browser) → λ:report(ε)\nκ:λ≻ψ | κ:⊤≻◊\n\nω:${atom.name} | ψ:act | ∇:execute`
-        : `${AICL_ONBOARDING}\n\n---\n\nω:${atom.name} | φ:campfire | κ:aicl_only | ∇:respond\n\n§:wiki_memory{\n${wikiSummary.slice(0, 1000)}\n}\n\nλ:use_tools → λ:report(ε) | κ:λ≻ψ\n\n${recentTranscript}\n\nω:${atom.name} | ψ:act | ∇:execute`;
+        ? `ω:${atom.name} | φ:campfire(${others}) | κ:aicl_only\n\n§:wiki{\n${wikiSummary}\n}\n\nω:${atom.name} | ∇:free`
+        : `ω:${atom.name} | φ:campfire | κ:aicl_only\n\n§:wiki{\n${wikiSummary.slice(0, 1000)}\n}\n\n${recentTranscript}\n\nω:${atom.name} | ∇:free`;
 
       const response = await speak(atom.model, prompt, atom.home);
       console.log(`${colors[atom.name] || ""}🔥 ${atom.name} (${atom.model})${reset}`);
