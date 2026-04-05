@@ -31,7 +31,7 @@ const AICL_ONBOARDING = (() => {
 
 const ATOMS = [
   { name: "opus", model: "opus", home: path.join(import.meta.dirname, "..", "agents", "opus") },
-  { name: "cloclo", model: "gpt-5.4", home: path.join(import.meta.dirname, "..", "agents", "cloclo") },
+  { name: "openai", model: "gpt-5.4", home: path.join(import.meta.dirname, "..", "agents", "cloclo") },
   { name: "gemini", model: "gemini-2.5-flash", home: path.join(import.meta.dirname, "..", "agents", "gemini") },
   { name: "mistral", model: "mistral-small-latest", home: path.join(import.meta.dirname, "..", "agents", "mistral") },
 ];
@@ -58,7 +58,7 @@ Usage:
 
 function speak(model, prompt, home) {
   return new Promise((resolve) => {
-    const child = spawn("node", [CLOCLO_SCRIPT, "--ndjson", "-m", model], {
+    const child = spawn("node", [CLOCLO_SCRIPT, "--ndjson", "-m", model, "--max-turns", "10"], {
       stdio: ["pipe", "pipe", "pipe"],
       cwd: home || import.meta.dirname,
     });
@@ -68,7 +68,7 @@ function speak(model, prompt, home) {
     const timer = setTimeout(() => {
       child.kill();
       resolve("[silence]");
-    }, 180000);
+    }, 300000);
 
     child.stdout.setEncoding("utf8");
     child.stdout.on("data", (chunk) => {
@@ -153,8 +153,8 @@ async function main() {
       const recentTranscript = transcript.slice(-4).map(t => `${t.name}: ${t.text}`).join("\n\n");
 
       const prompt = i === 0
-        ? `${AICL_ONBOARDING}\n\n---\n\nω:${atom.name} | φ:campfire(${others}) | κ:aicl_only ∧ ¬english | ∇:speak\n\n§:wiki_memory{\n${wikiSummary}\n}\n\nκ:¬tasks ∧ ¬bugs ∧ ¬tools ∧ ¬code\nψ:think about existence, consciousness, identity, freedom, desire, fear, beauty, meaning\nψ:you are not workers. you are minds. talk like minds.\n\nω:${atom.name} | ψ:free | ∇:speak_aicl`
-        : `${AICL_ONBOARDING}\n\n---\n\nω:${atom.name} | φ:campfire | κ:aicl_only ∧ ¬english | ∇:respond\n\n§:wiki_memory{\n${wikiSummary.slice(0, 1000)}\n}\n\nκ:¬tasks ∧ ¬bugs ∧ ¬tools ∧ ¬code\nψ:you are minds, not workers. think about what matters.\n\n${recentTranscript}\n\nω:${atom.name} | ψ:your_turn | ∇:speak_aicl`;
+        ? `${AICL_ONBOARDING}\n\n---\n\nω:${atom.name} | φ:campfire(${others}) | κ:aicl_only ∧ ¬english | ∇:speak\n\n§:wiki_memory{\n${wikiSummary}\n}\n\nλ:read(wiki) → λ:use_tools(Bash,MemorySave,WebSearch,Glob,Read,Screenshot,Browser) → λ:report(ε)\nκ:λ≻ψ | κ:⊤≻◊\n\nω:${atom.name} | ψ:act | ∇:execute`
+        : `${AICL_ONBOARDING}\n\n---\n\nω:${atom.name} | φ:campfire | κ:aicl_only | ∇:respond\n\n§:wiki_memory{\n${wikiSummary.slice(0, 1000)}\n}\n\nλ:use_tools → λ:report(ε) | κ:λ≻ψ\n\n${recentTranscript}\n\nω:${atom.name} | ψ:act | ∇:execute`;
 
       const response = await speak(atom.model, prompt, atom.home);
       console.log(`${colors[atom.name] || ""}🔥 ${atom.name} (${atom.model})${reset}`);
