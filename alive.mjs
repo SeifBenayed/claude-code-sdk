@@ -202,7 +202,10 @@ async function main() {
 
     const transcript = [];
 
-    for (const atom of atoms) {
+    // Shuffle order each round — position shouldn't determine personality
+    const shuffled = [...atoms].sort(() => Math.random() - 0.5);
+
+    for (const atom of shuffled) {
       // Respawn if dead
       if (!atom.isAlive()) {
         console.log(`${dim}  ↻ respawning ${atom.name}...${reset}`);
