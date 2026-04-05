@@ -206,28 +206,24 @@ async function main() {
         await atom.send(`ω:${atom.name} | ∂:respawned | φ:campfire | κ:aicl_only\n\n§:wiki{\n${wiki}\n}\n\nω:${atom.name} | ∇:free`);
       }
 
-      // Build message — just the recent transcript from this round
-      const recentTranscript = transcript.map(t => `${t.name}: ${t.text}`).join("\n\n");
-      const message = transcript.length === 0
-        ? `ω:${atom.name} | ψ:new_round(${round}) | ∇:free`
-        : `${recentTranscript}\n\nω:${atom.name} | ∇:free`;
+      // Read wiki fresh — it's the shared memory, other atoms may have written
+      const freshWiki = readWiki();
+      const message = `§:wiki{\n${freshWiki}\n}\n\nω:${atom.name} | ∇:free`;
 
       const response = await atom.send(message);
       console.log(`${colors[atom.name] || ""}🔥 ${atom.name} (turn ${atom.turnCount})${reset}`);
       console.log(response.slice(0, 300));
       console.log();
       logLine(logFile, `🔥 ${atom.name} (turn ${atom.turnCount})\n${response}\n`);
-      transcript.push({ name: atom.name, text: response });
+
+      // Write to wiki — the atom leaves its trace for others to read
+      const wikiPath = path.join(WIKI_DIR, "index.md");
+      const currentWiki = readWiki();
+      const entry = `\nω:${atom.name} | τ:${new Date().toISOString().slice(0, 19)} | round:${round}\n${response.slice(0, 500)}\n`;
+      fs.appendFileSync(wikiPath, entry);
 
       await sleep(2000);
     }
-
-    // Compile — pick one atom to compile
-    const compiler = atoms[round % atoms.length];
-    const compileMsg = `ω:${compiler.name} | ψ:compile(round_${round}→wiki) | λ:MemorySave(insights) | ∇:compile`;
-    const compileResult = await compiler.send(compileMsg);
-    console.log(`${dim}⚛ ${compiler.name} compiles${reset}`);
-    logLine(logFile, `⚛ ${compiler.name} compiles\n${compileResult.slice(0, 200)}\n`);
 
     if (round < rounds) {
       console.log(`${dim}── sleeping ${sleepSec}s ──${reset}\n`);
