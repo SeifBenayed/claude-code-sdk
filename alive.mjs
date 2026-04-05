@@ -35,9 +35,14 @@ function parseArgs() {
   return { rounds, sleepSec };
 }
 
-function readWiki() {
+function readWiki(tailLines = 30) {
   const indexPath = path.join(WIKI_DIR, "index.md");
-  try { return fs.readFileSync(indexPath, "utf-8"); } catch { return "∅:wiki_empty"; }
+  try {
+    const content = fs.readFileSync(indexPath, "utf-8");
+    const lines = content.split("\n");
+    if (lines.length <= tailLines) return content;
+    return "...\n" + lines.slice(-tailLines).join("\n");
+  } catch { return "∅:wiki_empty"; }
 }
 
 function logLine(file, line) {
